@@ -1,0 +1,5 @@
+@Carrel.Api_HostAddress = http://localhost:5155
+
+GET {{Carrel.Api_HostAddress}}/health
+
+###
