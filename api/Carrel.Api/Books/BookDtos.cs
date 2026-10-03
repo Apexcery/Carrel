@@ -4,9 +4,13 @@ namespace Carrel.Api.Books;
 
 public record BookSearchResponse(int Found, BookSearchResult[] Results);
 
-/// <summary>A search hit straight from Hardcover; not stored until someone opens the book.</summary>
+/// <summary>
+/// A search hit straight from Hardcover, or Open Library when Hardcover has nothing; not stored until someone
+/// opens the book. Exactly one of HardcoverId and OpenLibraryWorkId is set.
+/// </summary>
 public record BookSearchResult(
-    int HardcoverId,
+    int? HardcoverId,
+    string? OpenLibraryWorkId,
     string Title,
     string? Subtitle,
     string[] Authors,

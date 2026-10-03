@@ -29,6 +29,21 @@ public static class BookEndpoints
                 ? Results.Ok(book)
                 : Results.NotFound()));
 
+        books.MapGet("/openlibrary/{workId:regex(^OL\\d+W$)}", (string workId, BookService service, CancellationToken ct) =>
+            FromBookSource(async () => await service.GetByOpenLibraryIdAsync(workId, ct) is { } book
+                ? Results.Ok(book)
+                : Results.NotFound()));
+
+        books.MapGet("/isbn/{isbn}", (string isbn, BookService service, CancellationToken ct) =>
+            BookService.NormalizeIsbn(isbn) is { } normalized
+                ? FromBookSource(async () => await service.GetByIsbnAsync(normalized, ct) is { } book
+                    ? Results.Ok(book)
+                    : Results.NotFound())
+                : Task.FromResult(Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["isbn"] = ["Must be a 10- or 13-character ISBN."],
+                })));
+
         books.MapGet("/{id:long}", (long id, BookService service, CancellationToken ct) =>
             FromBookSource(async () => await service.GetByIdAsync(id, ct) is { } book
                 ? Results.Ok(book)

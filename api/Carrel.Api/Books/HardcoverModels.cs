@@ -28,6 +28,10 @@ public record HardcoverSearchDocument(
     int? RatingsCount,
     HardcoverBookSeries? FeaturedSeries);
 
+public record HardcoverEditionsData(HardcoverEditionRef[] Editions);
+
+public record HardcoverEditionRef(int BookId);
+
 public record HardcoverBookData(HardcoverBook? BooksByPk);
 
 public record HardcoverBook(

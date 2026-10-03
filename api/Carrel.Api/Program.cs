@@ -68,6 +68,12 @@ builder.Services.AddHttpClient<HardcoverClient>(client =>
         builder.Configuration["Hardcover:ApiToken"] ?? throw new InvalidOperationException("Hardcover:ApiToken is not configured."));
     client.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
 });
+builder.Services.AddHttpClient<OpenLibraryClient>(client =>
+{
+    client.BaseAddress = new Uri("https://openlibrary.org/");
+    client.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
 builder.Services.AddScoped<BookService>();
 
 var app = builder.Build();

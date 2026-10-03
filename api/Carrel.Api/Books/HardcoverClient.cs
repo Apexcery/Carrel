@@ -50,6 +50,19 @@ public partial class HardcoverClient(HttpClient http, ILogger<HardcoverClient> l
         }
         """;
 
+    private const string IsbnQuery = """
+        query BookByIsbn($isbns: [String!]!) {
+          editions(where: {_or: [{isbn_13: {_in: $isbns}}, {isbn_10: {_in: $isbns}}]}, limit: 1) { book_id }
+        }
+        """;
+
+    /// <summary>Hardcover's book id for any edition with one of these ISBNs; null if none.</summary>
+    public async Task<int?> FindBookIdByIsbnAsync(IReadOnlyCollection<string> isbns, CancellationToken ct)
+    {
+        var data = await QueryAsync<HardcoverEditionsData>(IsbnQuery, new { isbns }, ct);
+        return data.Editions.FirstOrDefault()?.BookId;
+    }
+
     public async Task<HardcoverSearchResults> SearchBooksAsync(string query, int page, int perPage, CancellationToken ct)
     {
         var data = await QueryAsync<HardcoverSearchData>(SearchQuery, new { query, perPage, page }, ct);
@@ -75,7 +88,17 @@ public partial class HardcoverClient(HttpClient http, ILogger<HardcoverClient> l
             throw new BookSourceUnavailableException("Too many Hardcover requests are queued.");
         }
 
-        using var response = await http.PostAsJsonAsync("", new { query, variables }, ct);
+        HttpResponseMessage response;
+        try
+        {
+            response = await http.PostAsJsonAsync("", new { query, variables }, ct);
+        }
+        catch (Exception e) when (e is HttpRequestException || (e is TaskCanceledException && !ct.IsCancellationRequested))
+        {
+            logger.LogWarning(e, "Hardcover request failed.");
+            throw new BookSourceUnavailableException("Hardcover request failed.");
+        }
+        using var _ = response;
         LogDailyQuota(response);
 
         switch (response.StatusCode)
