@@ -29,9 +29,13 @@ public partial class HardcoverClient(HttpClient http, ILogger<HardcoverClient> l
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
     };
 
+    // Hardcover's default ranks any stronger text match first, so "mistborn" put samplers and box sets above the
+    // later novels. Two text-match buckets ordered by readers keeps exact titles first but lets popular books in the
+    // same series or by the same author outrank obscure title matches.
     private const string SearchQuery = """
         query Search($query: String!, $perPage: Int!, $page: Int!) {
-          search(query: $query, query_type: "Book", per_page: $perPage, page: $page) { results }
+          search(query: $query, query_type: "Book", per_page: $perPage, page: $page,
+                 sort: "_text_match(buckets: 2):desc,users_count:desc") { results }
         }
         """;
 
@@ -39,7 +43,7 @@ public partial class HardcoverClient(HttpClient http, ILogger<HardcoverClient> l
         query Book($id: Int!) {
           books_by_pk(id: $id) {
             id canonical_id title subtitle description release_year rating ratings_count cached_image cached_tags
-            book_series { position series { id name } }
+            book_series { position featured series { id name } }
             contributions { contribution author { id name } }
             editions(limit: 20, order_by: {users_count: desc}) {
               id isbn_13 isbn_10 reading_format_id pages audio_seconds release_date cached_image

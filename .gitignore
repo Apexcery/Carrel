@@ -22,6 +22,9 @@ obj/
 .claude/skills/
 skills-lock.json
 
+# Playwright MCP screenshots and snapshots
+.playwright-mcp/
+
 # OS
 .DS_Store
 Thumbs.db

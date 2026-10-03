@@ -54,7 +54,7 @@ public record HardcoverImage(string? Url);
 public record HardcoverTag(string Tag);
 
 // Series can be missing: search documents sometimes carry an empty featured_series object.
-public record HardcoverBookSeries(decimal? Position, HardcoverSeries? Series);
+public record HardcoverBookSeries(decimal? Position, bool Featured, HardcoverSeries? Series);
 
 public record HardcoverSeries(int Id, string Name);
 

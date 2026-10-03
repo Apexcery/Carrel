@@ -19,4 +19,7 @@ public class BookSeries
 
     /// <summary>Position in the series; fractional for novellas (e.g. 1.5), null if unnumbered.</summary>
     public decimal? Position { get; set; }
+
+    /// <summary>The series to show first for this book, as chosen by the source (Hardcover's featured series).</summary>
+    public bool IsFeatured { get; set; }
 }

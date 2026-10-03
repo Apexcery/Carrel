@@ -1,87 +1,34 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import type { Session } from '@supabase/supabase-js'
-import { supabase } from './supabase'
-import { apiFetch } from './api'
+import { Route, Routes } from 'react-router'
+import { useSession } from './auth'
+import { Layout } from './components/Layout'
+import { BookPage } from './pages/BookPage'
+import { BookResolver } from './pages/BookResolver'
+import { HomePage } from './pages/HomePage'
+import { NotFoundPage } from './pages/NotFoundPage'
+import { SearchPage } from './pages/SearchPage'
+import { SignInPage } from './pages/SignInPage'
 
 function App() {
-  const [session, setSession] = useState<Session | null>(null)
+  const session = useSession()
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session))
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => setSession(session))
-    return () => data.subscription.unsubscribe()
-  }, [])
-
-  return (
-    <main>
-      <h1>Carrel</h1>
-      {session ? <SignedIn session={session} /> : <SignInForm />}
-    </main>
-  )
-}
-
-function SignInForm() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [message, setMessage] = useState<string | null>(null)
-
-  async function signIn(event: FormEvent) {
-    event.preventDefault()
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    setMessage(error?.message ?? null)
+  if (session === undefined) {
+    return null
   }
-
-  async function signUp() {
-    const { error } = await supabase.auth.signUp({ email, password })
-    setMessage(error?.message ?? 'Check your email for a confirmation link.')
+  if (session === null) {
+    return <SignInPage />
   }
 
   return (
-    <form onSubmit={signIn}>
-      <input
-        type="email"
-        placeholder="Email"
-        autoComplete="email"
-        required
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
-      <input
-        type="password"
-        placeholder="Password"
-        autoComplete="current-password"
-        required
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
-      <button type="submit">Sign in</button>
-      <button type="button" onClick={signUp}>
-        Sign up
-      </button>
-      {message && <p>{message}</p>}
-    </form>
-  )
-}
-
-function SignedIn({ session }: { session: Session }) {
-  const [result, setResult] = useState<string | null>(null)
-
-  async function callApi() {
-    try {
-      const response = await apiFetch('/me')
-      setResult(`${response.status} ${await response.text()}`)
-    } catch (error) {
-      setResult(String(error))
-    }
-  }
-
-  return (
-    <section>
-      <p>Signed in as {session.user.email}</p>
-      <button onClick={callApi}>Call API /me</button>
-      <button onClick={() => supabase.auth.signOut()}>Sign out</button>
-      {result && <pre>{result}</pre>}
-    </section>
+    <Routes>
+      <Route element={<Layout />}>
+        <Route index element={<HomePage />} />
+        <Route path="search" element={<SearchPage />} />
+        <Route path="books/:id" element={<BookPage />} />
+        <Route path="books/hardcover/:sourceId" element={<BookResolver source="hardcover" />} />
+        <Route path="books/openlibrary/:sourceId" element={<BookResolver source="openlibrary" />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Route>
+    </Routes>
   )
 }
 

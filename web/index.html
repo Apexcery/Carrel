@@ -1,10 +1,20 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-GB">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>web</title>
+    <meta name="description" content="Carrel: keep track of what you read and find what to read next." />
+    <title>Carrel</title>
+    <script>
+      // Apply the saved theme and accent before first paint, so the page doesn't flash the wrong colours.
+      try {
+        var theme = localStorage.getItem('carrel-theme')
+        var accent = localStorage.getItem('carrel-accent')
+        if (theme === 'light' || theme === 'dark') document.documentElement.setAttribute('data-theme', theme)
+        if (accent) document.documentElement.setAttribute('data-accent', accent)
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

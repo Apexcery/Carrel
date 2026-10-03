@@ -111,7 +111,7 @@ public partial class BookService
     {
         var entries = source.BookSeries
             .Where(bs => bs.Series is not null)
-            .Select(bs => (bs.Position, Series: bs.Series!))
+            .Select(bs => (bs.Position, bs.Featured, Series: bs.Series!))
             .DistinctBy(bs => bs.Series.Id)
             .ToList();
         var ids = entries.Select(bs => (long)bs.Series.Id).ToList();
@@ -119,7 +119,7 @@ public partial class BookService
             .Where(s => s.HardcoverId != null && ids.Contains(s.HardcoverId.Value))
             .ToDictionaryAsync(s => s.HardcoverId!.Value, ct);
 
-        var wanted = new Dictionary<Series, decimal?>();
+        var wanted = new Dictionary<Series, (decimal? Position, bool Featured)>();
         foreach (var entry in entries)
         {
             if (!series.TryGetValue(entry.Series.Id, out var item))
@@ -128,20 +128,21 @@ public partial class BookService
                 series[entry.Series.Id] = item;
             }
             item.Name = entry.Series.Name;
-            wanted[item] = entry.Position;
+            wanted[item] = (entry.Position, entry.Featured);
         }
 
         book.Series.RemoveAll(bs => !wanted.ContainsKey(bs.Series));
-        foreach (var (item, position) in wanted)
+        foreach (var (item, (position, featured)) in wanted)
         {
             var link = book.Series.FirstOrDefault(bs => bs.Series == item);
             if (link is null)
             {
-                book.Series.Add(new BookSeries { Series = item, Position = position });
+                book.Series.Add(new BookSeries { Series = item, Position = position, IsFeatured = featured });
             }
             else
             {
                 link.Position = position;
+                link.IsFeatured = featured;
             }
         }
     }
