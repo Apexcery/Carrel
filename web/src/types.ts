@@ -15,6 +15,7 @@ export interface BookSearchResult {
   coverUrl: string | null
   hardcoverRating: number | null
   hardcoverRatingsCount: number | null
+  seriesHardcoverId: number | null
   seriesName: string | null
   seriesPosition: number | null
 }
@@ -44,6 +45,7 @@ export interface Contributor {
 
 export interface SeriesEntry {
   id: number
+  hardcoverId: number | null
   name: string
   position: number | null
 }
@@ -59,4 +61,24 @@ export interface Edition {
   releaseDate: string | null
   language: string | null
   coverUrl: string | null
+}
+
+export interface SeriesDetail {
+  hardcoverId: number
+  name: string
+  author: string | null
+  isCompleted: boolean | null
+  books: SeriesBook[]
+  otherBooks: SeriesBook[]
+}
+
+export interface SeriesBook {
+  hardcoverId: number
+  position: number | null
+  title: string
+  authors: string[]
+  releaseYear: number | null
+  coverUrl: string | null
+  hardcoverRating: number | null
+  hardcoverRatingsCount: number | null
 }

@@ -28,6 +28,27 @@ public record HardcoverSearchDocument(
     int? RatingsCount,
     HardcoverBookSeries? FeaturedSeries);
 
+public record HardcoverSeriesData(HardcoverSeriesDetail? SeriesByPk);
+
+public record HardcoverSeriesDetail(
+    int Id,
+    string Name,
+    bool? IsCompleted,
+    HardcoverAuthor? Author,
+    HardcoverSeriesEntry[] BookSeries);
+
+public record HardcoverSeriesEntry(decimal? Position, HardcoverSeriesBook Book);
+
+public record HardcoverSeriesBook(
+    int Id,
+    string Title,
+    int? ReleaseYear,
+    int UsersCount,
+    decimal? Rating,
+    int RatingsCount,
+    HardcoverImage? CachedImage,
+    HardcoverContribution[] Contributions);
+
 public record HardcoverEditionsData(HardcoverEditionRef[] Editions);
 
 public record HardcoverEditionRef(int BookId);

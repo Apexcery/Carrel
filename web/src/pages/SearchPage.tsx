@@ -79,17 +79,31 @@ function ResultCard({ result }: { result: BookSearchResult }) {
   const subtitle = displaySubtitle(result.title, result.subtitle)
   const position = seriesPosition(result.seriesPosition)
 
+  // The title link stretches over the whole card (see .result-link in styles.css); the series link sits above it.
   return (
-    <Link to={href} className="result">
+    <article className="result">
       <Cover url={result.coverUrl} title={result.title} author={result.authors[0]} size="small" />
       <div className="result-body">
         {result.seriesName && (
           <p className="result-series mono">
             {position ? `Book ${position} · ` : ''}
-            {result.seriesName}
+            {result.seriesHardcoverId ? (
+              <Link
+                to={`/series/hardcover/${result.seriesHardcoverId}${result.hardcoverId ? `?book=${result.hardcoverId}` : ''}`}
+                className="series-link"
+              >
+                {result.seriesName}
+              </Link>
+            ) : (
+              result.seriesName
+            )}
           </p>
         )}
-        <h2 className="result-title">{result.title}</h2>
+        <h2 className="result-title">
+          <Link to={href} className="result-link">
+            {result.title}
+          </Link>
+        </h2>
         {subtitle && <p className="result-subtitle">{subtitle}</p>}
         <p className="result-byline">
           {result.authors.length > 0 && <>by {listNames(result.authors.slice(0, 3))}</>}
@@ -97,7 +111,7 @@ function ResultCard({ result }: { result: BookSearchResult }) {
         </p>
         <HardcoverRating rating={result.hardcoverRating} count={result.hardcoverRatingsCount} />
       </div>
-    </Link>
+    </article>
   )
 }
 

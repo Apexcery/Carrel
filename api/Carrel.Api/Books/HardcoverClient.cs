@@ -54,6 +54,29 @@ public partial class HardcoverClient(HttpClient http, ILogger<HardcoverClient> l
         }
         """;
 
+    // Leaves out compilations (box sets) and books Hardcover has merged or removed; most-read first at each position.
+    private const string SeriesQuery = """
+        query Series($id: Int!) {
+          series_by_pk(id: $id) {
+            id name is_completed
+            author { id name }
+            book_series(
+              where: {compilation: {_eq: false}, book: {canonical_id: {_is_null: true}, book_status_id: {_eq: 1}}}
+              order_by: [{position: asc_nulls_last}, {book: {users_count: desc}}]
+            ) {
+              position
+              book {
+                id title release_year users_count rating ratings_count cached_image
+                contributions(limit: 2) { contribution author { id name } }
+              }
+            }
+          }
+        }
+        """;
+
+    public async Task<HardcoverSeriesDetail?> GetSeriesAsync(int id, CancellationToken ct) =>
+        (await QueryAsync<HardcoverSeriesData>(SeriesQuery, new { id }, ct)).SeriesByPk;
+
     private const string IsbnQuery = """
         query BookByIsbn($isbns: [String!]!) {
           editions(where: {_or: [{isbn_13: {_in: $isbns}}, {isbn_10: {_in: $isbns}}]}, limit: 1) { book_id }

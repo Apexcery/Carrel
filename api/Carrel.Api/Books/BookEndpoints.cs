@@ -44,6 +44,12 @@ public static class BookEndpoints
                     ["isbn"] = ["Must be a 10- or 13-character ISBN."],
                 })));
 
+        app.MapGroup("/series").RequireRateLimiting(BookSourcesRateLimit)
+            .MapGet("/hardcover/{hardcoverId:int}", (int hardcoverId, SeriesService service, CancellationToken ct) =>
+                FromBookSource(async () => await service.GetByHardcoverIdAsync(hardcoverId, ct) is { } series
+                    ? Results.Ok(series)
+                    : Results.NotFound()));
+
         books.MapGet("/{id:long}", (long id, BookService service, CancellationToken ct) =>
             FromBookSource(async () => await service.GetByIdAsync(id, ct) is { } book
                 ? Results.Ok(book)

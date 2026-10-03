@@ -75,6 +75,7 @@ builder.Services.AddHttpClient<OpenLibraryClient>(client =>
     client.Timeout = TimeSpan.FromSeconds(15);
 });
 builder.Services.AddScoped<BookService>();
+builder.Services.AddScoped<SeriesService>();
 
 var app = builder.Build();
 

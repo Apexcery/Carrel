@@ -202,6 +202,7 @@ public partial class BookService
         doc.Image?.Url,
         doc.Rating is { } rating ? Math.Round(rating, 2) : null,
         doc.RatingsCount,
+        doc.FeaturedSeries?.Series?.Id,
         doc.FeaturedSeries?.Series?.Name,
         doc.FeaturedSeries?.Series is null ? null : doc.FeaturedSeries.Position);
 }

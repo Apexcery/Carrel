@@ -18,8 +18,28 @@ public record BookSearchResult(
     string? CoverUrl,
     decimal? HardcoverRating,
     int? HardcoverRatingsCount,
+    int? SeriesHardcoverId,
     string? SeriesName,
     decimal? SeriesPosition);
+
+/// <summary>A series as listed by Hardcover, cleaned up; its books aren't stored until someone opens one.</summary>
+public record SeriesDetail(
+    int HardcoverId,
+    string Name,
+    string? Author,
+    bool? IsCompleted,
+    SeriesBook[] Books,
+    SeriesBook[] OtherBooks);
+
+public record SeriesBook(
+    int HardcoverId,
+    decimal? Position,
+    string Title,
+    string[] Authors,
+    int? ReleaseYear,
+    string? CoverUrl,
+    decimal? HardcoverRating,
+    int? HardcoverRatingsCount);
 
 public record BookDetail(
     long Id,
@@ -39,7 +59,7 @@ public record BookDetail(
 
 public record ContributorDto(long Id, string Name, string Role);
 
-public record SeriesEntryDto(long Id, string Name, decimal? Position);
+public record SeriesEntryDto(long Id, long? HardcoverId, string Name, decimal? Position);
 
 public record EditionDto(
     long Id,

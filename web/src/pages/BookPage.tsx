@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useParams } from 'react-router'
+import { Link, useParams } from 'react-router'
 import { apiGet } from '../api'
 import { Cover } from '../components/Cover'
 import { ErrorNotice } from '../components/ErrorNotice'
 import { HardcoverRating } from '../components/HardcoverRating'
 import { displaySubtitle, formatDate, formatDuration, listNames, otherCredits, seriesPosition } from '../format'
-import type { BookDetail, Edition } from '../types'
+import type { BookDetail, Edition, SeriesEntry } from '../types'
 
 const EDITIONS_SHOWN = 6
 
@@ -26,7 +26,9 @@ export function BookPage() {
 function BookView({ book }: { book: BookDetail }) {
   const authors = book.authors.filter((a) => a.role === 'author').map((a) => a.name)
   const subtitle = displaySubtitle(book.title, book.subtitle)
-  const [mainSeries, ...otherSeries] = book.series
+  const mainSeries = book.series[0]
+  const seriesHref = (s: SeriesEntry) =>
+    s.hardcoverId ? `/series/hardcover/${s.hardcoverId}${book.hardcoverId ? `?book=${book.hardcoverId}` : ''}` : null
 
   return (
     <article className="book">
@@ -39,7 +41,13 @@ function BookView({ book }: { book: BookDetail }) {
           {mainSeries && (
             <p className="kicker">
               {seriesPosition(mainSeries.position) ? `Book ${seriesPosition(mainSeries.position)} · ` : ''}
-              {mainSeries.name}
+              {seriesHref(mainSeries) ? (
+                <Link to={seriesHref(mainSeries)!} className="series-link">
+                  {mainSeries.name}
+                </Link>
+              ) : (
+                mainSeries.name
+              )}
             </p>
           )}
           <h1 className="book-title">{book.title}</h1>
@@ -67,14 +75,21 @@ function BookView({ book }: { book: BookDetail }) {
 
         {book.description && <Description text={book.description} source={book.descriptionSource} />}
 
-        {otherSeries.length > 0 && (
+        {book.series.length > 0 && (
           <section className="book-section">
-            <h2 className="section-title">Also part of</h2>
+            <h2 className="section-title">{book.series.length === 1 ? 'Series' : 'Series it belongs to'}</h2>
             <ul className="series-list">
-              {otherSeries.map((s) => (
+              {book.series.map((s) => (
                 <li key={s.id}>
                   <span className="mono series-number">{seriesPosition(s.position) ?? '–'}</span>
-                  {s.name}
+                  {seriesHref(s) ? (
+                    <Link to={seriesHref(s)!} className="series-list-link">
+                      {s.name}
+                      <span className="mono series-list-cta">See the whole series →</span>
+                    </Link>
+                  ) : (
+                    s.name
+                  )}
                 </li>
               ))}
             </ul>

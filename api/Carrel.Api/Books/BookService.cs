@@ -166,7 +166,7 @@ public partial class BookService(
         book.HardcoverRatingsCount,
         book.Authors.OrderBy(ba => ba.Position).Select(ba => new ContributorDto(ba.Author.Id, ba.Author.Name, ba.Role)).ToArray(),
         // Featured series first (the frontend headlines it), then by position.
-        book.Series.OrderByDescending(bs => bs.IsFeatured).ThenBy(bs => bs.Position ?? decimal.MaxValue).ThenBy(bs => bs.Series.Name).Select(bs => new SeriesEntryDto(bs.Series.Id, bs.Series.Name, bs.Position)).ToArray(),
+        book.Series.OrderByDescending(bs => bs.IsFeatured).ThenBy(bs => bs.Position ?? decimal.MaxValue).ThenBy(bs => bs.Series.Name).Select(bs => new SeriesEntryDto(bs.Series.Id, bs.Series.HardcoverId, bs.Series.Name, bs.Position)).ToArray(),
         book.Genres.Select(bg => bg.Genre.Name).Order().ToArray(),
         book.Editions.OrderBy(e => e.Id).Select(e => new EditionDto(e.Id, e.Isbn13, e.Isbn10, e.Format, e.PageCount, e.AudioSeconds,
             e.Publisher, e.ReleaseDate, e.Language, e.CoverUrl)).ToArray());
