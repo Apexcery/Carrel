@@ -14,6 +14,14 @@ A book-tracking website: track what you read and find new books.
 
 ## Running locally
 
+The API reads secrets from .NET user secrets (`dotnet user-secrets set <key> <value> --project api/Carrel.Api`):
+
+- `ConnectionStrings:Carrel` – Supabase session pooler connection string, in Npgsql format
+- `Hardcover:ApiToken` – Hardcover API token with the `read:catalog` scope, without the `Bearer ` prefix
+- `BookSources:ContactEmail` – contact address sent in the User-Agent to book data sources
+
+Restore local tools (EF Core migrations) with `dotnet tool restore`.
+
 API (http://localhost:5155, health check at `/health`):
 
 ```bash

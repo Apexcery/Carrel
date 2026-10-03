@@ -1,4 +1,9 @@
+using System.Net.Http.Headers;
 using System.Security.Claims;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
+using Carrel.Api.Books;
 using Carrel.Api.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -35,12 +40,43 @@ builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy
     .AllowAnyHeader()
     .AllowAnyMethod()));
 
+// Limits per signed-in user: a general one for every endpoint, and a tighter one where external book sources may be called.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+        RateLimitPartition.GetFixedWindowLimiter(RateLimitPartitionKey(context),
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = 120, Window = TimeSpan.FromMinutes(1) }));
+    options.AddPolicy(BookEndpoints.BookSourcesRateLimit, context =>
+        RateLimitPartition.GetFixedWindowLimiter(RateLimitPartitionKey(context),
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1) }));
+});
+
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower)));
+
+// Search results are cached in memory; the size limit counts entries.
+builder.Services.AddMemoryCache(options => options.SizeLimit = 1000);
+
+var contactEmail = builder.Configuration["BookSources:ContactEmail"];
+var userAgent = contactEmail is null ? "Carrel/0.1" : $"Carrel/0.1 ({contactEmail})";
+
+builder.Services.AddHttpClient<HardcoverClient>(client =>
+{
+    client.BaseAddress = new Uri("https://api.hardcover.app/v1/graphql");
+    client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
+        builder.Configuration["Hardcover:ApiToken"] ?? throw new InvalidOperationException("Hardcover:ApiToken is not configured."));
+    client.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+});
+builder.Services.AddScoped<BookService>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 if (app.Environment.IsDevelopment())
 {
@@ -55,4 +91,8 @@ app.MapGet("/me", (ClaimsPrincipal user) => new
     Email = user.FindFirstValue("email"),
 });
 
+app.MapBookEndpoints();
+
 app.Run();
+
+static string RateLimitPartitionKey(HttpContext context) => context.User.FindFirstValue("sub") ?? "anonymous";
