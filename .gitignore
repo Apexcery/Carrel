@@ -16,6 +16,11 @@ obj/
 !.env.example
 *.local
 
+# Locally installed agent skills
+.agents/
+.claude/skills/
+skills-lock.json
+
 # OS
 .DS_Store
 Thumbs.db
