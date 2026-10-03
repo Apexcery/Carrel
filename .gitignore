@@ -14,6 +14,7 @@ obj/
 .env
 .env.*
 !.env.example
+!web/.env.development
 *.local
 
 # Locally installed agent skills

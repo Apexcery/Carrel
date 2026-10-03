@@ -3,3 +3,8 @@
 GET {{Carrel.Api_HostAddress}}/health
 
 ###
+
+# Requires a Supabase access token; returns 401 without one.
+GET {{Carrel.Api_HostAddress}}/me
+
+###
