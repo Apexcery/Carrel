@@ -1,11 +1,17 @@
 import { useState, type FormEvent } from 'react'
-import { Link } from 'react-router'
+import { Link, Navigate, useSearchParams } from 'react-router'
+import { useSession } from '../auth'
+import { MIN_PASSWORD_LENGTH, passwordProblem } from '../passwords'
+import { safeNext } from '../signIn'
 import { supabase } from '../supabase'
 
 type Mode = 'sign-in' | 'sign-up'
 
+/** Sign in or create an account, then return to the page that sent you here (?next=). */
 export function SignInPage() {
-  const [mode, setMode] = useState<Mode>('sign-in')
+  const session = useSession()
+  const [params] = useSearchParams()
+  const [mode, setMode] = useState<Mode>(params.get('mode') === 'sign-up' ? 'sign-up' : 'sign-in')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
@@ -13,6 +19,11 @@ export function SignInPage() {
 
   async function submit(event: FormEvent) {
     event.preventDefault()
+    const problem = mode === 'sign-up' ? passwordProblem(password) : null
+    if (problem) {
+      setMessage({ text: problem, isError: true })
+      return
+    }
     setBusy(true)
     setMessage(null)
     const { error } =
@@ -32,10 +43,18 @@ export function SignInPage() {
     setMessage(null)
   }
 
+  if (session) {
+    return <Navigate to={safeNext(params.get('next'))} replace />
+  }
+
   return (
     <div className="sign-in">
       <div className="sign-in-card">
-        <p className="kicker">Carrel</p>
+        <p className="kicker">
+          <Link to="/" className="kicker-link">
+            Carrel
+          </Link>
+        </p>
         <h1 className="sign-in-title">{mode === 'sign-in' ? 'Welcome back.' : 'Take a seat.'}</h1>
         <p className="muted">A quiet place to keep track of what you read.</p>
 
@@ -49,7 +68,7 @@ export function SignInPage() {
             <input
               type="password"
               autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'}
-              minLength={mode === 'sign-up' ? 8 : undefined}
+              minLength={mode === 'sign-up' ? MIN_PASSWORD_LENGTH : undefined}
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}

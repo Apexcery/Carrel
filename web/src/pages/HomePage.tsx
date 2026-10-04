@@ -1,8 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import { apiGet } from '../api'
+import { useSession } from '../auth'
 import { Cover } from '../components/Cover'
 import { ErrorNotice } from '../components/ErrorNotice'
+import { SignInPrompt } from '../components/SignInPrompt'
 import { StarDisplay } from '../components/StarRating'
 import { listNames, STATUS_LABELS } from '../format'
 import { shelfItems, shelfPath } from '../shelves'
@@ -14,6 +16,7 @@ const SHELF_BOOKS = 9
 
 /** The main column is for discovery (recommendations, new releases); the reader's library sits on the right. */
 export function HomePage() {
+  const signedIn = Boolean(useSession())
   return (
     <div className="home-layout">
       <section className="home-main">
@@ -21,7 +24,13 @@ export function HomePage() {
         <p className="home-lede">Search above by title, author, or ISBN to find a book, its editions, and the series it belongs to.</p>
       </section>
       <aside className="home-library" aria-label="Your library">
-        <Library />
+        {signedIn ? (
+          <Library />
+        ) : (
+          <SignInPrompt title="Your library">
+            Sign in to keep track of what you’re reading, what you’ve read, and what you want to read next.
+          </SignInPrompt>
+        )}
       </aside>
     </div>
   )

@@ -10,7 +10,8 @@ public static class BookEndpoints
 
     public static void MapBookEndpoints(this IEndpointRouteBuilder app)
     {
-        var books = app.MapGroup("/books").RequireRateLimiting(BookSourcesRateLimit);
+        // Browsing is public: anyone can search and read book and series pages; only the library needs signing in.
+        var books = app.MapGroup("/books").AllowAnonymous().RequireRateLimiting(BookSourcesRateLimit);
 
         books.MapGet("/search", (string q, int? page, BookService service, CancellationToken ct) =>
         {
@@ -44,7 +45,7 @@ public static class BookEndpoints
                     ["isbn"] = ["Must be a 10- or 13-character ISBN."],
                 })));
 
-        app.MapGroup("/series").RequireRateLimiting(BookSourcesRateLimit)
+        app.MapGroup("/series").AllowAnonymous().RequireRateLimiting(BookSourcesRateLimit)
             .MapGet("/hardcover/{hardcoverId:int}", (int hardcoverId, SeriesService service, CancellationToken ct) =>
                 FromBookSource(async () => await service.GetByHardcoverIdAsync(hardcoverId, ct) is { } series
                     ? Results.Ok(series)

@@ -18,4 +18,9 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Supabase's root certificate, so the database connection can verify the server (SSL Mode=VerifyFull). -->
+    <None Include="supabase-ca.crt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

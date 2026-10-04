@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
 import { ApiError, apiSend } from '../api'
 import { useSession } from '../auth'
+import { passwordProblem } from '../passwords'
 import { PROFILE_KEY, useProfile } from '../profile'
 import { clearRecentSearches } from '../recentSearches'
 import { supabase } from '../supabase'
@@ -226,6 +227,10 @@ function PasswordRow() {
 
   const change = useMutation({
     mutationFn: async () => {
+      const problem = passwordProblem(newPassword)
+      if (problem) {
+        throw new Error(problem)
+      }
       if (newPassword !== repeated) {
         throw new Error('The new passwords don’t match.')
       }
@@ -280,7 +285,7 @@ function PasswordRow() {
           />
         </label>
         <label>
-          <span>New password</span>
+          <span>New password (at least 8 characters)</span>
           <input
             type="password"
             autoComplete="new-password"
