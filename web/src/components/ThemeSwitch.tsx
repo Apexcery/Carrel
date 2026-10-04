@@ -16,7 +16,7 @@ export function ThemeSwitch() {
   }
 
   return (
-    <div className="theme-switch" role="radiogroup" aria-label="Colour theme">
+    <div className="option-switch" role="radiogroup" aria-label="Colour theme">
       {OPTIONS.map((option) => (
         <button
           key={option.value}

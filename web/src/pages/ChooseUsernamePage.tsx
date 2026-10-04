@@ -1,31 +1,17 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiSend } from '../api'
+import { useState, type FormEvent } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { apiSend } from '../api'
 import { PROFILE_KEY } from '../profile'
 import { supabase } from '../supabase'
-import type { Profile, UsernameAvailability } from '../types'
-
-const VALID = /^[A-Za-z0-9_-]{3,20}$/
+import type { Profile } from '../types'
+import { useUsernameStatus } from '../username'
 
 /** Shown after sign-in until the reader has chosen their public username. */
 export function ChooseUsernamePage() {
   const queryClient = useQueryClient()
   const [username, setUsername] = useState('')
   const trimmed = username.trim()
-
-  // Check availability once typing pauses, rather than on every keystroke.
-  const [checking, setChecking] = useState('')
-  useEffect(() => {
-    const timer = setTimeout(() => setChecking(trimmed), 350)
-    return () => clearTimeout(timer)
-  }, [trimmed])
-
-  const availability = useQuery({
-    queryKey: ['username-available', checking],
-    queryFn: () => apiGet<UsernameAvailability>(`/profile/username-available?username=${encodeURIComponent(checking)}`),
-    enabled: VALID.test(checking),
-    staleTime: 30_000,
-  })
+  const status = useUsernameStatus(username, '3 to 20 letters, numbers, underscores, or hyphens. You can change it later.')
 
   const save = useMutation({
     mutationFn: () => apiSend<Profile>('PUT', '/profile', { username: trimmed }),
@@ -34,28 +20,12 @@ export function ChooseUsernamePage() {
 
   function submit(event: FormEvent) {
     event.preventDefault()
-    if (VALID.test(trimmed)) {
+    if (status.canSave) {
       save.mutate()
     }
   }
 
-  const status = (() => {
-    if (!trimmed) {
-      return { text: '3 to 20 letters, numbers, underscores, or hyphens. You can change it later.', tone: '' }
-    }
-    if (!VALID.test(trimmed)) {
-      return { text: 'Use 3 to 20 letters, numbers, underscores, or hyphens.', tone: 'error' }
-    }
-    if (checking !== trimmed || availability.isPending) {
-      return { text: 'Checking…', tone: '' }
-    }
-    if (availability.data?.available) {
-      return { text: `${trimmed} is available.`, tone: 'ok' }
-    }
-    return { text: availability.data?.reason ?? 'Couldn’t check that name. Try again.', tone: 'error' }
-  })()
-
-  const canSave = VALID.test(trimmed) && checking === trimmed && availability.data?.available === true && !save.isPending
+  const canSave = status.canSave && !save.isPending
 
   return (
     <div className="sign-in">
