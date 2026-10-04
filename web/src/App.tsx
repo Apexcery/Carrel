@@ -3,12 +3,15 @@ import { useSession } from './auth'
 import { Layout } from './components/Layout'
 import { BookPage } from './pages/BookPage'
 import { BookResolver } from './pages/BookResolver'
+import { ChooseUsernamePage } from './pages/ChooseUsernamePage'
 import { HomePage } from './pages/HomePage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { SearchPage } from './pages/SearchPage'
 import { SeriesPage } from './pages/SeriesPage'
 import { ShelfPage } from './pages/ShelfPage'
 import { SignInPage } from './pages/SignInPage'
+import { useProfile } from './profile'
+import { ErrorNotice } from './components/ErrorNotice'
 
 function App() {
   const session = useSession()
@@ -18,6 +21,22 @@ function App() {
   }
   if (session === null) {
     return <SignInPage />
+  }
+  return <SignedIn />
+}
+
+/** Everything behind sign-in. A reader without a username chooses one first. */
+function SignedIn() {
+  const profile = useProfile()
+
+  if (profile.isError) {
+    return <ErrorNotice error={profile.error} onRetry={() => profile.refetch()} />
+  }
+  if (!profile.data) {
+    return null
+  }
+  if (profile.data.username === null) {
+    return <ChooseUsernamePage />
   }
 
   return (

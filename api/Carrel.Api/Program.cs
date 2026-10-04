@@ -6,6 +6,7 @@ using System.Threading.RateLimiting;
 using Carrel.Api.Books;
 using Carrel.Api.Data;
 using Carrel.Api.Library;
+using Carrel.Api.Profiles;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
@@ -102,6 +103,7 @@ app.MapGet("/me", (ClaimsPrincipal user) => new
 
 app.MapBookEndpoints();
 app.MapLibraryEndpoints();
+app.MapProfileEndpoints();
 
 app.Run();
 

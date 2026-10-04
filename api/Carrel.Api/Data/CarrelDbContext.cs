@@ -14,6 +14,7 @@ public class CarrelDbContext(DbContextOptions<CarrelDbContext> options) : DbCont
     public DbSet<BookGenre> BookGenres => Set<BookGenre>();
     public DbSet<LibraryEntry> LibraryEntries => Set<LibraryEntry>();
     public DbSet<Read> Reads => Set<Read>();
+    public DbSet<Profile> Profiles => Set<Profile>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -98,6 +99,15 @@ public class CarrelDbContext(DbContextOptions<CarrelDbContext> options) : DbCont
 
             entry.HasOne(e => e.Book).WithMany().OnDelete(DeleteBehavior.Restrict);
             entry.HasOne(e => e.Edition).WithMany().OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<Profile>(profile =>
+        {
+            // user_id references auth.users and usernames are unique ignoring case; both are added in the migration.
+            profile.HasKey(p => p.UserId);
+            profile.ToTable(t => t.HasCheckConstraint("ck_profiles_username", "username ~ '^[A-Za-z0-9_-]{3,20}$'"));
+            profile.Property(p => p.CreatedAt).HasDefaultValueSql("now()");
+            profile.Property(p => p.UpdatedAt).HasDefaultValueSql("now()");
         });
 
         modelBuilder.Entity<Read>(read =>

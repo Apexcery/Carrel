@@ -132,3 +132,13 @@ export interface LibraryItem {
     hardcoverRatingsCount: number | null
   }
 }
+
+export interface Profile {
+  /** Null until the reader chooses one. */
+  username: string | null
+}
+
+export interface UsernameAvailability {
+  available: boolean
+  reason: string | null
+}

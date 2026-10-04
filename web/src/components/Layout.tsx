@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation, useSearchParams } from 'react-router'
-import { useSession } from '../auth'
+import { useProfile } from '../profile'
 import { supabase } from '../supabase'
 import { SearchBox } from './SearchBox'
 import { ThemeSwitch } from './ThemeSwitch'
@@ -31,11 +31,11 @@ export function Layout() {
 }
 
 function Account() {
-  const session = useSession()
+  const username = useProfile().data?.username
   return (
     <div className="account">
-      <span className="account-email" title={session?.user.email}>
-        {session?.user.email}
+      <span className="account-name" title={username ?? undefined}>
+        {username}
       </span>
       <button type="button" className="link-button" onClick={() => supabase.auth.signOut()}>
         Sign out
