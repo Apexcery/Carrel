@@ -3,6 +3,8 @@
   "compatibility_date": "2026-10-04",
   "workers_dev": true,
   "preview_urls": false,
+  // The site's address. Cloudflare creates the DNS record and certificate; the workers.dev address keeps working too.
+  "routes": [{ "pattern": "carrel.zenithal.co.uk", "custom_domain": true }],
   "assets": {
     "directory": "./dist",
     "not_found_handling": "single-page-application"

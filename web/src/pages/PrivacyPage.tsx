@@ -81,7 +81,12 @@ export function PrivacyPage() {
           <strong>Google Cloud</strong> runs Carrel’s server, in Belgium.
         </li>
         <li>
-          <strong>Cloudflare</strong> delivers the website to your browser.
+          <strong>Resend</strong> sends Carrel’s emails, such as confirming your account or changing your email address,
+          so it handles your email address.
+        </li>
+        <li>
+          <strong>Cloudflare</strong> delivers the website to your browser and forwards emails sent to Carrel’s contact
+          address.
         </li>
         <li>
           <strong>Hardcover</strong> and <strong>Open Library</strong> supply the book information. When you search,
