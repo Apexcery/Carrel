@@ -10,7 +10,9 @@ using Carrel.Api.Library;
 using Carrel.Api.Profiles;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,8 +23,14 @@ var supabaseUrl = builder.Configuration["Supabase:Url"]
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks();
+// Verify the database server's certificate against Supabase's root CA, not just encrypt the connection.
+var connectionString = new NpgsqlConnectionStringBuilder(builder.Configuration.GetConnectionString("Carrel"))
+{
+    SslMode = SslMode.VerifyFull,
+    RootCertificate = Path.Combine(AppContext.BaseDirectory, "supabase-ca.crt"),
+}.ConnectionString;
 builder.Services.AddDbContext<CarrelDbContext>(options => options
-    .UseNpgsql(builder.Configuration.GetConnectionString("Carrel"))
+    .UseNpgsql(connectionString)
     .UseSnakeCaseNamingConvention());
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -43,16 +51,43 @@ builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy
     .AllowAnyHeader()
     .AllowAnyMethod()));
 
-// Limits per signed-in user: a general one for every endpoint, and a tighter one where external book sources may be called.
+// Cloud Run puts the visitor's address last in X-Forwarded-For; earlier entries come from the client and can be faked,
+// so only the last one is used (ForwardLimit 1). Signed-out visitors are rate limited by this address.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor;
+    options.ForwardLimit = 1;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
+// Limits per signed-in user, or per address for signed-out visitors (who get lower ones): a general one for every
+// endpoint, and a tighter one where external book sources may be called. Signed-out book lookups also share one daily
+// allowance, so anonymous traffic can't use up Hardcover's daily request quota and break search for readers.
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
-        RateLimitPartition.GetFixedWindowLimiter(RateLimitPartitionKey(context),
-            _ => new FixedWindowRateLimiterOptions { PermitLimit = 120, Window = TimeSpan.FromMinutes(1) }));
+    options.GlobalLimiter = PartitionedRateLimiter.CreateChained(
+        PartitionedRateLimiter.Create<HttpContext, string>(context =>
+            RateLimitPartition.GetFixedWindowLimiter(RateLimitPartitionKey(context), _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = IsSignedIn(context) ? 120 : 60,
+                Window = TimeSpan.FromMinutes(1),
+            })),
+        PartitionedRateLimiter.Create<HttpContext, string>(context =>
+            !IsSignedIn(context) && IsBookSourceRequest(context)
+                ? RateLimitPartition.GetFixedWindowLimiter("anonymous-book-sources", _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 2000,
+                    Window = TimeSpan.FromDays(1),
+                })
+                : RateLimitPartition.GetNoLimiter("unlimited")));
     options.AddPolicy(BookEndpoints.BookSourcesRateLimit, context =>
-        RateLimitPartition.GetFixedWindowLimiter(RateLimitPartitionKey(context),
-            _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1) }));
+        RateLimitPartition.GetFixedWindowLimiter(RateLimitPartitionKey(context), _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = IsSignedIn(context) ? 30 : 15,
+            Window = TimeSpan.FromMinutes(1),
+        }));
     options.AddPolicy(AccountEndpoints.AccountRateLimit, context =>
         RateLimitPartition.GetFixedWindowLimiter(RateLimitPartitionKey(context),
             _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1) }));
@@ -93,6 +128,20 @@ builder.Services.AddScoped<LibraryService>();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+app.UseForwardedHeaders();
+
+// The API only returns JSON: nothing in a response should run, be framed, or be sniffed as another type.
+app.Use((context, next) =>
+{
+    var headers = context.Response.Headers;
+    headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'";
+    headers["X-Content-Type-Options"] = "nosniff";
+    headers["X-Frame-Options"] = "DENY";
+    headers["Referrer-Policy"] = "no-referrer";
+    headers["Strict-Transport-Security"] = "max-age=31536000";
+    return next(context);
+});
+
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -118,4 +167,10 @@ app.MapAccountEndpoints();
 
 app.Run();
 
-static string RateLimitPartitionKey(HttpContext context) => context.User.FindFirstValue("sub") ?? "anonymous";
+static bool IsSignedIn(HttpContext context) => context.User.FindFirstValue("sub") is not null;
+
+static string RateLimitPartitionKey(HttpContext context) =>
+    context.User.FindFirstValue("sub") is { } userId ? $"user:{userId}" : $"ip:{context.Connection.RemoteIpAddress}";
+
+static bool IsBookSourceRequest(HttpContext context) =>
+    context.Request.Path.StartsWithSegments("/books") || context.Request.Path.StartsWithSegments("/series");

@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react'
-import { Link, NavLink, Outlet, useLocation, useSearchParams } from 'react-router'
+import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router'
+import { useSession } from '../auth'
 import { useProfile } from '../profile'
+import { isMembersOnly, signInPath } from '../signIn'
 import { supabase } from '../supabase'
 import { SearchBox } from './SearchBox'
 
@@ -27,21 +28,6 @@ export function Layout() {
   )
 }
 
-/** For pages anyone can open (privacy, copyright) when there's no signed-in reader to show the full header for. */
-export function PublicLayout({ children }: { children: ReactNode }) {
-  return (
-    <div className="shell">
-      <header className="masthead">
-        <Link to="/" className="wordmark" aria-label="Carrel home">
-          Carrel
-        </Link>
-      </header>
-      <main className="page">{children}</main>
-      <Footer />
-    </div>
-  )
-}
-
 function Footer() {
   return (
     <footer className="colophon">
@@ -54,19 +40,39 @@ function Footer() {
   )
 }
 
+/** Settings are for everyone (appearance needs no account); the rest depends on whether someone is signed in. */
 function Account() {
+  const signedIn = Boolean(useSession())
   const username = useProfile().data?.username
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
+
+  async function signOut() {
+    await supabase.auth.signOut()
+    if (isMembersOnly(pathname)) {
+      navigate('/', { replace: true })
+    }
+  }
+
   return (
     <div className="account">
-      <span className="account-name" title={username ?? undefined}>
-        {username}
-      </span>
+      {signedIn && (
+        <span className="account-name" title={username ?? undefined}>
+          {username}
+        </span>
+      )}
       <NavLink to="/settings" className="account-settings" aria-label="Settings" title="Settings">
         <CogIcon />
       </NavLink>
-      <button type="button" className="link-button" onClick={() => supabase.auth.signOut()}>
-        Sign out
-      </button>
+      {signedIn ? (
+        <button type="button" className="link-button" onClick={signOut}>
+          Sign out
+        </button>
+      ) : (
+        <Link to={signInPath()} className="link-button">
+          Sign in
+        </Link>
+      )}
     </div>
   )
 }

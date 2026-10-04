@@ -1,7 +1,7 @@
-import type { ReactNode } from 'react'
-import { Navigate, Route, Routes, useLocation } from 'react-router'
+import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router'
 import { useSession } from './auth'
-import { Layout, PublicLayout } from './components/Layout'
+import { ErrorNotice } from './components/ErrorNotice'
+import { Layout } from './components/Layout'
 import { AccountSettings } from './pages/AccountSettings'
 import { AppearanceSettings } from './pages/AppearanceSettings'
 import { BookPage } from './pages/BookPage'
@@ -17,43 +17,36 @@ import { SettingsPage } from './pages/SettingsPage'
 import { ShelfPage } from './pages/ShelfPage'
 import { SignInPage } from './pages/SignInPage'
 import { useProfile } from './profile'
-import { ErrorNotice } from './components/ErrorNotice'
+import { signInPath } from './signIn'
 
-/** Pages anyone can read, signed in or not: people need the privacy notice before signing up. */
-const PUBLIC_PAGES: Record<string, ReactNode> = {
-  '/privacy': <PrivacyPage />,
-  '/copyright': <CopyrightPage />,
-}
+/** Pages a reader who hasn't chosen a username yet can still open. */
+const BEFORE_USERNAME = ['/privacy', '/copyright']
 
+/** Browsing is open to everyone; signing in is only for keeping a library. */
 function App() {
   const session = useSession()
-  const publicPage = PUBLIC_PAGES[useLocation().pathname]
-
-  if (session === undefined || session === null) {
-    if (publicPage) {
-      return <PublicLayout>{publicPage}</PublicLayout>
-    }
-    return session === null ? <SignInPage /> : null
-  }
-  return <SignedIn publicPage={publicPage} />
-}
-
-/** Everything behind sign-in. A reader without a username chooses one first, but can still read the public pages. */
-function SignedIn({ publicPage }: { publicPage: ReactNode | undefined }) {
   const profile = useProfile()
+  const { pathname } = useLocation()
 
-  if (profile.isError) {
-    return <ErrorNotice error={profile.error} onRetry={() => profile.refetch()} />
-  }
-  if (!profile.data) {
+  if (session === undefined) {
     return null
   }
-  if (profile.data.username === null) {
-    return publicPage ? <PublicLayout>{publicPage}</PublicLayout> : <ChooseUsernamePage />
+  // A signed-in reader without a username chooses one first.
+  if (session && !BEFORE_USERNAME.includes(pathname)) {
+    if (profile.isError) {
+      return <ErrorNotice error={profile.error} onRetry={() => profile.refetch()} />
+    }
+    if (!profile.data) {
+      return null
+    }
+    if (profile.data.username === null) {
+      return <ChooseUsernamePage />
+    }
   }
 
   return (
     <Routes>
+      <Route path="sign-in" element={<SignInPage />} />
       <Route element={<Layout />}>
         <Route index element={<HomePage />} />
         <Route path="search" element={<SearchPage />} />
@@ -61,18 +54,27 @@ function SignedIn({ publicPage }: { publicPage: ReactNode | undefined }) {
         <Route path="books/hardcover/:sourceId" element={<BookResolver source="hardcover" />} />
         <Route path="books/openlibrary/:sourceId" element={<BookResolver source="openlibrary" />} />
         <Route path="series/hardcover/:hardcoverId" element={<SeriesPage />} />
-        <Route path="shelves/:slug" element={<ShelfPage />} />
         <Route path="privacy" element={<PrivacyPage />} />
         <Route path="copyright" element={<CopyrightPage />} />
         <Route path="settings" element={<SettingsPage />}>
-          <Route index element={<Navigate to="account" replace />} />
-          <Route path="account" element={<AccountSettings />} />
+          <Route index element={<Navigate to={session ? 'account' : 'appearance'} replace />} />
           <Route path="appearance" element={<AppearanceSettings />} />
+          <Route element={<RequireSignIn />}>
+            <Route path="account" element={<AccountSettings />} />
+          </Route>
+        </Route>
+        <Route element={<RequireSignIn />}>
+          <Route path="shelves/:slug" element={<ShelfPage />} />
         </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>
   )
+}
+
+/** Sends signed-out visitors to sign in, then back here. */
+function RequireSignIn() {
+  return useSession() ? <Outlet /> : <Navigate to={signInPath()} replace />
 }
 
 export default App

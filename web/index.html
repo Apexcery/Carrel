@@ -6,15 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Carrel: keep track of what you read and find what to read next." />
     <title>Carrel</title>
-    <script>
-      // Apply the saved theme and accent before first paint, so the page doesn't flash the wrong colours.
-      try {
-        var theme = localStorage.getItem('carrel-theme')
-        var accent = localStorage.getItem('carrel-accent')
-        if (theme === 'light' || theme === 'dark') document.documentElement.setAttribute('data-theme', theme)
-        if (accent) document.documentElement.setAttribute('data-accent', accent)
-      } catch (e) {}
-    </script>
+    <!-- Applies the saved theme and accent before first paint. A separate file, not inline, so the CSP needn't allow inline scripts. -->
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>

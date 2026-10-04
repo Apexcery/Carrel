@@ -1,7 +1,12 @@
 import { NavLink, Outlet } from 'react-router'
+import { useSession } from '../auth'
 
-/** Settings, split into sections with their own addresses (/settings/account, /settings/appearance). */
+/**
+ * Settings, split into sections with their own addresses (/settings/account, /settings/appearance). Signed-out
+ * visitors only get Appearance.
+ */
 export function SettingsPage() {
+  const signedIn = Boolean(useSession())
   return (
     <section className="settings">
       <header className="search-header">
@@ -9,7 +14,7 @@ export function SettingsPage() {
       </header>
       <div className="settings-layout">
         <nav className="settings-nav" aria-label="Settings sections">
-          <NavLink to="account">Account</NavLink>
+          {signedIn && <NavLink to="account">Account</NavLink>}
           <NavLink to="appearance">Appearance</NavLink>
         </nav>
         <div className="settings-content">

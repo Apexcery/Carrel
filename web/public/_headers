@@ -1,0 +1,10 @@
+# Security headers for every page and file Cloudflare serves (https://developers.cloudflare.com/workers/static-assets/headers/).
+# The Content Security Policy only allows Carrel's own scripts and styles, images from the book sources' cover servers,
+# and connections to Carrel's API and Supabase. It's report-only until checked against the live site, then enforced.
+/*
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://assets.hardcover.app https://covers.openlibrary.org https://archive.org https://*.archive.org; font-src 'self'; connect-src 'self' https://carrel-api-3344660708.europe-west1.run.app https://iirzotkuqblvyfvjwuta.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+  Strict-Transport-Security: max-age=31536000

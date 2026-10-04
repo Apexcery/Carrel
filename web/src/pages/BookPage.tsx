@@ -2,10 +2,12 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router'
 import { apiGet } from '../api'
+import { useSession } from '../auth'
 import { Cover } from '../components/Cover'
 import { ErrorNotice } from '../components/ErrorNotice'
 import { HardcoverRating } from '../components/HardcoverRating'
 import { LibraryPanel } from '../components/LibraryPanel'
+import { SignInPrompt } from '../components/SignInPrompt'
 import { displaySubtitle, formatDate, formatDuration, listNames, otherCredits, seriesPosition } from '../format'
 import type { BookDetail, Edition, SeriesEntry } from '../types'
 
@@ -25,6 +27,7 @@ export function BookPage() {
 }
 
 function BookView({ book }: { book: BookDetail }) {
+  const signedIn = Boolean(useSession())
   const authors = book.authors.filter((a) => a.role === 'author').map((a) => a.name)
   const subtitle = displaySubtitle(book.title, book.subtitle)
   const mainSeries = book.series[0]
@@ -66,7 +69,11 @@ function BookView({ book }: { book: BookDetail }) {
           {book.firstPublishedYear && <span className="mono">First published {book.firstPublishedYear}</span>}
         </div>
 
-        <LibraryPanel book={book} />
+        {signedIn ? (
+          <LibraryPanel book={book} />
+        ) : (
+          <SignInPrompt title="Add to your library" panel>Sign in to shelve this book, rate it, and track your progress.</SignInPrompt>
+        )}
 
         {book.genres.length > 0 && (
           <ul className="genres" aria-label="Genres">

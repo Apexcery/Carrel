@@ -1,4 +1,4 @@
-// Recent searches, kept in this browser only and separately for each signed-in account.
+// Recent searches, kept in this browser only and separately for each signed-in account (and for signed-out browsing).
 
 const MAX_RECENT = 8
 
