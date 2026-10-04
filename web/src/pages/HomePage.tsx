@@ -18,7 +18,7 @@ export function HomePage() {
     <div className="home-layout">
       <section className="home-main">
         <h1 className="home-title">What are you reading?</h1>
-        <p className="home-lede">Search above by title, author or ISBN to find a book, its editions and the series it belongs to.</p>
+        <p className="home-lede">Search above by title, author, or ISBN to find a book, its editions, and the series it belongs to.</p>
       </section>
       <aside className="home-library" aria-label="Your library">
         <Library />
@@ -49,7 +49,7 @@ function Library() {
       </header>
 
       {library.data.length === 0 && (
-        <p className="muted">Nothing on your shelves yet. Open a book and choose a status to add it here.</p>
+        <p className="muted">Nothing on your shelves yet. Books you add to your library will appear here.</p>
       )}
 
       {reading.length > 0 && (

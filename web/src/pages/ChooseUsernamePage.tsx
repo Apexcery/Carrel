@@ -41,10 +41,10 @@ export function ChooseUsernamePage() {
 
   const status = (() => {
     if (!trimmed) {
-      return { text: '3 to 20 letters, numbers, underscores or hyphens. You can change it later.', tone: '' }
+      return { text: '3 to 20 letters, numbers, underscores, or hyphens. You can change it later.', tone: '' }
     }
     if (!VALID.test(trimmed)) {
-      return { text: 'Use 3 to 20 letters, numbers, underscores or hyphens.', tone: 'error' }
+      return { text: 'Use 3 to 20 letters, numbers, underscores, or hyphens.', tone: 'error' }
     }
     if (checking !== trimmed || availability.isPending) {
       return { text: 'Checking…', tone: '' }

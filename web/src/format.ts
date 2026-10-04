@@ -14,7 +14,7 @@ export function listNames(names: string[]): string {
   if (names.length <= 2) {
     return names.join(' and ')
   }
-  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+  return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`
 }
 
 const ROLE_PHRASES: Record<string, string> = {

@@ -77,7 +77,7 @@ public static partial class ProfileEndpoints
     {
         if (!ValidUsername().IsMatch(username))
         {
-            return new(false, "Use 3 to 20 letters, numbers, underscores or hyphens.");
+            return new(false, "Use 3 to 20 letters, numbers, underscores, or hyphens.");
         }
         if (Reserved.Contains(username))
         {

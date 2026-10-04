@@ -55,7 +55,7 @@ export function SearchBox({ initialQuery }: { initialQuery: string }) {
           id="search"
           type="search"
           autoComplete="off"
-          placeholder="Title, author or ISBN"
+          placeholder="Title, author, or ISBN"
           maxLength={200}
           // Keep the typed text when the dropdown closes (the combobox has no selected value to show).
           displayValue={() => text}

@@ -280,7 +280,7 @@ function EditForm({
           className="link-button shelf-remove"
           disabled={busy}
           onClick={() => {
-            if (window.confirm('Remove this book from your library? Its rating, progress and read dates will be deleted.')) {
+            if (window.confirm('Remove this book from your library? Its rating, progress, and read dates will be deleted.')) {
               onRemove()
             }
           }}

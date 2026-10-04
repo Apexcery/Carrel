@@ -393,8 +393,10 @@ p {
   max-width: 640px;
 }
 
+/* Line the capitals up with "Your library". Literata has space above its capitals that grows with size: 0.206em at
+   this line height, 0.221em for the library title (2.2rem, so 0.486rem). Pull this title up by the difference. */
 .home-main .home-title {
-  margin-top: 0;
+  margin-top: calc(0.486rem - 0.206em);
 }
 
 /* Discovery on the left, the reader's library in a column on the right. */

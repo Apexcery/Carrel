@@ -85,7 +85,7 @@ export function ShelfPage() {
               id="shelf-filter"
               type="search"
               autoComplete="off"
-              placeholder="Filter by title, author or series"
+              placeholder="Filter by title, author, or series"
               value={query}
               onChange={(e) => update({ q: e.target.value })}
             />
