@@ -21,6 +21,8 @@ The API reads secrets from .NET user secrets (`dotnet user-secrets set <key> <va
 - `BookSources:ContactEmail` – contact address sent in the User-Agent to book data sources
 - `Supabase:SecretKey` – Supabase secret key (`carrel_api`), used to check passwords and delete accounts; only account deletion fails without it
 
+Local development uses a separate Supabase project, `carrel-dev`: its address is in `appsettings.Development.json` and `web/.env.development`, and the user secrets above should point at it. Production's settings live only in Cloud Run (secrets and `appsettings.json`) and in Cloudflare's build variables.
+
 Restore local tools (EF Core migrations) with `dotnet tool restore`.
 
 API (http://localhost:5155, health check at `/health`):
@@ -36,6 +38,16 @@ cd web
 npm install
 npm run dev
 ```
+
+## Database migrations
+
+`dotnet ef database update --project api/Carrel.Api` applies migrations to the dev database (the user secret). Apply them to production deliberately, before pushing code that needs them, by setting production's connection string for that one command only (environment variables override user secrets). In PowerShell:
+
+```powershell
+$env:ConnectionStrings__Carrel = '<production connection string>'; dotnet ef database update --project api/Carrel.Api; Remove-Item Env:ConnectionStrings__Carrel
+```
+
+The running site keeps using the old code until the deploy finishes, so a migration must not break it: add columns and tables rather than renaming or dropping ones the deployed code still reads.
 
 ## Auth emails
 
