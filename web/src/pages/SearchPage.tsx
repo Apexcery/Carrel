@@ -1,7 +1,9 @@
-import type { CSSProperties } from 'react'
+import { useEffect, type CSSProperties } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router'
 import { apiGet } from '../api'
+import { useSession } from '../auth'
+import { addRecentSearch } from '../recentSearches'
 import { Cover } from '../components/Cover'
 import { ErrorNotice } from '../components/ErrorNotice'
 import { HardcoverRating } from '../components/HardcoverRating'
@@ -14,6 +16,14 @@ const MAX_PAGE = 50
 export function SearchPage() {
   const [params] = useSearchParams()
   const q = (params.get('q') ?? '').trim()
+  const userId = useSession()?.user.id
+
+  // Every search shown here goes into this browser's recent searches, however it was reached.
+  useEffect(() => {
+    if (q && userId) {
+      addRecentSearch(userId, q)
+    }
+  }, [q, userId])
 
   const search = useInfiniteQuery({
     queryKey: ['search', q],

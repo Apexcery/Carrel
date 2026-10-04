@@ -5,6 +5,7 @@ import { apiGet } from '../api'
 import { Cover } from '../components/Cover'
 import { ErrorNotice } from '../components/ErrorNotice'
 import { HardcoverRating } from '../components/HardcoverRating'
+import { LibraryPanel } from '../components/LibraryPanel'
 import { displaySubtitle, formatDate, formatDuration, listNames, otherCredits, seriesPosition } from '../format'
 import type { BookDetail, Edition, SeriesEntry } from '../types'
 
@@ -64,6 +65,8 @@ function BookView({ book }: { book: BookDetail }) {
           <HardcoverRating rating={book.hardcoverRating} count={book.hardcoverRatingsCount} hardcoverId={book.hardcoverId} />
           {book.firstPublishedYear && <span className="mono">First published {book.firstPublishedYear}</span>}
         </div>
+
+        <LibraryPanel book={book} />
 
         {book.genres.length > 0 && (
           <ul className="genres" aria-label="Genres">

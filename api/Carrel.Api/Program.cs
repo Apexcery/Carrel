@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Carrel.Api.Books;
 using Carrel.Api.Data;
+using Carrel.Api.Library;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
@@ -76,6 +77,7 @@ builder.Services.AddHttpClient<OpenLibraryClient>(client =>
 });
 builder.Services.AddScoped<BookService>();
 builder.Services.AddScoped<SeriesService>();
+builder.Services.AddScoped<LibraryService>();
 
 var app = builder.Build();
 
@@ -99,6 +101,7 @@ app.MapGet("/me", (ClaimsPrincipal user) => new
 });
 
 app.MapBookEndpoints();
+app.MapLibraryEndpoints();
 
 app.Run();
 

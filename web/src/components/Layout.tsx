@@ -1,7 +1,7 @@
-import { useState, type FormEvent } from 'react'
-import { Link, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router'
+import { Link, Outlet, useLocation, useSearchParams } from 'react-router'
 import { useSession } from '../auth'
 import { supabase } from '../supabase'
+import { SearchBox } from './SearchBox'
 import { ThemeSwitch } from './ThemeSwitch'
 
 export function Layout() {
@@ -27,36 +27,6 @@ export function Layout() {
         <ThemeSwitch />
       </footer>
     </div>
-  )
-}
-
-function SearchBox({ initialQuery }: { initialQuery: string }) {
-  const navigate = useNavigate()
-  const [text, setText] = useState(initialQuery)
-
-  function submit(event: FormEvent) {
-    event.preventDefault()
-    const q = text.trim()
-    if (q) {
-      navigate(`/search?q=${encodeURIComponent(q)}`)
-    }
-  }
-
-  return (
-    <form className="search-box" role="search" onSubmit={submit}>
-      <label htmlFor="search" className="visually-hidden">
-        Search books
-      </label>
-      <input
-        id="search"
-        type="search"
-        placeholder="Title, author or ISBN"
-        maxLength={200}
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-      />
-      <button type="submit">Search</button>
-    </form>
   )
 }
 

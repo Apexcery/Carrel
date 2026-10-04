@@ -2,10 +2,18 @@
    Colours are tokens only: themes switch via html[data-theme], accents via html[data-accent]. */
 
 :root {
-  /* Caslon for titles (classic book typography); Literata, designed for reading ebooks, for text. */
-  --font-display: 'Libre Caslon Display', 'Georgia', serif;
+  /* One serif family throughout: Literata, designed for reading ebooks. Titles use the same family; its optical
+     size axis (font-optical-sizing: auto) gives large text the finer display cut automatically. */
+  --font-display: 'Literata Variable', 'Georgia', serif;
   --font-body: 'Literata Variable', 'Georgia', serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  /* Type scale: use these instead of one-off sizes. Rem-based so nothing compounds. */
+  --text-mono: 0.8rem; /* all mono text: labels, kickers, buttons, dates, lengths, ISBNs, ratings, small links */
+  --text-body: 1rem; /* serif: all running text, subtitles, bylines, form fields, card text */
+  --text-heading: 1.4rem; /* display: titles in lists */
+  --text-display-md: clamp(2.2rem, 5vw, 3.4rem); /* display: search and series page titles */
+  --text-display-lg: clamp(2.4rem, 5.5vw, 4rem); /* display: book and home titles */
 
   /* Accent palette: each accent has a light-theme and dark-theme value. */
   --accent-light: #8a2b1d;
@@ -97,7 +105,7 @@ body {
   background: var(--paper);
   font-family: var(--font-body);
   font-weight: var(--body-weight);
-  font-size: 1.125rem;
+  font-size: var(--text-body);
   font-optical-sizing: auto;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
@@ -136,7 +144,8 @@ a:hover {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
   color: inherit;
 }
@@ -164,7 +173,7 @@ p {
 
 .mono {
   font-family: var(--font-mono);
-  font-size: 0.8em;
+  font-size: var(--text-mono);
   letter-spacing: 0.01em;
 }
 
@@ -174,7 +183,7 @@ p {
 
 .kicker {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: var(--text-mono);
   font-weight: 500;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -196,7 +205,7 @@ p {
   background: none;
   cursor: pointer;
   font-family: var(--font-mono);
-  font-size: 0.8rem;
+  font-size: var(--text-mono);
   color: var(--ink-soft);
   text-decoration: underline;
   text-decoration-color: var(--rule-strong);
@@ -216,7 +225,7 @@ p {
   background: var(--accent);
   color: var(--on-accent);
   font-family: var(--font-mono);
-  font-size: 0.8rem;
+  font-size: var(--text-mono);
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -285,7 +294,19 @@ p {
   border-radius: 2px 0 0 2px;
   background: var(--paper-raised);
   padding: 0.55em 0.85em;
-  font-size: 1rem;
+  font-size: var(--text-body);
+}
+
+.search-box input:focus-visible,
+.edition-picker input:focus-visible {
+  outline: none;
+}
+
+.search-box:has(input:focus-visible),
+.edition-picker:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 .search-box input::placeholder {
@@ -306,7 +327,7 @@ p {
 
 .account-email {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: var(--text-mono);
   color: var(--ink-faint);
   max-width: 180px;
   overflow: hidden;
@@ -328,7 +349,7 @@ p {
   padding: 18px 0 28px;
   border-top: 1px solid var(--rule);
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: var(--text-mono);
   color: var(--ink-faint);
 }
 
@@ -343,7 +364,7 @@ p {
   background: none;
   padding: 0.35em 0.75em;
   font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-size: var(--text-mono);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ink-soft);
@@ -366,16 +387,37 @@ p {
   padding-top: 8vh;
 }
 
+.home-main {
+  max-width: 640px;
+}
+
+.home-main .home-title {
+  margin-top: 0;
+}
+
+/* Discovery on the left, the reader's library in a column on the right. */
+.home-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  gap: 56px;
+  align-items: start;
+}
+
+.home-library {
+  padding-left: 32px;
+  border-left: 1px solid var(--rule);
+}
+
 .home-title {
   font-family: var(--font-display);
-  font-size: clamp(2.6rem, 7vw, 4.6rem);
+  font-size: var(--text-display-lg);
   line-height: 1.02;
   margin: 14px 0 22px;
   letter-spacing: -0.015em;
 }
 
 .home-lede {
-  font-size: 1.25rem;
+  font-size: var(--text-body);
   color: var(--ink-soft);
   max-width: 34em;
 }
@@ -388,7 +430,7 @@ p {
 
 .search-title {
   font-family: var(--font-display);
-  font-size: clamp(2rem, 4.5vw, 3rem);
+  font-size: var(--text-display-md);
   line-height: 1.1;
   margin: 8px 0 6px;
   overflow-wrap: anywhere;
@@ -466,7 +508,7 @@ p {
 
 .result-title {
   font-family: var(--font-display);
-  font-size: 1.45rem;
+  font-size: var(--text-heading);
   line-height: 1.15;
   transition: color 140ms ease;
 }
@@ -570,7 +612,7 @@ p {
   align-items: baseline;
   gap: 6px;
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: var(--text-mono);
   color: var(--ink-soft);
 }
 
@@ -613,7 +655,7 @@ p {
 
 .book-title {
   font-family: var(--font-display);
-  font-size: clamp(2.4rem, 5.5vw, 4rem);
+  font-size: var(--text-display-lg);
   line-height: 1.02;
   letter-spacing: -0.015em;
   margin: 10px 0 8px;
@@ -621,14 +663,14 @@ p {
 }
 
 .book-subtitle {
-  font-size: 1.4rem;
+  font-size: var(--text-body);
   font-style: italic;
   color: var(--ink-soft);
 }
 
 .book-byline {
   margin-top: 14px;
-  font-size: 1.25rem;
+  font-size: var(--text-body);
 }
 
 .book-credit {
@@ -655,7 +697,7 @@ p {
 
 .genres li {
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: var(--text-mono);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   padding: 0.3em 0.7em;
@@ -666,7 +708,7 @@ p {
 
 .description {
   max-width: 38em;
-  font-size: 1.15rem;
+  font-size: var(--text-body);
   line-height: 1.65;
 }
 
@@ -694,7 +736,7 @@ p {
 
 .section-title {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: var(--text-mono);
   font-weight: 500;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -747,7 +789,7 @@ p {
 
 .series-title {
   font-family: var(--font-display);
-  font-size: clamp(2.2rem, 5vw, 3.6rem);
+  font-size: var(--text-display-md);
   line-height: 1.05;
   letter-spacing: -0.01em;
   margin: 8px 0 8px;
@@ -755,7 +797,7 @@ p {
 }
 
 .series-meta {
-  font-size: 1.15rem;
+  font-size: var(--text-body);
   color: var(--ink-soft);
 }
 
@@ -795,7 +837,7 @@ p {
 
 .series-books-other .series-item-number {
   font-family: var(--font-mono);
-  font-size: 1rem;
+  font-size: var(--text-mono);
 }
 
 .series-item-link {
@@ -823,7 +865,7 @@ p {
   border: 1px solid var(--accent);
   border-radius: 2px;
   font-family: var(--font-mono);
-  font-size: 0.65rem;
+  font-size: var(--text-mono);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--accent);
@@ -862,7 +904,7 @@ p {
 
 .catalogue-format {
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: var(--text-mono);
   font-weight: 500;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -870,7 +912,7 @@ p {
 }
 
 .catalogue-publisher {
-  font-size: 1.05rem;
+  font-size: var(--text-body);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -882,6 +924,592 @@ p {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ---------- Shelf panel (book page) ---------- */
+
+/* Spaced with margins rather than a grid gap, so the collapsed edit section takes no space at all. */
+.shelf-panel {
+  display: flex;
+  flex-direction: column;
+  margin: 4px 0 30px;
+  padding: 20px 22px 18px;
+  background: var(--paper-raised);
+  border-top: 2px solid var(--accent);
+  box-shadow: var(--card-shadow);
+  min-height: 70px;
+}
+
+.shelf-panel > * + * {
+  margin-top: 18px;
+}
+
+.status-picker {
+  display: flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.status-picker button {
+  border: 0;
+  background: none;
+  padding: 0.55em 0.95em;
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.status-picker button + button {
+  border-left: 1px solid var(--rule-strong);
+}
+
+.status-picker button:hover:not(:disabled) {
+  color: var(--accent);
+}
+
+.status-picker button[aria-checked='true'] {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.status-picker button:disabled {
+  cursor: progress;
+}
+
+.shelf-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+}
+
+.shelf-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  min-width: 8.5em;
+}
+
+.shelf-panel select,
+.progress-inputs input,
+.read-row input {
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  background: var(--paper);
+  padding: 0.35em 0.6em;
+  font-size: var(--text-body);
+  max-width: 100%;
+}
+
+.shelf-panel select {
+  min-width: 0;
+  flex: 1 1 260px;
+}
+
+.shelf-edit {
+  align-self: flex-start;
+}
+
+/* The edit section slides open by animating its grid row from 0fr to 1fr (i.e. to its natural height). */
+.shelf-panel > .shelf-edit-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  margin-top: 0;
+  transition:
+    grid-template-rows 280ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    opacity 220ms ease,
+    margin-top 280ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.shelf-panel > .shelf-edit-wrap[data-open='true'] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  margin-top: 18px;
+}
+
+.shelf-edit-inner {
+  min-height: 0;
+  overflow: hidden;
+  /* Room for focus outlines inside the clipped area. */
+  padding: 0 4px 4px;
+  margin: 0 -4px -4px;
+}
+
+.shelf-edit-form {
+  display: grid;
+  gap: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule);
+}
+
+.progress-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.progress-inputs input {
+  width: 7em;
+}
+
+.progress-inputs select {
+  flex: 0 1 auto;
+}
+
+.shelf-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+}
+
+.shelf-remove {
+  margin-left: auto;
+}
+
+/* Edition picker (Headless UI combobox; the options list is portalled to the body). */
+.edition-picker {
+  display: flex;
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.edition-picker input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--rule-strong);
+  border-right: 0;
+  border-radius: 2px 0 0 2px;
+  background: var(--paper);
+  padding: 0.35em 0.6em;
+  font-size: var(--text-body);
+}
+
+.edition-picker input::placeholder {
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+.edition-picker-button {
+  border: 1px solid var(--rule-strong);
+  border-radius: 0 2px 2px 0;
+  background: var(--paper);
+  padding: 0 0.75em;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+/* Dropdowns for the edition picker and the search box (Headless UI; portalled to the body). */
+.edition-options,
+.search-options {
+  --anchor-gap: 4px;
+  width: max(var(--input-width), 320px);
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 6px 0;
+  background: var(--paper-raised);
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  box-shadow: var(--card-shadow);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-weight: var(--body-weight);
+  z-index: 50;
+}
+
+.edition-options:focus,
+.search-options:focus {
+  outline: none;
+}
+
+.edition-group,
+.search-options-heading {
+  padding: 10px 14px 4px;
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.edition-option,
+.search-option {
+  display: grid;
+  gap: 1px;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+
+.edition-option[data-focus],
+.search-option[data-focus] {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.edition-option[data-selected] {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.edition-option-detail {
+  color: var(--ink-soft);
+  font-size: var(--text-mono);
+}
+
+.search-option-clear {
+  margin-top: 4px;
+  border-top: 1px solid var(--rule);
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+  color: var(--ink-soft);
+}
+
+.edition-empty {
+  padding: 10px 14px;
+  color: var(--ink-soft);
+}
+
+/* Stars: an empty glyph with a clipped filled glyph on top, and two invisible half-star buttons. */
+.stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.star {
+  position: relative;
+  display: inline-block;
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.star-empty {
+  color: var(--rule-strong);
+}
+
+.star-full {
+  position: absolute;
+  inset: 0 auto 0 0;
+  overflow: hidden;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.star-half {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.star-half-left {
+  left: 0;
+}
+
+.star-half-right {
+  right: 0;
+}
+
+.star-half:disabled {
+  cursor: progress;
+}
+
+.star-half:focus-visible {
+  outline-offset: 0;
+}
+
+.stars-value {
+  margin-left: 10px;
+  color: var(--ink-faint);
+}
+
+.stars-small .star {
+  font-size: 0.85rem;
+}
+
+/* Progress */
+.progress {
+  display: grid;
+  gap: 8px;
+}
+
+.progress-bar {
+  height: 6px;
+  background: var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 300ms ease;
+}
+
+.progress-summary {
+  color: var(--ink-soft);
+}
+
+/* Reads */
+.reads {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.reads legend {
+  padding: 0;
+  margin-bottom: 8px;
+}
+
+.reads ul {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+
+.read-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.read-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-soft);
+}
+
+/* ---------- Library (home) ---------- */
+
+.library-header {
+  margin-bottom: 26px;
+}
+
+.library-title {
+  font-family: var(--font-display);
+  font-size: 2.2rem;
+  line-height: 1.05;
+  margin-bottom: 4px;
+}
+
+.shelf + .shelf {
+  margin-top: 36px;
+}
+
+.reading-now {
+  display: grid;
+  gap: 12px;
+  list-style: none;
+  margin: 0;
+  padding: 0 0 18px;
+}
+
+.reading-card {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 16px;
+  padding: 14px 16px;
+  background: var(--paper-raised);
+  box-shadow: var(--card-shadow);
+  text-decoration: none;
+  height: 100%;
+}
+
+.reading-card:hover {
+  color: inherit;
+}
+
+.reading-card:hover .reading-card-title {
+  color: var(--accent);
+}
+
+.reading-card .cover-small {
+  width: 56px;
+}
+
+.reading-card-title {
+  font-family: var(--font-display);
+  font-size: var(--text-body);
+  line-height: 1.15;
+  transition: color 140ms ease;
+}
+
+.reading-card-byline {
+  font-size: var(--text-body);
+  color: var(--ink-soft);
+}
+
+.reading-card .progress-bar {
+  margin-top: 12px;
+}
+
+.reading-card .progress-summary {
+  margin-top: 4px;
+}
+
+/* A home-page shelf: one row of covers that scrolls sideways. */
+.shelf-strip {
+  display: flex;
+  gap: 14px;
+  list-style: none;
+  margin: 0;
+  padding: 0 0 18px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule-strong) transparent;
+}
+
+.shelf-strip > li {
+  flex: 0 0 92px;
+  scroll-snap-align: start;
+}
+
+.shelf-title-link {
+  text-decoration: none;
+}
+
+.shelf-title-link:hover {
+  color: var(--accent);
+}
+
+/* Every shelf, including Reading now, sits on the same wooden edge. */
+.reading-now,
+.shelf-strip {
+  border-bottom: 6px solid var(--rule-strong);
+  box-shadow: 0 8px 12px -10px rgb(40 25 10 / 0.5);
+}
+
+.shelf-book {
+  display: grid;
+  gap: 8px;
+  text-decoration: none;
+  align-content: start;
+}
+
+.shelf-book .cover {
+  transition: transform 160ms ease;
+}
+
+.shelf-book:hover {
+  color: inherit;
+}
+
+.shelf-book:hover .cover {
+  transform: translateY(-4px) rotate(-1deg);
+}
+
+/* ---------- Shelf page ---------- */
+
+.shelf-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  margin-bottom: 32px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.filter-box {
+  flex: 1 1 280px;
+  max-width: 420px;
+}
+
+.filter-box input,
+.sort-control select,
+.sort-direction {
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  background: var(--paper-raised);
+  padding: 0.45em 0.75em;
+  font-size: var(--text-body);
+}
+
+.filter-box input {
+  width: 100%;
+}
+
+.filter-box input::placeholder {
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+.sort-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sort-control .shelf-label {
+  min-width: 0;
+}
+
+.sort-direction {
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.sort-direction:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.shelf-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 32px 24px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.shelf-grid-book {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  text-decoration: none;
+}
+
+.shelf-grid-book:hover {
+  color: inherit;
+}
+
+.shelf-grid-book:hover .shelf-grid-title {
+  color: var(--accent);
+}
+
+.shelf-grid-book .cover {
+  margin-bottom: 6px;
+}
+
+.shelf-grid-author {
+  color: var(--ink-soft);
 }
 
 /* ---------- Notices, skeletons ---------- */
@@ -964,7 +1592,7 @@ p {
 
 .sign-in-form label span {
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: var(--text-mono);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ink-soft);
@@ -975,7 +1603,7 @@ p {
   border-bottom: 1px solid var(--rule-strong);
   background: transparent;
   padding: 0.35em 0;
-  font-size: 1.1rem;
+  font-size: var(--text-body);
 }
 
 .sign-in-form input:focus-visible {
@@ -990,7 +1618,7 @@ p {
 
 .form-message {
   margin-top: 14px;
-  font-size: 0.95rem;
+  font-size: var(--text-body);
   color: var(--ink-soft);
 }
 
@@ -1000,7 +1628,7 @@ p {
 
 .sign-in-switch {
   margin-top: 22px;
-  font-size: 0.95rem;
+  font-size: var(--text-body);
   color: var(--ink-soft);
 }
 
@@ -1086,6 +1714,30 @@ p {
   .series-item-link {
     gap: 16px;
     padding-inline: 0;
+  }
+
+  .shelf-panel {
+    padding-inline: 16px;
+  }
+
+  .status-picker button {
+    flex: 1 1 auto;
+  }
+
+  .home-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+  }
+
+  .home-library {
+    padding-left: 0;
+    padding-top: 28px;
+    border-left: 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .home-main {
+    padding-top: 0;
   }
 
   .sign-in-card {

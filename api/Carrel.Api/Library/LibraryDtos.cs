@@ -1,0 +1,49 @@
+using Carrel.Api.Books;
+using Carrel.Api.Data;
+
+namespace Carrel.Api.Library;
+
+public record LibraryEntryDto(
+    long Id,
+    long BookId,
+    ReadingStatus Status,
+    decimal? Rating,
+    long? EditionId,
+    ProgressUnit? ProgressUnit,
+    decimal? ProgressValue,
+    decimal? ProgressPercent,
+    int? ProgressTotal, // Pages or seconds in the edition used for progress, when known.
+    DateTimeOffset AddedAt,
+    DateTimeOffset UpdatedAt,
+    ReadDto[] Reads);
+
+public record ReadDto(long Id, DateOnly? StartedOn, DateOnly? FinishedOn);
+
+/// <summary>A library entry with enough of its book to show on a shelf.</summary>
+public record LibraryItemDto(LibraryEntryDto Entry, LibraryBookDto Book);
+
+public record LibraryBookDto(
+    long Id,
+    string Title,
+    string[] Authors,
+    string? CoverUrl,
+    SeriesEntryDto? Series,
+    int? FirstPublishedYear,
+    decimal? HardcoverRating,
+    int? HardcoverRatingsCount);
+
+/// <summary>
+/// The entry's desired state. <paramref name="Today"/> is the reader's local date, used for automatic read dates
+/// (servers run on UTC, which may be a different day). <paramref name="Reads"/>, when given, replaces the reading
+/// history: reads with an id are updated, reads without one are added, and reads left out are deleted.
+/// </summary>
+public record SaveEntryRequest(
+    ReadingStatus Status,
+    long? EditionId,
+    decimal? Rating,
+    ProgressUnit? ProgressUnit,
+    decimal? ProgressValue,
+    DateOnly? Today,
+    ReadInput[]? Reads = null);
+
+public record ReadInput(long? Id, DateOnly? StartedOn, DateOnly? FinishedOn);

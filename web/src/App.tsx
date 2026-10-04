@@ -7,6 +7,7 @@ import { HomePage } from './pages/HomePage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { SearchPage } from './pages/SearchPage'
 import { SeriesPage } from './pages/SeriesPage'
+import { ShelfPage } from './pages/ShelfPage'
 import { SignInPage } from './pages/SignInPage'
 
 function App() {
@@ -28,6 +29,7 @@ function App() {
         <Route path="books/hardcover/:sourceId" element={<BookResolver source="hardcover" />} />
         <Route path="books/openlibrary/:sourceId" element={<BookResolver source="openlibrary" />} />
         <Route path="series/hardcover/:hardcoverId" element={<SeriesPage />} />
+        <Route path="shelves/:slug" element={<ShelfPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

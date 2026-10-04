@@ -53,3 +53,15 @@ export function formatDuration(seconds: number): string {
   const minutes = Math.round((seconds % 3600) / 60)
   return hours > 0 ? `${hours} h ${minutes} m` : `${minutes} m`
 }
+
+/** Today's date in the reader's timezone, as yyyy-mm-dd. */
+export function localToday(): string {
+  return new Date().toLocaleDateString('en-CA')
+}
+
+export const STATUS_LABELS: Record<string, string> = {
+  want_to_read: 'Want to read',
+  reading: 'Reading',
+  read: 'Read',
+  did_not_finish: 'Did not finish',
+}

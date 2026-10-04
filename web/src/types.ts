@@ -82,3 +82,53 @@ export interface SeriesBook {
   hardcoverRating: number | null
   hardcoverRatingsCount: number | null
 }
+
+export type ReadingStatus = 'want_to_read' | 'reading' | 'read' | 'did_not_finish'
+export type ProgressUnit = 'page' | 'percent' | 'seconds'
+
+export interface LibraryEntry {
+  id: number
+  bookId: number
+  status: ReadingStatus
+  rating: number | null
+  editionId: number | null
+  progressUnit: ProgressUnit | null
+  progressValue: number | null
+  progressPercent: number | null
+  /** Pages or seconds in the edition used for progress, when known. */
+  progressTotal: number | null
+  addedAt: string
+  updatedAt: string
+  reads: Read[]
+}
+
+export interface Read {
+  id: number
+  startedOn: string | null
+  finishedOn: string | null
+}
+
+export interface SaveEntryRequest {
+  status: ReadingStatus
+  editionId: number | null
+  rating: number | null
+  progressUnit: ProgressUnit | null
+  progressValue: number | null
+  today: string
+  /** When given, replaces the reading history: reads with an id are updated, without one added, missing ones deleted. */
+  reads?: { id: number | null; startedOn: string | null; finishedOn: string | null }[]
+}
+
+export interface LibraryItem {
+  entry: LibraryEntry
+  book: {
+    id: number
+    title: string
+    authors: string[]
+    coverUrl: string | null
+    series: SeriesEntry | null
+    firstPublishedYear: number | null
+    hardcoverRating: number | null
+    hardcoverRatingsCount: number | null
+  }
+}
