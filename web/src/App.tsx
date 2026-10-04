@@ -7,20 +7,25 @@ import { AppearanceSettings } from './pages/AppearanceSettings'
 import { BookPage } from './pages/BookPage'
 import { BookResolver } from './pages/BookResolver'
 import { ChooseUsernamePage } from './pages/ChooseUsernamePage'
+import { ConfirmEmailPage } from './pages/ConfirmEmailPage'
 import { CopyrightPage } from './pages/CopyrightPage'
 import { HomePage } from './pages/HomePage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { PrivacyPage } from './pages/PrivacyPage'
 import { SearchPage } from './pages/SearchPage'
 import { SeriesPage } from './pages/SeriesPage'
+import { SetPasswordPage } from './pages/SetPasswordPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { ShelfPage } from './pages/ShelfPage'
 import { SignInPage } from './pages/SignInPage'
 import { useProfile } from './profile'
 import { signInPath } from './signIn'
 
-/** Pages a reader who hasn't chosen a username yet can still open. */
-const BEFORE_USERNAME = ['/privacy', '/copyright']
+/**
+ * Pages a reader who hasn't chosen a username yet can still open. The email-link pages are here too: a link from an
+ * invitation signs in a reader with no username, and the page has to stay put while it finishes.
+ */
+const BEFORE_USERNAME = ['/privacy', '/copyright', '/auth/confirm', '/auth/set-password']
 
 /** Browsing is open to everyone; signing in is only for keeping a library. */
 function App() {
@@ -47,6 +52,8 @@ function App() {
   return (
     <Routes>
       <Route path="sign-in" element={<SignInPage />} />
+      <Route path="auth/confirm" element={<ConfirmEmailPage />} />
+      <Route path="auth/set-password" element={<SetPasswordPage />} />
       <Route element={<Layout />}>
         <Route index element={<HomePage />} />
         <Route path="search" element={<SearchPage />} />
