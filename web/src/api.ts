@@ -73,7 +73,10 @@ async function messageFor(response: Response): Promise<string> {
     case 404:
       return 'We couldn’t find that.'
     case 429:
-      return 'That’s a lot of requests in a short time. Wait a minute and try again.'
+      // Waits longer than a minute only come from the daily allowance for signed-out browsing.
+      return Number(response.headers.get('Retry-After')) > 60
+        ? 'Carrel is busy, so browsing without an account is paused for now. Sign in to carry on, or try again later.'
+        : 'That’s a lot of requests in a short time. Wait a minute and try again.'
     case 503:
       return 'Book data is temporarily unavailable. Try again in a few minutes.'
     default:

@@ -49,7 +49,9 @@ builder.Services.AddAuthorizationBuilder()
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy
     .WithOrigins(builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [])
     .AllowAnyHeader()
-    .AllowAnyMethod()));
+    .AllowAnyMethod()
+    // Lets the website read how long a rate-limited visitor should wait.
+    .WithExposedHeaders("Retry-After")));
 
 // Cloud Run puts the visitor's address last in X-Forwarded-For; earlier entries come from the client and can be faked,
 // so only the last one is used (ForwardLimit 1). Signed-out visitors are rate limited by this address.
@@ -67,6 +69,15 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    // Say how long to wait, so the website can tell a one-minute limit from the daily signed-out allowance.
+    options.OnRejected = (context, _) =>
+    {
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+        {
+            context.HttpContext.Response.Headers.RetryAfter = ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString();
+        }
+        return ValueTask.CompletedTask;
+    };
     options.GlobalLimiter = PartitionedRateLimiter.CreateChained(
         PartitionedRateLimiter.Create<HttpContext, string>(context =>
             RateLimitPartition.GetFixedWindowLimiter(RateLimitPartitionKey(context), _ => new FixedWindowRateLimiterOptions
