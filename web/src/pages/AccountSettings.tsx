@@ -177,7 +177,7 @@ function EmailRow() {
   }
 
   const hint = sent
-    ? 'We’ve sent a confirmation link to both addresses. Your email changes once you’ve confirmed both.'
+    ? 'We’ve sent a confirmation link to both addresses (check spam folders too). Your email changes once you’ve confirmed both.'
     : user?.new_email
       ? `Waiting for you to confirm the change to ${user.new_email}.`
       : undefined

@@ -55,10 +55,10 @@ export function SignInPage() {
     if (error) {
       setMessage({ text: error.message, isError: true })
     } else if (mode === 'sign-up') {
-      setMessage({ text: 'Check your email for a link to confirm your account.', isError: false })
+      setMessage({ text: 'Check your inbox, and your spam folder, for a link to confirm your account.', isError: false })
     } else if (mode === 'reset') {
       // Worded the same whether or not the address has an account, so it can't be used to find out who does.
-      setMessage({ text: 'If there’s an account for that email, we’ve sent it a link to set a new password.', isError: false })
+      setMessage({ text: 'If there’s an account for that email, we’ve sent it a link to set a new password. Check your spam folder if it doesn’t arrive.', isError: false })
     }
   }
 
