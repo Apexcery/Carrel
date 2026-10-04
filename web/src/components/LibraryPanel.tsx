@@ -5,6 +5,7 @@ import { formatDuration, localToday, STATUS_LABELS } from '../format'
 import type { BookDetail, Edition, LibraryEntry, ProgressUnit, ReadingStatus, SaveEntryRequest } from '../types'
 import { EditionPicker } from './EditionPicker'
 import { ErrorNotice } from './ErrorNotice'
+import { Select } from './Select'
 import { StarRating } from './StarRating'
 
 const STATUSES: ReadingStatus[] = ['want_to_read', 'reading', 'read', 'did_not_finish']
@@ -209,11 +210,16 @@ function EditForm({
               value={progressText}
               onChange={(e) => setProgressText(e.target.value)}
             />
-            <select aria-label="Progress unit" value={unit} onChange={(e) => setUnit(e.target.value as ProgressUnit)}>
-              <option value="page">pages</option>
-              <option value="percent">%</option>
-              <option value="seconds">time (h:mm)</option>
-            </select>
+            <Select<ProgressUnit>
+              aria-label="Progress unit"
+              value={unit}
+              onChange={setUnit}
+              options={[
+                { value: 'page', label: 'pages' },
+                { value: 'percent', label: '%' },
+                { value: 'seconds', label: 'time (h:mm)' },
+              ]}
+            />
           </div>
         </div>
       )}

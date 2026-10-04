@@ -1,8 +1,10 @@
+import { Field, Label } from '@headlessui/react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { apiGet } from '../api'
 import { Cover } from '../components/Cover'
 import { ErrorNotice } from '../components/ErrorNotice'
+import { Select } from '../components/Select'
 import { StarDisplay } from '../components/StarRating'
 import { listNames, STATUS_LABELS } from '../format'
 import {
@@ -88,28 +90,28 @@ export function ShelfPage() {
               onChange={(e) => update({ q: e.target.value })}
             />
           </div>
-          <label className="sort-control">
-            <span className="shelf-label">Sort</span>
-            <select
-              value={sort}
-              // A new sort starts in its natural direction (A–Z, newest first, highest first).
-              onChange={(e) => update({ sort: e.target.value, dir: naturalDirection(e.target.value as SortKey) })}
-            >
-              {options.map((o) => (
-                <option key={o.key} value={o.key}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="button"
-            className="sort-direction"
-            aria-label={`${directionLabel(sort, dir)}. Reverse the order`}
-            onClick={() => update({ dir: dir === 'asc' ? 'desc' : 'asc' })}
-          >
-            <span aria-hidden="true">{dir === 'asc' ? '↑' : '↓'}</span> {directionLabel(sort, dir)}
-          </button>
+          <Field className="sort-control">
+            <Label className="shelf-label">Sort</Label>
+            {/* The sort and its direction are joined into one control. */}
+            <div className="sort-group">
+              <Select<SortKey>
+                value={sort}
+                // A new sort starts in its natural direction (A–Z, newest first, highest first).
+                onChange={(key) => update({ sort: key, dir: naturalDirection(key) })}
+                options={options.map((o) => ({ value: o.key, label: o.label }))}
+              />
+              <button
+                type="button"
+                className="sort-direction"
+                aria-label={`${directionLabel(sort, dir)}. Reverse the order`}
+                // The arrow alone doesn't say what "up" means for this sort, so the tooltip does.
+                title={`${directionLabel(sort, dir)}. Click to reverse`}
+                onClick={() => update({ dir: dir === 'asc' ? 'desc' : 'asc' })}
+              >
+                <span aria-hidden="true">{dir === 'asc' ? '↑' : '↓'}</span>
+              </button>
+            </div>
+          </Field>
         </div>
       )}
 

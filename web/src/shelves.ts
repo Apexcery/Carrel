@@ -56,16 +56,16 @@ export function naturalDirection(key: SortKey): SortDirection {
   return SORT_OPTIONS.find((o) => o.key === key)?.kind === 'text' ? 'asc' : 'desc'
 }
 
-export function directionLabel(key: SortKey, direction: SortDirection): string {
-  const kind = SORT_OPTIONS.find((o) => o.key === key)?.kind
-  const labels: Record<Kind, Record<SortDirection, string>> = {
-    text: { asc: 'A–Z', desc: 'Z–A' },
-    number: { asc: 'Lowest first', desc: 'Highest first' },
-    date: { asc: 'Oldest first', desc: 'Newest first' },
-  }
-  return labels[kind ?? 'text'][direction]
+const DIRECTION_LABELS: Record<Kind, Record<SortDirection, string>> = {
+  text: { asc: 'A–Z', desc: 'Z–A' },
+  number: { asc: 'Lowest first', desc: 'Highest first' },
+  date: { asc: 'Oldest first', desc: 'Newest first' },
 }
 
+export function directionLabel(key: SortKey, direction: SortDirection): string {
+  const kind = SORT_OPTIONS.find((o) => o.key === key)?.kind
+  return DIRECTION_LABELS[kind ?? 'text'][direction]
+}
 /** Sorts by the given key; books without a value go last in either direction, then ties go by title. */
 export function sortItems(items: LibraryItem[], key: SortKey, direction: SortDirection): LibraryItem[] {
   const option = SORT_OPTIONS.find((o) => o.key === key) ?? SORT_OPTIONS[0]

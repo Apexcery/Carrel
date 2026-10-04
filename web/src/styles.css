@@ -96,6 +96,8 @@
 
 html {
   background: var(--paper);
+  /* Native controls that honour it (date pickers in some browsers, checkboxes) use the site accent. */
+  accent-color: var(--accent);
 }
 
 body {
@@ -998,7 +1000,7 @@ p {
   min-width: 8.5em;
 }
 
-.shelf-panel select,
+.progress-inputs .select-button,
 .progress-inputs input,
 .read-row input {
   border: 1px solid var(--rule-strong);
@@ -1007,11 +1009,6 @@ p {
   padding: 0.35em 0.6em;
   font-size: var(--text-body);
   max-width: 100%;
-}
-
-.shelf-panel select {
-  min-width: 0;
-  flex: 1 1 260px;
 }
 
 .shelf-edit {
@@ -1061,10 +1058,6 @@ p {
   width: 7em;
 }
 
-.progress-inputs select {
-  flex: 0 1 auto;
-}
-
 .shelf-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1108,9 +1101,10 @@ p {
   cursor: pointer;
 }
 
-/* Dropdowns for the edition picker and the search box (Headless UI; portalled to the body). */
+/* Dropdowns for the edition picker, the search box and Select (Headless UI; portalled to the body). */
 .edition-options,
-.search-options {
+.search-options,
+.select-options {
   --anchor-gap: 4px;
   width: max(var(--input-width), 320px);
   max-height: 340px;
@@ -1126,8 +1120,13 @@ p {
   z-index: 50;
 }
 
+.select-options {
+  width: max(var(--button-width), 160px);
+}
+
 .edition-options:focus,
-.search-options:focus {
+.search-options:focus,
+.select-options:focus {
   outline: none;
 }
 
@@ -1142,7 +1141,8 @@ p {
 }
 
 .edition-option,
-.search-option {
+.search-option,
+.select-option {
   display: grid;
   gap: 1px;
   padding: 7px 14px;
@@ -1150,12 +1150,42 @@ p {
 }
 
 .edition-option[data-focus],
-.search-option[data-focus] {
+.search-option[data-focus],
+.select-option[data-focus] {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
-.edition-option[data-selected] {
+.edition-option[data-selected],
+.select-option[data-selected] {
   box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* The button that opens a Select. */
+.select-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75em;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* All labels share one grid cell, so the control is as wide as the longest; only the current one shows. */
+.widest-label {
+  display: inline-grid;
+}
+
+.widest-label > * {
+  grid-area: 1 / 1;
+}
+
+.widest-label-hidden {
+  visibility: hidden;
+}
+
+.select-caret {
+  color: var(--ink-faint);
+  font-size: var(--text-mono);
 }
 
 .edition-option-detail {
@@ -1440,7 +1470,7 @@ p {
 }
 
 .filter-box input,
-.sort-control select,
+.sort-group .select-button,
 .sort-direction {
   border: 1px solid var(--rule-strong);
   border-radius: 2px;
@@ -1468,9 +1498,30 @@ p {
   min-width: 0;
 }
 
+/* The sort dropdown and its direction button read as one control. */
+.sort-group {
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.sort-group .select-button {
+  border-radius: 2px 0 0 2px;
+}
+
+.sort-group > :focus-visible {
+  position: relative;
+  z-index: 1;
+}
+
 .sort-direction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.6em;
+  margin-left: -1px;
+  border-radius: 0 2px 2px 0;
+  /* Plex Mono's arrows are full height; Literata's are short. */
   font-family: var(--font-mono);
-  font-size: var(--text-mono);
   color: var(--ink-soft);
   cursor: pointer;
 }
