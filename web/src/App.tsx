@@ -1,6 +1,8 @@
-import { Route, Routes } from 'react-router'
+import { Navigate, Route, Routes } from 'react-router'
 import { useSession } from './auth'
 import { Layout } from './components/Layout'
+import { AccountSettings } from './pages/AccountSettings'
+import { AppearanceSettings } from './pages/AppearanceSettings'
 import { BookPage } from './pages/BookPage'
 import { BookResolver } from './pages/BookResolver'
 import { ChooseUsernamePage } from './pages/ChooseUsernamePage'
@@ -8,6 +10,7 @@ import { HomePage } from './pages/HomePage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { SearchPage } from './pages/SearchPage'
 import { SeriesPage } from './pages/SeriesPage'
+import { SettingsPage } from './pages/SettingsPage'
 import { ShelfPage } from './pages/ShelfPage'
 import { SignInPage } from './pages/SignInPage'
 import { useProfile } from './profile'
@@ -49,6 +52,11 @@ function SignedIn() {
         <Route path="books/openlibrary/:sourceId" element={<BookResolver source="openlibrary" />} />
         <Route path="series/hardcover/:hardcoverId" element={<SeriesPage />} />
         <Route path="shelves/:slug" element={<ShelfPage />} />
+        <Route path="settings" element={<SettingsPage />}>
+          <Route index element={<Navigate to="account" replace />} />
+          <Route path="account" element={<AccountSettings />} />
+          <Route path="appearance" element={<AppearanceSettings />} />
+        </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

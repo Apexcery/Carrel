@@ -72,16 +72,21 @@
   color-scheme: dark;
 }
 
-/* Accents a user can choose later; the default (oxblood) is above. */
-:root[data-accent='forest'] {
+/* Accents chosen in Settings > Appearance; red is the default above. Not limited to :root, so a colour swatch can
+   carry data-accent and show that accent's colours. */
+[data-accent='red'] {
+  --accent-light: #8a2b1d;
+  --accent-dark: #e07a5f;
+}
+[data-accent='green'] {
   --accent-light: #2f5a41;
   --accent-dark: #86bb95;
 }
-:root[data-accent='ink'] {
+[data-accent='blue'] {
   --accent-light: #2b3f6b;
   --accent-dark: #93a9dc;
 }
-:root[data-accent='ochre'] {
+[data-accent='gold'] {
   --accent-light: #8f5f0c;
   --accent-dark: #ddae55;
 }
@@ -327,6 +332,22 @@ p {
   min-width: 0;
 }
 
+.account-settings {
+  display: inline-flex;
+  align-self: center;
+  color: var(--ink-soft);
+}
+
+.account-settings:hover,
+.account-settings[aria-current='page'] {
+  color: var(--accent);
+}
+
+.account-settings svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
 .account-name {
   font-family: var(--font-mono);
   font-size: var(--text-mono);
@@ -355,13 +376,13 @@ p {
   color: var(--ink-faint);
 }
 
-.theme-switch {
+.option-switch {
   display: inline-flex;
   border: 1px solid var(--rule-strong);
   border-radius: 2px;
 }
 
-.theme-switch button {
+.option-switch button {
   border: 0;
   background: none;
   padding: 0.35em 0.75em;
@@ -373,11 +394,11 @@ p {
   cursor: pointer;
 }
 
-.theme-switch button + button {
+.option-switch button + button {
   border-left: 1px solid var(--rule-strong);
 }
 
-.theme-switch button[aria-checked='true'] {
+.option-switch button[aria-checked='true'] {
   background: var(--ink);
   color: var(--paper);
 }
@@ -1605,6 +1626,138 @@ p {
   width: 60%;
 }
 
+/* ---------- Settings ---------- */
+
+.settings-layout {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 48px;
+  align-items: start;
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-nav a {
+  padding: 0.6em 0 0.6em 14px;
+  border-left: 2px solid var(--rule);
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--ink-soft);
+}
+
+.settings-nav a:hover {
+  color: var(--accent);
+}
+
+.settings-nav a[aria-current='page'] {
+  border-left-color: var(--accent);
+  color: var(--ink);
+}
+
+.settings-content {
+  max-width: 560px;
+}
+
+.settings-section + .settings-section {
+  margin-top: 48px;
+}
+
+.settings-content > .settings-note {
+  margin-top: 48px;
+}
+
+.settings-note {
+  margin-bottom: 14px;
+  color: var(--ink-soft);
+}
+
+.settings-form {
+  display: grid;
+  gap: 16px;
+}
+
+/* Account details: label, current value, and a "Change" link; the row opens into a small form while editing. */
+.setting-row {
+  display: grid;
+  grid-template-columns: 9rem minmax(0, 1fr) auto;
+  gap: 6px 20px;
+  align-items: baseline;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.setting-row:first-child {
+  border-top: 1px solid var(--rule);
+}
+
+.setting-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.setting-value {
+  overflow-wrap: anywhere;
+}
+
+.setting-hint {
+  grid-column: 2 / -1;
+  color: var(--ink-faint);
+}
+
+.setting-edit {
+  grid-column: 2 / -1;
+}
+
+.setting-warning {
+  color: var(--ink-soft);
+}
+
+.settings-form .primary-button {
+  justify-self: start;
+}
+
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+}
+
+.accent-swatch {
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  margin-right: 0.55em;
+  border-radius: 50%;
+  vertical-align: -0.1em;
+  background: var(--accent-light);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .accent-swatch {
+    background: var(--accent-dark);
+  }
+}
+
+:root[data-theme='dark'] .accent-swatch {
+  background: var(--accent-dark);
+}
+
+/* A ring keeps a dark swatch visible on the selected option's ink background. */
+.option-switch button[aria-checked='true'] .accent-swatch {
+  box-shadow: 0 0 0 1.5px var(--paper);
+}
+
 /* ---------- Sign in ---------- */
 
 .sign-in {
@@ -1638,12 +1791,14 @@ p {
   margin: 28px 0 8px;
 }
 
-.sign-in-form label {
+.sign-in-form label,
+.settings-form label {
   display: grid;
   gap: 4px;
 }
 
-.sign-in-form label span {
+.sign-in-form label span,
+.settings-form label span {
   font-family: var(--font-mono);
   font-size: var(--text-mono);
   letter-spacing: 0.1em;
@@ -1651,7 +1806,8 @@ p {
   color: var(--ink-soft);
 }
 
-.sign-in-form input {
+.sign-in-form input,
+.settings-form input {
   border: 0;
   border-bottom: 1px solid var(--rule-strong);
   background: transparent;
@@ -1659,7 +1815,8 @@ p {
   font-size: var(--text-body);
 }
 
-.sign-in-form input:focus-visible {
+.sign-in-form input:focus-visible,
+.settings-form input:focus-visible {
   outline: none;
   border-bottom: 2px solid var(--accent);
 }
@@ -1683,7 +1840,8 @@ p {
   color: var(--ink);
 }
 
-.sign-in-form .form-message {
+.sign-in-form .form-message,
+.settings-form .form-message {
   margin-top: -8px;
 }
 
@@ -1800,5 +1958,37 @@ p {
 
   .sign-in-card {
     padding: 28px 22px 24px;
+  }
+
+  .settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+  }
+
+  .settings-nav {
+    flex-direction: row;
+    gap: 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .settings-nav a {
+    padding: 0.6em 14px;
+    border-left: 0;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+
+  .settings-nav a[aria-current='page'] {
+    border-bottom-color: var(--accent);
+  }
+
+  .setting-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .setting-label,
+  .setting-hint,
+  .setting-edit {
+    grid-column: 1 / -1;
   }
 }

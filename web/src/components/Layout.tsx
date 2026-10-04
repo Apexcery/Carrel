@@ -1,8 +1,7 @@
-import { Link, Outlet, useLocation, useSearchParams } from 'react-router'
+import { Link, NavLink, Outlet, useLocation, useSearchParams } from 'react-router'
 import { useProfile } from '../profile'
 import { supabase } from '../supabase'
 import { SearchBox } from './SearchBox'
-import { ThemeSwitch } from './ThemeSwitch'
 
 export function Layout() {
   const [params] = useSearchParams()
@@ -24,7 +23,6 @@ export function Layout() {
       </main>
       <footer className="colophon">
         <span>Book data from Hardcover and Open Library.</span>
-        <ThemeSwitch />
       </footer>
     </div>
   )
@@ -37,9 +35,22 @@ function Account() {
       <span className="account-name" title={username ?? undefined}>
         {username}
       </span>
+      <NavLink to="/settings" className="account-settings" aria-label="Settings" title="Settings">
+        <CogIcon />
+      </NavLink>
       <button type="button" className="link-button" onClick={() => supabase.auth.signOut()}>
         Sign out
       </button>
     </div>
+  )
+}
+
+/** The "settings" icon from Lucide (lucide.dev, ISC licence). */
+function CogIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
   )
 }

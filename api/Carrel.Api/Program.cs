@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using Carrel.Api.Accounts;
 using Carrel.Api.Books;
 using Carrel.Api.Data;
 using Carrel.Api.Library;
@@ -52,6 +53,9 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy(BookEndpoints.BookSourcesRateLimit, context =>
         RateLimitPartition.GetFixedWindowLimiter(RateLimitPartitionKey(context),
             _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1) }));
+    options.AddPolicy(AccountEndpoints.AccountRateLimit, context =>
+        RateLimitPartition.GetFixedWindowLimiter(RateLimitPartitionKey(context),
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1) }));
 });
 
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -74,6 +78,11 @@ builder.Services.AddHttpClient<OpenLibraryClient>(client =>
 {
     client.BaseAddress = new Uri("https://openlibrary.org/");
     client.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
+builder.Services.AddHttpClient<SupabaseAuthClient>(client =>
+{
+    client.BaseAddress = new Uri($"{supabaseUrl}/auth/v1/");
     client.Timeout = TimeSpan.FromSeconds(15);
 });
 builder.Services.AddScoped<BookService>();
@@ -104,6 +113,7 @@ app.MapGet("/me", (ClaimsPrincipal user) => new
 app.MapBookEndpoints();
 app.MapLibraryEndpoints();
 app.MapProfileEndpoints();
+app.MapAccountEndpoints();
 
 app.Run();
 
