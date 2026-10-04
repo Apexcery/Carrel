@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { Link } from 'react-router'
 import { supabase } from '../supabase'
 
 type Mode = 'sign-in' | 'sign-up'
@@ -65,6 +66,13 @@ export function SignInPage() {
           </p>
         )}
 
+        {mode === 'sign-up' && (
+          <p className="sign-in-note">
+            You must be 13 or over to create an account. See how Carrel handles your information in the{' '}
+            <Link to="/privacy">privacy notice</Link>.
+          </p>
+        )}
+
         <p className="sign-in-switch">
           {mode === 'sign-in' ? 'New here?' : 'Already have an account?'}{' '}
           <button type="button" className="link-button" onClick={switchMode}>
@@ -72,6 +80,10 @@ export function SignInPage() {
           </button>
         </p>
       </div>
+      <nav className="colophon-links" aria-label="About Carrel">
+        <Link to="/privacy">Privacy</Link>
+        <Link to="/copyright">Copyright</Link>
+      </nav>
     </div>
   )
 }

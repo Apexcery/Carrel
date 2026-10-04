@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation, useSearchParams } from 'react-router'
 import { useProfile } from '../profile'
 import { supabase } from '../supabase'
@@ -21,10 +22,35 @@ export function Layout() {
       <main className="page">
         <Outlet />
       </main>
-      <footer className="colophon">
-        <span>Book data from Hardcover and Open Library.</span>
-      </footer>
+      <Footer />
     </div>
+  )
+}
+
+/** For pages anyone can open (privacy, copyright) when there's no signed-in reader to show the full header for. */
+export function PublicLayout({ children }: { children: ReactNode }) {
+  return (
+    <div className="shell">
+      <header className="masthead">
+        <Link to="/" className="wordmark" aria-label="Carrel home">
+          Carrel
+        </Link>
+      </header>
+      <main className="page">{children}</main>
+      <Footer />
+    </div>
+  )
+}
+
+function Footer() {
+  return (
+    <footer className="colophon">
+      <span>Book data from Hardcover and Open Library.</span>
+      <nav className="colophon-links" aria-label="About Carrel">
+        <Link to="/privacy">Privacy</Link>
+        <Link to="/copyright">Copyright</Link>
+      </nav>
+    </footer>
   )
 }
 

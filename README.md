@@ -19,6 +19,7 @@ The API reads secrets from .NET user secrets (`dotnet user-secrets set <key> <va
 - `ConnectionStrings:Carrel` – Supabase session pooler connection string, in Npgsql format
 - `Hardcover:ApiToken` – Hardcover API token with the `read:catalog` scope, without the `Bearer ` prefix
 - `BookSources:ContactEmail` – contact address sent in the User-Agent to book data sources
+- `Supabase:SecretKey` – Supabase secret key (`carrel_api`), used to check passwords and delete accounts; only account deletion fails without it
 
 Restore local tools (EF Core migrations) with `dotnet tool restore`.
 
@@ -35,3 +36,17 @@ cd web
 npm install
 npm run dev
 ```
+
+## Copyright takedowns
+
+When a valid notice arrives (see `/copyright`), hide the material by setting a flag on the book in the Supabase SQL Editor. Book refreshes don't clear these flags.
+
+```sql
+-- Hide the cover (the book's and its editions') everywhere Carrel shows the book, including search and series pages.
+update books set cover_suppressed = true where id = <book id>;
+
+-- Hide the description.
+update books set description_suppressed = true where id = <book id>;
+```
+
+The book id is the number in the page address, e.g. `/books/20`. A book that only appears in search results has no row yet: open its page once to store it, then set the flag. Tell the source (Hardcover or Open Library) as well.

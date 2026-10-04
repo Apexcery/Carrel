@@ -1,13 +1,16 @@
-import { Navigate, Route, Routes } from 'react-router'
+import type { ReactNode } from 'react'
+import { Navigate, Route, Routes, useLocation } from 'react-router'
 import { useSession } from './auth'
-import { Layout } from './components/Layout'
+import { Layout, PublicLayout } from './components/Layout'
 import { AccountSettings } from './pages/AccountSettings'
 import { AppearanceSettings } from './pages/AppearanceSettings'
 import { BookPage } from './pages/BookPage'
 import { BookResolver } from './pages/BookResolver'
 import { ChooseUsernamePage } from './pages/ChooseUsernamePage'
+import { CopyrightPage } from './pages/CopyrightPage'
 import { HomePage } from './pages/HomePage'
 import { NotFoundPage } from './pages/NotFoundPage'
+import { PrivacyPage } from './pages/PrivacyPage'
 import { SearchPage } from './pages/SearchPage'
 import { SeriesPage } from './pages/SeriesPage'
 import { SettingsPage } from './pages/SettingsPage'
@@ -16,20 +19,27 @@ import { SignInPage } from './pages/SignInPage'
 import { useProfile } from './profile'
 import { ErrorNotice } from './components/ErrorNotice'
 
-function App() {
-  const session = useSession()
-
-  if (session === undefined) {
-    return null
-  }
-  if (session === null) {
-    return <SignInPage />
-  }
-  return <SignedIn />
+/** Pages anyone can read, signed in or not: people need the privacy notice before signing up. */
+const PUBLIC_PAGES: Record<string, ReactNode> = {
+  '/privacy': <PrivacyPage />,
+  '/copyright': <CopyrightPage />,
 }
 
-/** Everything behind sign-in. A reader without a username chooses one first. */
-function SignedIn() {
+function App() {
+  const session = useSession()
+  const publicPage = PUBLIC_PAGES[useLocation().pathname]
+
+  if (session === undefined || session === null) {
+    if (publicPage) {
+      return <PublicLayout>{publicPage}</PublicLayout>
+    }
+    return session === null ? <SignInPage /> : null
+  }
+  return <SignedIn publicPage={publicPage} />
+}
+
+/** Everything behind sign-in. A reader without a username chooses one first, but can still read the public pages. */
+function SignedIn({ publicPage }: { publicPage: ReactNode | undefined }) {
   const profile = useProfile()
 
   if (profile.isError) {
@@ -39,7 +49,7 @@ function SignedIn() {
     return null
   }
   if (profile.data.username === null) {
-    return <ChooseUsernamePage />
+    return publicPage ? <PublicLayout>{publicPage}</PublicLayout> : <ChooseUsernamePage />
   }
 
   return (
@@ -52,6 +62,8 @@ function SignedIn() {
         <Route path="books/openlibrary/:sourceId" element={<BookResolver source="openlibrary" />} />
         <Route path="series/hardcover/:hardcoverId" element={<SeriesPage />} />
         <Route path="shelves/:slug" element={<ShelfPage />} />
+        <Route path="privacy" element={<PrivacyPage />} />
+        <Route path="copyright" element={<CopyrightPage />} />
         <Route path="settings" element={<SettingsPage />}>
           <Route index element={<Navigate to="account" replace />} />
           <Route path="account" element={<AccountSettings />} />
