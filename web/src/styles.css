@@ -376,6 +376,23 @@ p {
   color: var(--ink-faint);
 }
 
+.colophon-links {
+  display: flex;
+  gap: 18px;
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+}
+
+.colophon-links a {
+  color: var(--ink-soft);
+  text-decoration-color: var(--rule-strong);
+}
+
+.colophon-links a:hover {
+  color: var(--accent);
+  text-decoration-color: var(--accent);
+}
+
 .option-switch {
   display: inline-flex;
   border: 1px solid var(--rule-strong);
@@ -1758,6 +1775,46 @@ p {
   box-shadow: 0 0 0 1.5px var(--paper);
 }
 
+/* ---------- Privacy and copyright ---------- */
+
+.legal {
+  max-width: 40em;
+}
+
+.legal-lede {
+  margin-bottom: 8px;
+}
+
+.legal h2 {
+  margin: 40px 0 12px;
+  font-family: var(--font-display);
+  font-size: var(--text-heading);
+  line-height: 1.2;
+}
+
+.legal p + p,
+.legal ul + p,
+.legal ol + p {
+  margin-top: 12px;
+}
+
+.legal ul,
+.legal ol {
+  margin: 8px 0 0;
+  padding-left: 1.3em;
+}
+
+.legal li + li {
+  margin-top: 8px;
+}
+
+.legal-contact {
+  margin-top: 16px;
+  padding-left: 14px;
+  border-left: 2px solid var(--accent);
+  color: var(--ink-soft);
+}
+
 /* ---------- Sign in ---------- */
 
 .sign-in {
@@ -1843,6 +1900,11 @@ p {
 .sign-in-form .form-message,
 .settings-form .form-message {
   margin-top: -8px;
+}
+
+.sign-in-note {
+  margin-top: 18px;
+  color: var(--ink-soft);
 }
 
 .sign-in-switch {

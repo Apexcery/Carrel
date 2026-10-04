@@ -14,6 +14,7 @@ public partial class BookService(
     HardcoverClient hardcover,
     OpenLibraryClient openLibrary,
     IMemoryCache cache,
+    CoverSuppression suppression,
     ILogger<BookService> logger)
 {
     private static readonly TimeSpan RefreshAfter = TimeSpan.FromDays(30);
@@ -29,14 +30,12 @@ public partial class BookService(
     {
         query = query.Trim();
         var key = $"book-search:{page}:{query.ToLowerInvariant()}";
-        if (cache.TryGetValue(key, out BookSearchResponse? cached))
+        if (!cache.TryGetValue(key, out BookSearchResponse? response))
         {
-            return cached!;
+            response = await SearchHardcoverAsync(query, page, ct) ?? await SearchOpenLibraryAsync(query, page, ct);
+            cache.Set(key, response, new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = SearchCacheDuration });
         }
-
-        var response = await SearchHardcoverAsync(query, page, ct) ?? await SearchOpenLibraryAsync(query, page, ct);
-        cache.Set(key, response, new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = SearchCacheDuration });
-        return response;
+        return await suppression.ApplyAsync(response!, ct);
     }
 
     public async Task<BookDetail?> GetByIdAsync(long id, CancellationToken ct)
@@ -158,9 +157,10 @@ public partial class BookService(
         book.HardcoverId,
         book.Title,
         book.Subtitle,
-        book.Description,
-        book.DescriptionSource,
-        book.CoverUrl,
+        // Takedowns hide the description or cover; see Book.CoverSuppressed.
+        book.DescriptionSuppressed ? null : book.Description,
+        book.DescriptionSuppressed ? null : book.DescriptionSource,
+        book.CoverSuppressed ? null : book.CoverUrl,
         book.FirstPublishedYear,
         book.HardcoverRating,
         book.HardcoverRatingsCount,
@@ -169,5 +169,5 @@ public partial class BookService(
         book.Series.OrderByDescending(bs => bs.IsFeatured).ThenBy(bs => bs.Position ?? decimal.MaxValue).ThenBy(bs => bs.Series.Name).Select(bs => new SeriesEntryDto(bs.Series.Id, bs.Series.HardcoverId, bs.Series.Name, bs.Position)).ToArray(),
         book.Genres.Select(bg => bg.Genre.Name).Order().ToArray(),
         book.Editions.OrderBy(e => e.Id).Select(e => new EditionDto(e.Id, e.Isbn13, e.Isbn10, e.Format, e.PageCount, e.AudioSeconds,
-            e.Publisher, e.ReleaseDate, e.Language, e.CoverUrl)).ToArray());
+            e.Publisher, e.ReleaseDate, e.Language, book.CoverSuppressed ? null : e.CoverUrl)).ToArray());
 }

@@ -7,7 +7,7 @@ namespace Carrel.Api.Books;
 /// ("Part 2 of 3"), translations and duplicates at the same position, so only the most-read book at each numbered
 /// position is kept, and in-between or unnumbered works only if they have a meaningful readership.
 /// </summary>
-public class SeriesService(HardcoverClient hardcover, IMemoryCache cache)
+public class SeriesService(HardcoverClient hardcover, IMemoryCache cache, CoverSuppression suppression)
 {
     private static readonly TimeSpan CacheDuration = TimeSpan.FromHours(12);
 
@@ -17,15 +17,13 @@ public class SeriesService(HardcoverClient hardcover, IMemoryCache cache)
     public async Task<SeriesDetail?> GetByHardcoverIdAsync(int hardcoverId, CancellationToken ct)
     {
         var key = $"series:{hardcoverId}";
-        if (cache.TryGetValue(key, out SeriesDetail? cached))
+        if (!cache.TryGetValue(key, out SeriesDetail? series))
         {
-            return cached;
+            var source = await hardcover.GetSeriesAsync(hardcoverId, ct);
+            series = source is null ? null : ToDetail(source);
+            cache.Set(key, series, new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = CacheDuration });
         }
-
-        var source = await hardcover.GetSeriesAsync(hardcoverId, ct);
-        var series = source is null ? null : ToDetail(source);
-        cache.Set(key, series, new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = CacheDuration });
-        return series;
+        return series is null ? null : await suppression.ApplyAsync(series, ct);
     }
 
     private static SeriesDetail ToDetail(HardcoverSeriesDetail source)

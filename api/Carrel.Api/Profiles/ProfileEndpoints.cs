@@ -21,6 +21,7 @@ public static partial class ProfileEndpoints
         "admin", "administrator", "carrel", "support", "help", "settings", "account", "profile", "profiles",
         "library", "search", "books", "series", "shelves", "api", "root", "system", "moderator", "staff",
         "official", "null", "undefined", "me", "you", "user", "users", "about", "privacy", "terms",
+        "copyright", "legal", "dmca",
     };
 
     public static void MapProfileEndpoints(this IEndpointRouteBuilder app)

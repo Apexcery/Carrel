@@ -208,7 +208,7 @@ public class LibraryService(CarrelDbContext db)
             book.Id,
             book.Title,
             book.Authors.Where(ba => ba.Role == "author").OrderBy(ba => ba.Position).Select(ba => ba.Author.Name).ToArray(),
-            book.CoverUrl,
+            book.CoverSuppressed ? null : book.CoverUrl,
             series,
             book.FirstPublishedYear,
             book.HardcoverRating,

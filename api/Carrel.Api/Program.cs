@@ -85,6 +85,7 @@ builder.Services.AddHttpClient<SupabaseAuthClient>(client =>
     client.BaseAddress = new Uri($"{supabaseUrl}/auth/v1/");
     client.Timeout = TimeSpan.FromSeconds(15);
 });
+builder.Services.AddScoped<CoverSuppression>();
 builder.Services.AddScoped<BookService>();
 builder.Services.AddScoped<SeriesService>();
 builder.Services.AddScoped<LibraryService>();
