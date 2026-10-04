@@ -973,7 +973,7 @@ p {
   border-left: 1px solid var(--rule-strong);
 }
 
-.status-picker button:hover:not(:disabled) {
+.status-picker button:hover:not(:disabled):not([aria-checked='true']) {
   color: var(--accent);
 }
 
