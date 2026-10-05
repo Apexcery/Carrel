@@ -47,6 +47,12 @@ The running site keeps using the old code until the new version has started, so 
 
 To apply migrations without starting the API, `dotnet ef database update --project api/Carrel.Api` still works against the dev database.
 
+## Library imports
+
+Goodreads and StoryGraph imports run in batches of about a minute, each queuing the next. Cloud Run only gives the API CPU while it handles a request, so in production each batch arrives from the Cloud Tasks queue `carrel-imports` (europe-west1) as a request to `/internal/imports/{id}/process`, signed as the `carrel-api` service account (settings under `Imports:Queue` in `appsettings.json`). Locally there's no queue, and batches run in the API process.
+
+Imports only use Hardcover capacity readers aren't using, and pause for the day once fewer than 1,000 of Hardcover's daily requests are left. Progress is saved per row, so an import carries on after a restart; one that stalls is queued again when the reader opens the import page.
+
 ## Auth emails
 
 Supabase sends sign-up, invitation, password reset, and email change emails through Resend (SMTP, from `no-reply@carrel.zenithal.co.uk`). Their templates are customised in Supabase (Authentication → Emails → Templates). Each template's link must point at the site, not Supabase's own address:

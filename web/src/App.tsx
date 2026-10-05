@@ -10,6 +10,7 @@ import { ChooseUsernamePage } from './pages/ChooseUsernamePage'
 import { ConfirmEmailPage } from './pages/ConfirmEmailPage'
 import { CopyrightPage } from './pages/CopyrightPage'
 import { HomePage } from './pages/HomePage'
+import { ImportPage } from './pages/ImportPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { PrivacyPage } from './pages/PrivacyPage'
 import { SearchPage } from './pages/SearchPage'
@@ -72,6 +73,7 @@ function App() {
         </Route>
         <Route element={<RequireSignIn />}>
           <Route path="shelves/:slug" element={<ShelfPage />} />
+          <Route path="import" element={<ImportPage />} />
         </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Route>

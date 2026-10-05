@@ -9,4 +9,13 @@ public class Read
 
     public DateOnly? StartedOn { get; set; }
     public DateOnly? FinishedOn { get; set; }
+
+    /// <summary>
+    /// Finished, but when isn't known (common in imports). Such a read isn't open, so it isn't picked up as the
+    /// current read, and it counts as a read without belonging to any year.
+    /// </summary>
+    public bool FinishedDateUnknown { get; set; }
+
+    /// <summary>Still being read: not finished on any date, known or not.</summary>
+    public bool IsOpen => FinishedOn is null && !FinishedDateUnknown;
 }

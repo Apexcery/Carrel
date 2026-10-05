@@ -15,6 +15,8 @@ public class CarrelDbContext(DbContextOptions<CarrelDbContext> options) : DbCont
     public DbSet<LibraryEntry> LibraryEntries => Set<LibraryEntry>();
     public DbSet<Read> Reads => Set<Read>();
     public DbSet<Profile> Profiles => Set<Profile>();
+    public DbSet<LibraryImport> LibraryImports => Set<LibraryImport>();
+    public DbSet<ImportItem> ImportItems => Set<ImportItem>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -112,8 +114,47 @@ public class CarrelDbContext(DbContextOptions<CarrelDbContext> options) : DbCont
 
         modelBuilder.Entity<Read>(read =>
         {
-            read.ToTable(t => t.HasCheckConstraint("ck_reads_dates", "finished_on >= started_on"));
+            read.ToTable(t =>
+            {
+                t.HasCheckConstraint("ck_reads_dates", "finished_on >= started_on");
+                t.HasCheckConstraint("ck_reads_finished_date_unknown", "not (finished_date_unknown and finished_on is not null)");
+            });
+            read.Ignore(r => r.IsOpen);
             read.HasIndex(r => r.LibraryEntryId);
+        });
+
+        modelBuilder.Entity<LibraryImport>(import =>
+        {
+            import.ToTable("library_imports", t =>
+            {
+                t.HasCheckConstraint("ck_library_imports_source", SnakeCaseEnumConverter<ImportSource>.CheckSql("source"));
+                t.HasCheckConstraint("ck_library_imports_state", SnakeCaseEnumConverter<ImportState>.CheckSql("state"));
+            });
+            import.Property(i => i.Source).HasConversion<SnakeCaseEnumConverter<ImportSource>>();
+            import.Property(i => i.State).HasConversion<SnakeCaseEnumConverter<ImportState>>();
+            import.Property(i => i.CreatedAt).HasDefaultValueSql("now()");
+            import.Property(i => i.UpdatedAt).HasDefaultValueSql("now()");
+            // user_id references auth.users, which EF Core doesn't model; that foreign key is added in the migration.
+            import.HasIndex(i => new { i.UserId, i.CreatedAt });
+        });
+
+        modelBuilder.Entity<ImportItem>(item =>
+        {
+            item.ToTable("import_items", t =>
+            {
+                t.HasCheckConstraint("ck_import_items_status", SnakeCaseEnumConverter<ReadingStatus>.CheckSql("status"));
+                t.HasCheckConstraint("ck_import_items_match", SnakeCaseEnumConverter<ImportMatch>.CheckSql("match"));
+                t.HasCheckConstraint("ck_import_items_rating", "rating between 0.5 and 5 and mod(rating * 2, 1) = 0");
+            });
+            item.Property(i => i.Status).HasConversion<SnakeCaseEnumConverter<ReadingStatus>>();
+            item.Property(i => i.Match).HasConversion<SnakeCaseEnumConverter<ImportMatch>>();
+            item.Property(i => i.Rating).HasPrecision(2, 1);
+            item.OwnsMany(i => i.Reads, reads => reads.ToJson());
+            item.HasIndex(i => new { i.ImportId, i.Row }).IsUnique();
+            item.HasIndex(i => i.BookId);
+            item.HasOne(i => i.Import).WithMany(i => i.Items).OnDelete(DeleteBehavior.Cascade);
+            // A book can't be deleted while an import points at it, like library entries.
+            item.HasOne(i => i.Book).WithMany().OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

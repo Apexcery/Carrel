@@ -68,7 +68,7 @@ public static class BookEndpoints
             .AllowAnonymous();
     }
 
-    private static async Task<IResult> FromBookSource(Func<Task<IResult>> action)
+    internal static async Task<IResult> FromBookSource(Func<Task<IResult>> action)
     {
         try
         {

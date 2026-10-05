@@ -148,6 +148,7 @@ interface ReadDraft {
   id: number | null
   startedOn: string
   finishedOn: string
+  finishedDateUnknown: boolean
 }
 
 function EditForm({
@@ -169,7 +170,13 @@ function EditForm({
   const [progressText, setProgressText] = useState(entry.progressValue === null ? '' : formatValue(entry.progressUnit ?? 'page', entry.progressValue))
   const [editionId, setEditionId] = useState<number | null>(entry.editionId)
   const [reads, setReads] = useState<ReadDraft[]>(
-    entry.reads.map((r) => ({ key: String(r.id), id: r.id, startedOn: r.startedOn ?? '', finishedOn: r.finishedOn ?? '' })),
+    entry.reads.map((r) => ({
+      key: String(r.id),
+      id: r.id,
+      startedOn: r.startedOn ?? '',
+      finishedOn: r.finishedOn ?? '',
+      finishedDateUnknown: r.finishedDateUnknown,
+    })),
   )
   const [problem, setProblem] = useState<string | null>(null)
   const reading = IN_PROGRESS.includes(entry.status)
@@ -193,7 +200,12 @@ function EditForm({
     onSave({
       editionId,
       ...(reading ? { progressUnit: progressValue === null ? null : unit, progressValue } : {}),
-      reads: reads.map((r) => ({ id: r.id, startedOn: r.startedOn || null, finishedOn: r.finishedOn || null })),
+      reads: reads.map((r) => ({
+        id: r.id,
+        startedOn: r.startedOn || null,
+        finishedOn: r.finishedOn || null,
+        finishedDateUnknown: r.finishedDateUnknown && !r.finishedOn,
+      })),
     })
   }
 
@@ -249,6 +261,16 @@ function EditForm({
                 <span className="mono">Finished</span>
                 <input type="date" value={read.finishedOn} onChange={(e) => updateRead(read.key, { finishedOn: e.target.value })} />
               </label>
+              {!read.finishedOn && (
+                <label className="read-unknown">
+                  <input
+                    type="checkbox"
+                    checked={read.finishedDateUnknown}
+                    onChange={(e) => updateRead(read.key, { finishedDateUnknown: e.target.checked })}
+                  />
+                  <span className="mono">Finished, date unknown</span>
+                </label>
+              )}
               <button type="button" className="link-button" onClick={() => setReads(reads.filter((r) => r.key !== read.key))}>
                 Remove
               </button>
@@ -258,7 +280,9 @@ function EditForm({
         <button
           type="button"
           className="link-button"
-          onClick={() => setReads([...reads, { key: crypto.randomUUID(), id: null, startedOn: '', finishedOn: '' }])}
+          onClick={() =>
+            setReads([...reads, { key: crypto.randomUUID(), id: null, startedOn: '', finishedOn: '', finishedDateUnknown: false }])
+          }
         >
           Add another read
         </button>

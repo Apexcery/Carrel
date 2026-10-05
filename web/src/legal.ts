@@ -2,4 +2,4 @@
 export const CONTACT_EMAIL: string | null = 'carrel@zenithal.co.uk'
 
 /** Shown at the top of the privacy and copyright pages; change it whenever either page changes. */
-export const LEGAL_UPDATED = '4 October 2026'
+export const LEGAL_UPDATED = '6 October 2026'

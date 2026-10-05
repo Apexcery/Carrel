@@ -305,12 +305,21 @@ function Library() {
       <header className="library-header">
         <h2 className="library-title">Your library</h2>
         <p className="muted mono">
-          {library.data.length} {library.data.length === 1 ? 'book' : 'books'}
+          {library.data.length} {library.data.length === 1 ? 'book' : 'books'} ·{' '}
+          <Link to="/import" className="series-link">
+            Import
+          </Link>
         </p>
       </header>
 
       {library.data.length === 0 && (
-        <p className="muted">Nothing on your shelves yet. Books you add to your library will appear here.</p>
+        <p className="muted">
+          Nothing on your shelves yet. Books you add to your library will appear here, or{' '}
+          <Link to="/import" className="series-link">
+            import them from Goodreads or StoryGraph
+          </Link>
+          .
+        </p>
       )}
 
       {reading.length > 0 && (

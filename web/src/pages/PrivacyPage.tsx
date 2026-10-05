@@ -36,6 +36,11 @@ export function PrivacyPage() {
           the editions you chose, and the dates you started and finished reading. Your library is private.
         </li>
         <li>
+          <strong>Your imports:</strong> when you import a Goodreads or StoryGraph export, each book’s title, authors,
+          ISBN, status, rating, and reading dates from the file, so Carrel can match it to a book and show you any it
+          couldn’t. Reviews, notes, and anything else in the file aren’t kept.
+        </li>
+        <li>
           <strong>Sign-in records:</strong> the IP address and browser of each signed-in session, kept until that
           session ends.
         </li>
@@ -89,8 +94,9 @@ export function PrivacyPage() {
           address.
         </li>
         <li>
-          <strong>Hardcover</strong> and <strong>Open Library</strong> supply the book information. When you search,
-          Carrel’s server sends them your search words, but nothing that identifies you. Book covers load straight from
+          <strong>Hardcover</strong> and <strong>Open Library</strong> supply the book information. When you search or
+          import, Carrel’s server sends them your search words or the books’ titles, authors, and ISBNs, but nothing
+          that identifies you. Book covers load straight from
           their image servers, so they see your IP address when your browser fetches a cover.
         </li>
       </ul>
@@ -101,8 +107,8 @@ export function PrivacyPage() {
 
       <h2>How long it’s kept</h2>
       <p>
-        Your account and library are kept until you delete your account. Deleting it (in Settings, under Account)
-        removes your account, username, and library straight away. Sign-in records end with each session, and logs
+        Your account, library, and imports are kept until you delete your account. Deleting it (in Settings, under
+        Account) removes your account, username, library, and imports straight away. Sign-in records end with each session, and logs
         are deleted automatically, after 30 days by default.
       </p>
       {/* "Straight away" holds while the Supabase plan keeps no backups; revisit this if backups are turned on. */}

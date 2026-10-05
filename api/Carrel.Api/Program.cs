@@ -6,6 +6,7 @@ using System.Threading.RateLimiting;
 using Carrel.Api.Accounts;
 using Carrel.Api.Books;
 using Carrel.Api.Data;
+using Carrel.Api.Imports;
 using Carrel.Api.Library;
 using Carrel.Api.Profiles;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -33,7 +34,10 @@ builder.Services.AddDbContext<CarrelDbContext>(options => options
     .UseNpgsql(connectionString)
     .UseSnakeCaseNamingConvention());
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+// Import batches go through Cloud Tasks when a queue is configured (production), and run in-process otherwise.
+var importQueue = builder.Configuration.GetSection("Imports:Queue").Get<ImportQueueOptions>() ?? new ImportQueueOptions();
+
+var authentication = builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
         // Supabase Auth publishes OpenID discovery and its public signing keys under /auth/v1.
@@ -41,10 +45,26 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         options.Audience = "authenticated";
         options.MapInboundClaims = false;
     });
+if (importQueue.UsesCloudTasks)
+{
+    // Cloud Tasks signs each batch request with a Google identity token for the API's service account, with the
+    // API's address as the audience. Only the batch endpoint's policy uses this scheme.
+    authentication.AddJwtBearer(ImportEndpoints.CloudTasksScheme, options =>
+    {
+        options.Authority = "https://accounts.google.com";
+        options.Audience = importQueue.ServiceUrl;
+        options.MapInboundClaims = false;
+        options.TokenValidationParameters.ValidIssuers = ["https://accounts.google.com", "accounts.google.com"];
+    });
+}
 
 // Every endpoint requires a signed-in user unless it opts out with AllowAnonymous().
 builder.Services.AddAuthorizationBuilder()
-    .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+    .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build())
+    .AddPolicy(ImportEndpoints.CloudTasksPolicy, policy => policy
+        .AddAuthenticationSchemes(ImportEndpoints.CloudTasksScheme)
+        // Google only issues tokens for a service account's email to callers allowed to act as it.
+        .RequireAssertion(context => context.User.FindFirstValue("email") is { } email && email == importQueue.ServiceAccount));
 
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy
     .WithOrigins(builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [])
@@ -136,6 +156,17 @@ builder.Services.AddScoped<BookService>();
 builder.Services.AddScoped<SeriesService>();
 builder.Services.AddScoped<LibraryService>();
 builder.Services.AddScoped<RecommendationService>();
+builder.Services.AddSingleton(importQueue);
+if (importQueue.UsesCloudTasks)
+{
+    builder.Services.AddSingleton<IImportQueue, CloudTasksImportQueue>();
+}
+else
+{
+    builder.Services.AddSingleton<IImportQueue, InProcessImportQueue>();
+}
+builder.Services.AddScoped<ImportProcessor>();
+builder.Services.AddScoped<ImportService>();
 
 var app = builder.Build();
 
@@ -184,6 +215,7 @@ app.MapBookEndpoints();
 app.MapLibraryEndpoints();
 app.MapProfileEndpoints();
 app.MapAccountEndpoints();
+app.MapImportEndpoints(importQueue.UsesCloudTasks);
 
 app.Run();
 
