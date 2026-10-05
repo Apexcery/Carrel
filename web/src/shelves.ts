@@ -4,6 +4,7 @@ import type { LibraryItem, ReadingStatus } from './types'
 const SLUGS: Record<ReadingStatus, string> = {
   want_to_read: 'want-to-read',
   reading: 'reading',
+  paused: 'paused',
   read: 'read',
   did_not_finish: 'did-not-finish',
 }
@@ -34,7 +35,7 @@ interface SortOption {
 const SORT_OPTIONS: SortOption[] = [
   { key: 'added', label: 'Date added', kind: 'date', value: (i) => i.entry.addedAt },
   { key: 'finished', label: 'Date finished', kind: 'date', shelves: ['read', 'did_not_finish'], value: lastFinished },
-  { key: 'progress', label: 'Progress', kind: 'number', shelves: ['reading'], value: (i) => i.entry.progressPercent },
+  { key: 'progress', label: 'Progress', kind: 'number', shelves: ['reading', 'paused'], value: (i) => i.entry.progressPercent },
   { key: 'title', label: 'Title', kind: 'text', value: (i) => i.book.title },
   { key: 'author', label: 'Author', kind: 'text', value: (i) => surname(i.book.authors[0]) },
   { key: 'rating', label: 'Your rating', kind: 'number', value: (i) => i.entry.rating },

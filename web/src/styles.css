@@ -2289,6 +2289,23 @@ a.primary-button:hover {
     flex: 1 1 auto;
   }
 
+  /* Too narrow for the five statuses in one row: a stacked list rather than a ragged wrap. */
+  @media (max-width: 560px) {
+    .status-picker {
+      flex-direction: column;
+      width: 100%;
+    }
+
+    .status-picker button {
+      text-align: left;
+    }
+
+    .status-picker button + button {
+      border-left: 0;
+      border-top: 1px solid var(--rule-strong);
+    }
+  }
+
   .home-layout {
     grid-template-columns: minmax(0, 1fr);
     gap: 32px;

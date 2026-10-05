@@ -62,6 +62,7 @@ export function localToday(): string {
 export const STATUS_LABELS: Record<string, string> = {
   want_to_read: 'Want to read',
   reading: 'Reading',
+  paused: 'Paused',
   read: 'Read',
   did_not_finish: 'Did not finish',
 }
