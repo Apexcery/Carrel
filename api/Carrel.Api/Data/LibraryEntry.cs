@@ -36,6 +36,8 @@ public enum ReadingStatus
 {
     WantToRead,
     Reading,
+    /// <summary>Started but set aside; the open read stays open, so resuming carries on with it.</summary>
+    Paused,
     Read,
     DidNotFinish,
 }

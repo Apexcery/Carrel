@@ -115,7 +115,7 @@ export interface DiscoverShelves {
   topRated: BookSuggestion[]
 }
 
-export type ReadingStatus = 'want_to_read' | 'reading' | 'read' | 'did_not_finish'
+export type ReadingStatus = 'want_to_read' | 'reading' | 'paused' | 'read' | 'did_not_finish'
 export type ProgressUnit = 'page' | 'percent' | 'seconds'
 
 export interface LibraryEntry {

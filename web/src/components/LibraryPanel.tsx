@@ -8,7 +8,9 @@ import { ErrorNotice } from './ErrorNotice'
 import { Select } from './Select'
 import { StarRating } from './StarRating'
 
-const STATUSES: ReadingStatus[] = ['want_to_read', 'reading', 'read', 'did_not_finish']
+const STATUSES: ReadingStatus[] = ['want_to_read', 'reading', 'paused', 'read', 'did_not_finish']
+/** Started but not finished: these show and edit progress. */
+const IN_PROGRESS: ReadingStatus[] = ['reading', 'paused']
 
 /**
  * The signed-in reader's shelf entry for a book. Status and rating save as soon as they change; progress, edition
@@ -92,7 +94,7 @@ export function LibraryPanel({ book }: { book: BookDetail }) {
             <StarRating value={current.rating} disabled={busy} onChange={(rating) => save.mutate({ rating })} />
           </div>
 
-          {current.status === 'reading' && (
+          {IN_PROGRESS.includes(current.status) && (
             <div className="progress">
               <div className="progress-bar" role="progressbar" aria-label="Progress" aria-valuemin={0} aria-valuemax={100}
                 aria-valuenow={current.progressPercent ?? undefined}>
@@ -170,7 +172,7 @@ function EditForm({
     entry.reads.map((r) => ({ key: String(r.id), id: r.id, startedOn: r.startedOn ?? '', finishedOn: r.finishedOn ?? '' })),
   )
   const [problem, setProblem] = useState<string | null>(null)
-  const reading = entry.status === 'reading'
+  const reading = IN_PROGRESS.includes(entry.status)
 
   function updateRead(key: string, changes: Partial<ReadDraft>) {
     setReads(reads.map((r) => (r.key === key ? { ...r, ...changes } : r)))
