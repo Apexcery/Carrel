@@ -11,8 +11,11 @@ const SOURCE_NAMES: Record<ImportSource, string> = { goodreads: 'Goodreads', sto
 const POLL_MS = 3000
 const PICKER_RESULTS = 5
 
-/** Import a Goodreads or StoryGraph export, follow its progress, and sort out the books it couldn't match for sure. */
-export function ImportPage() {
+/**
+ * The Import section of Settings: import a Goodreads or StoryGraph export, follow its progress, and sort out the books
+ * it couldn't match for sure.
+ */
+export function ImportSettings() {
   const queryClient = useQueryClient()
   const latest = useQuery({
     queryKey: ['import-latest'],
@@ -44,15 +47,7 @@ export function ImportPage() {
 
   return (
     <section className="import-page">
-      <header className="search-header">
-        <p className="kicker">
-          <Link to="/" className="series-link">
-            Your library
-          </Link>
-        </p>
-        <h1 className="search-title">Import your books</h1>
-        <p className="muted">Bring your shelves, ratings, and reading dates over from Goodreads or StoryGraph.</p>
-      </header>
+      <p className="settings-note">Bring your shelves, ratings, and reading dates over from Goodreads or StoryGraph.</p>
 
       {status && isActive(status) && <ImportProgress status={status} />}
       {!isActive(status) &&
