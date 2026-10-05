@@ -139,6 +139,14 @@ builder.Services.AddScoped<RecommendationService>();
 
 var app = builder.Build();
 
+// Apply pending migrations before taking requests. Cloud Run only sends traffic to a new revision once it has started,
+// so a failed migration stops the deploy and the old revision keeps serving. The old revision also runs against the
+// new schema until the switch, so migrations must stay additive (see the README).
+using (var scope = app.Services.CreateScope())
+{
+    await scope.ServiceProvider.GetRequiredService<CarrelDbContext>().Database.MigrateAsync();
+}
+
 // Configure the HTTP request pipeline.
 app.UseForwardedHeaders();
 
