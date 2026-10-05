@@ -274,6 +274,14 @@ a.primary-button:hover {
   flex-direction: column;
 }
 
+/* On very wide screens, the home page widens just enough for its shelves to sit two to a row (see .home-shelves).
+   Other pages are mostly text, kept to a comfortable line length. */
+@media (min-width: 1840px) {
+  .shell:has(.home-layout) {
+    max-width: 1800px;
+  }
+}
+
 .masthead {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -437,8 +445,22 @@ a.primary-button:hover {
   padding-top: 8vh;
 }
 
+/* Sized by the layout; its shelves change shape with its width (see .home-shelves). */
 .home-main {
-  max-width: 640px;
+  container-type: inline-size;
+}
+
+/* The suggestion shelves: each at most six covers wide, two to a row when both fit. */
+.home-shelves {
+  display: grid;
+  grid-template-columns: minmax(0, 640px);
+  column-gap: 48px;
+}
+
+@container (min-width: 1328px) {
+  .home-shelves {
+    grid-template-columns: repeat(2, minmax(0, 640px));
+  }
 }
 
 /* Line the capitals up with "Your library". Literata has space above its capitals that grows with size: 0.206em at
@@ -460,6 +482,12 @@ a.primary-button:hover {
   border-left: 1px solid var(--rule);
 }
 
+/* Set by the home page when the column fits in the window, so it stays in view while the suggestions scroll past. */
+.home-library.stays-in-view {
+  position: sticky;
+  top: 24px;
+}
+
 .home-title {
   font-family: var(--font-display);
   font-size: var(--text-display-lg);
@@ -472,6 +500,42 @@ a.primary-button:hover {
   font-size: var(--text-body);
   color: var(--ink-soft);
   max-width: 34em;
+}
+
+/* Signed in, the home page's suggestions are in two tabs. */
+.home-tabs {
+  display: flex;
+  margin-top: 28px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.home-tabs a {
+  margin-bottom: -1px;
+  padding: 0.6em 14px;
+  border-bottom: 2px solid transparent;
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--ink-soft);
+}
+
+.home-tabs a:first-child {
+  padding-left: 0;
+}
+
+.home-tabs a:hover {
+  color: var(--accent);
+}
+
+.home-tabs a[aria-current='page'] {
+  border-bottom-color: var(--accent);
+  color: var(--ink);
+}
+
+.home-tab-empty {
+  margin-top: 32px;
 }
 
 /* ---------- Search ---------- */
@@ -1395,6 +1459,133 @@ a.primary-button:hover {
   margin-bottom: 4px;
 }
 
+/* The reader's year so far, below their shelves (YearInBooks). */
+.year-in-books {
+  margin-top: 36px;
+}
+
+.year-stats {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 12px;
+  margin: 0 0 22px;
+}
+
+/* Number above its label. */
+.year-stats > div {
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: flex-end;
+}
+
+.year-stats dt {
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+  color: var(--ink-soft);
+}
+
+.year-stats dd {
+  margin: 0 0 2px;
+  font-family: var(--font-display);
+  font-size: var(--text-heading);
+  line-height: 1.2;
+}
+
+.year-months {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.year-months li {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  border-radius: 2px;
+}
+
+.year-months li:hover .year-bar-track,
+.year-months li:focus-visible .year-bar-track {
+  background: color-mix(in srgb, var(--rule) 45%, transparent);
+}
+
+.year-months li:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* A month's tooltip: how many books, and which. */
+.year-tooltip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  z-index: 2;
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  width: max-content;
+  max-width: 220px;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: var(--paper-raised);
+  box-shadow: var(--card-shadow);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.year-months li:hover .year-tooltip,
+.year-months li:focus-visible .year-tooltip {
+  display: flex;
+}
+
+.year-months li.align-start .year-tooltip {
+  left: 0;
+  transform: none;
+}
+
+.year-months li.align-end .year-tooltip {
+  right: 0;
+  left: auto;
+  transform: none;
+}
+
+.year-tooltip-heading {
+  margin-bottom: 2px;
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+  color: var(--ink-soft);
+}
+
+.year-tooltip-more {
+  color: var(--ink-soft);
+}
+
+.year-bar-track {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 100%;
+  height: 56px;
+  border-bottom: 1px solid var(--rule-strong);
+}
+
+.year-bar {
+  width: 100%;
+  max-width: 14px;
+  min-height: 4px;
+  border-radius: 4px 4px 0 0;
+  background: var(--accent);
+}
+
+.year-month {
+  color: var(--ink-faint);
+}
+
 .shelf + .shelf {
   margin-top: 36px;
 }
@@ -1450,22 +1641,77 @@ a.primary-button:hover {
   margin-top: 4px;
 }
 
-/* A home-page shelf: one row of covers that scrolls sideways. */
+/* A shelf (ShelfRow): one row of covers above a thick bottom border, scrolling sideways. The scrollbar is hidden, since
+   the border already looks like one; ‹ › buttons beside the heading move the row instead. */
+.shelf-scroll {
+  overflow-x: auto;
+  /* Scrolling clips anything outside the box, so leave room for the shelf's shadow below and for covers that lift and
+     tilt on hover above, pulling the row back up so it sits where it would without that room. */
+  padding: 8px 0 12px;
+  margin-top: -8px;
+  scrollbar-width: none;
+}
+
+.shelf-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.shelf-row-header {
+  position: relative;
+}
+
+.shelf-row-header:has(.shelf-arrows) .section-title {
+  padding-right: 64px;
+}
+
+.shelf-arrows {
+  position: absolute;
+  top: -5px;
+  right: 0;
+  display: flex;
+  gap: 4px;
+}
+
+.shelf-arrow {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.shelf-arrow svg {
+  width: 16px;
+  height: 16px;
+}
+
+.shelf-arrow:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.shelf-arrow:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 .shelf-strip {
   display: flex;
   gap: 14px;
   list-style: none;
   margin: 0;
   padding: 0 0 18px;
-  overflow-x: auto;
-  scroll-snap-type: x proximity;
-  scrollbar-width: thin;
-  scrollbar-color: var(--rule-strong) transparent;
+  width: max-content;
+  min-width: 100%;
 }
 
 .shelf-strip > li {
   flex: 0 0 92px;
-  scroll-snap-align: start;
 }
 
 .shelf-title-link {
@@ -1476,7 +1722,7 @@ a.primary-button:hover {
   color: var(--accent);
 }
 
-/* Every shelf, including Reading now, sits on the same wooden edge. */
+/* Every shelf, including Reading now, ends with the same thick border and faint shadow. */
 .reading-now,
 .shelf-strip {
   border-bottom: 6px solid var(--rule-strong);
@@ -1500,6 +1746,11 @@ a.primary-button:hover {
 
 .shelf-book:hover .cover {
   transform: translateY(-4px) rotate(-1deg);
+}
+
+.shelf-book .badge {
+  justify-self: start;
+  margin-left: 0;
 }
 
 /* ---------- Shelf page ---------- */
@@ -1651,6 +1902,11 @@ a.primary-button:hover {
 .skeleton-line.title {
   height: 2.6em;
   width: 60%;
+}
+
+/* In a placeholder section heading, keep to the heading's own height. */
+.section-title .skeleton-line {
+  margin: 0.15em 0;
 }
 
 /* ---------- Settings ---------- */
@@ -2043,6 +2299,11 @@ a.primary-button:hover {
     padding-top: 28px;
     border-left: 0;
     border-top: 1px solid var(--rule);
+  }
+
+  /* One column: the library comes after the suggestions, so there's nothing for it to stay beside. */
+  .home-library.stays-in-view {
+    position: static;
   }
 
   .home-main {

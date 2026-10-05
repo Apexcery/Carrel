@@ -57,6 +57,29 @@ public record BookDetail(
     string[] Genres,
     EditionDto[] Editions);
 
+/// <summary>A suggested book from Hardcover; not stored until someone opens it.</summary>
+public record BookSuggestion(
+    int HardcoverId,
+    string Title,
+    string[] Authors,
+    int? ReleaseYear,
+    string? CoverUrl,
+    string? SeriesName,
+    decimal? SeriesPosition);
+
+/// <summary>Suggestions for a book's page: books like it, and more by its first author (named in Author).</summary>
+public record RelatedBooks(BookSuggestion[] Similar, string? Author, BookSuggestion[] ByAuthor);
+
+/// <summary>The Discover shelves on the home page, the same for every reader.</summary>
+public record DiscoverShelves(
+    BookSuggestion[] Popular,
+    BookSuggestion[] NewReleases,
+    BookSuggestion[] ComingSoon,
+    BookSuggestion[] TopRated);
+
+/// <summary>Popular books in the reader's top genre; Genre is null until their books have one.</summary>
+public record GenrePicks(string? Genre, BookSuggestion[] Books);
+
 public record ContributorDto(long Id, string Name, string Role);
 
 public record SeriesEntryDto(long Id, long? HardcoverId, string Name, decimal? Position);

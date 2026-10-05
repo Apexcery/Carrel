@@ -8,10 +8,12 @@ import { ErrorNotice } from '../components/ErrorNotice'
 import { HardcoverRating } from '../components/HardcoverRating'
 import { LibraryPanel } from '../components/LibraryPanel'
 import { SignInPrompt } from '../components/SignInPrompt'
+import { SuggestionShelf, useOwnedHardcoverIds } from '../components/SuggestionShelf'
 import { displaySubtitle, formatDate, formatDuration, listNames, otherCredits, seriesPosition } from '../format'
-import type { BookDetail, Edition, SeriesEntry } from '../types'
+import type { BookDetail, BookSuggestion, Edition, RelatedBooks, SeriesEntry } from '../types'
 
 const EDITIONS_SHOWN = 6
+const RELATED_SHOWN = 6
 
 export function BookPage() {
   const { id } = useParams()
@@ -107,8 +109,32 @@ function BookView({ book }: { book: BookDetail }) {
         )}
 
         {book.editions.length > 0 && <Editions editions={book.editions} />}
+
+        <RelatedSections bookId={book.id} />
       </div>
     </article>
+  )
+}
+
+/** More by the book's author and books like it, leaving out any the reader already has. Hidden if they fail to load. */
+function RelatedSections({ bookId }: { bookId: number }) {
+  const related = useQuery({
+    queryKey: ['related', bookId],
+    queryFn: () => apiGet<RelatedBooks>(`/books/${bookId}/related`),
+  })
+  const owned = useOwnedHardcoverIds()
+  if (!related.data || !owned) {
+    return null
+  }
+  const notOwned = (books: BookSuggestion[]) => books.filter((b) => !owned.has(b.hardcoverId))
+
+  return (
+    <>
+      {related.data.author && (
+        <SuggestionShelf title={`More by ${related.data.author}`} books={notOwned(related.data.byAuthor)} limit={RELATED_SHOWN} />
+      )}
+      <SuggestionShelf title="Readers might also like" books={notOwned(related.data.similar)} limit={RELATED_SHOWN} />
+    </>
   )
 }
 

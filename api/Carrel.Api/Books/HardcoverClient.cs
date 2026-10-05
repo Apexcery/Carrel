@@ -23,6 +23,7 @@ public partial class HardcoverClient(HttpClient http, ILogger<HardcoverClient> l
     });
 
     private const int DailyQuotaWarningThreshold = 500;
+    private const int MaxRetryWaitSeconds = 5;
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -107,23 +108,23 @@ public partial class HardcoverClient(HttpClient http, ILogger<HardcoverClient> l
         return book;
     }
 
-    private async Task<T> QueryAsync<T>(string query, object variables, CancellationToken ct) where T : class
+    /// <param name="queries">How many top-level queries the request holds; Hardcover counts each against its limits.</param>
+    private async Task<T> QueryAsync<T>(string query, object variables, CancellationToken ct, int queries = 1) where T : class
     {
-        using var lease = await Throttle.AcquireAsync(1, ct);
+        using var lease = await Throttle.AcquireAsync(queries, ct);
         if (!lease.IsAcquired)
         {
             throw new BookSourceUnavailableException("Too many Hardcover requests are queued.");
         }
 
-        HttpResponseMessage response;
-        try
+        var response = await PostAsync(query, variables, ct);
+        // The throttle can drift from Hardcover's own count (requests from elsewhere, a restart), so when Hardcover
+        // says to wait a moment, wait and try once more rather than fail the page.
+        if (response.StatusCode == HttpStatusCode.TooManyRequests && RetryAfterSeconds(response) is { } wait and <= MaxRetryWaitSeconds)
         {
-            response = await http.PostAsJsonAsync("", new { query, variables }, ct);
-        }
-        catch (Exception e) when (e is HttpRequestException || (e is TaskCanceledException && !ct.IsCancellationRequested))
-        {
-            logger.LogWarning(e, "Hardcover request failed.");
-            throw new BookSourceUnavailableException("Hardcover request failed.");
+            response.Dispose();
+            await Task.Delay(TimeSpan.FromSeconds(wait + 1), ct);
+            response = await PostAsync(query, variables, ct);
         }
         using var _ = response;
         LogDailyQuota(response);
@@ -134,7 +135,8 @@ public partial class HardcoverClient(HttpClient http, ILogger<HardcoverClient> l
                 logger.LogError("Hardcover rejected the API token; it may have expired or been reset. Create a new one.");
                 throw new BookSourceUnavailableException("Hardcover authentication failed.");
             case HttpStatusCode.TooManyRequests:
-                logger.LogWarning("Hardcover rate limit reached.");
+                logger.LogWarning("Hardcover rate limit reached: {RateLimit}",
+                    response.Headers.TryGetValues("RateLimit", out var limits) ? string.Join(", ", limits) : "(no RateLimit header)");
                 throw new BookSourceUnavailableException("Hardcover rate limit reached.");
             case var status when !response.IsSuccessStatusCode:
                 logger.LogWarning("Hardcover returned {Status}: {Body}", (int)status, await response.Content.ReadAsStringAsync(ct));
@@ -149,6 +151,25 @@ public partial class HardcoverClient(HttpClient http, ILogger<HardcoverClient> l
         }
         return body.Data;
     }
+
+    private async Task<HttpResponseMessage> PostAsync(string query, object variables, CancellationToken ct)
+    {
+        try
+        {
+            return await http.PostAsJsonAsync("", new { query, variables }, ct);
+        }
+        catch (Exception e) when (e is HttpRequestException || (e is TaskCanceledException && !ct.IsCancellationRequested))
+        {
+            logger.LogWarning(e, "Hardcover request failed.");
+            throw new BookSourceUnavailableException("Hardcover request failed.");
+        }
+    }
+
+    // Seconds until the per-minute allowance has room again, from the RateLimit header's "Free" entry.
+    private static int? RetryAfterSeconds(HttpResponseMessage response) =>
+        response.Headers.TryGetValues("RateLimit", out var values) && MinuteReset().Match(string.Join(",", values)) is { Success: true } match
+            ? int.Parse(match.Groups[1].Value)
+            : null;
 
     // RateLimit header, e.g. "Free";r=8;t=42, "daily";r=4231;t=51234
     private void LogDailyQuota(HttpResponseMessage response)
@@ -166,4 +187,7 @@ public partial class HardcoverClient(HttpClient http, ILogger<HardcoverClient> l
 
     [GeneratedRegex("\"daily\";r=(\\d+)")]
     private static partial Regex DailyRemaining();
+
+    [GeneratedRegex("\"Free\";r=\\d+;t=(\\d+)")]
+    private static partial Regex MinuteReset();
 }

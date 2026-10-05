@@ -4,7 +4,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Carrel.Api.Books;
 
 /// <summary>
-/// Hides covers taken down after a copyright notice (Book.CoverSuppressed) in search results and series listings.
+/// Hides covers taken down after a copyright notice (Book.CoverSuppressed) in search results, series listings, and
+/// suggestions.
 /// Those come live from the book sources and are cached, so they're checked on every response rather than when stored.
 /// </summary>
 public class CoverSuppression(CarrelDbContext db)
@@ -50,5 +51,21 @@ public class CoverSuppression(CarrelDbContext db)
         SeriesBook[] Hide(SeriesBook[] books) =>
             books.Select(b => hidden.Contains(b.HardcoverId) ? b with { CoverUrl = null } : b).ToArray();
         return series with { Books = Hide(series.Books), OtherBooks = Hide(series.OtherBooks) };
+    }
+
+    public async Task<BookSuggestion[]> ApplyAsync(BookSuggestion[] books, CancellationToken ct)
+    {
+        var ids = books.Select(b => (long)b.HardcoverId).ToArray();
+        if (ids.Length == 0)
+        {
+            return books;
+        }
+        var hidden = await db.Books
+            .Where(b => b.CoverSuppressed && b.HardcoverId != null && ids.Contains(b.HardcoverId.Value))
+            .Select(b => b.HardcoverId!.Value)
+            .ToListAsync(ct);
+        return hidden.Count == 0
+            ? books
+            : books.Select(b => hidden.Contains(b.HardcoverId) ? b with { CoverUrl = null } : b).ToArray();
     }
 }
