@@ -41,13 +41,11 @@ npm run dev
 
 ## Database migrations
 
-`dotnet ef database update --project api/Carrel.Api` applies migrations to the dev database (the user secret). Apply them to production deliberately, before pushing code that needs them, by setting production's connection string for that one command only (environment variables override user secrets). In PowerShell:
+The API applies any pending migrations when it starts, before it takes requests: locally that's the dev database (the user secret), and in production it happens as each new version deploys. If a migration fails, the new version doesn't start and Cloud Run keeps serving the old one; the failure is in the new revision's logs.
 
-```powershell
-$env:ConnectionStrings__Carrel = '<production connection string>'; dotnet ef database update --project api/Carrel.Api; Remove-Item Env:ConnectionStrings__Carrel
-```
+The running site keeps using the old code until the new version has started, so a migration must not break it: add columns and tables rather than renaming or dropping ones the deployed code still reads. To drop or rename, first deploy code that no longer uses the old column, then remove it in a later release.
 
-The running site keeps using the old code until the deploy finishes, so a migration must not break it: add columns and tables rather than renaming or dropping ones the deployed code still reads.
+To apply migrations without starting the API, `dotnet ef database update --project api/Carrel.Api` still works against the dev database.
 
 ## Auth emails
 
