@@ -25,7 +25,7 @@ public class LibraryService(CarrelDbContext db)
             .AsSplitQuery()
             .OrderByDescending(e => e.UpdatedAt)
             .ToListAsync(ct);
-        return entries.Select(e => new LibraryItemDto(ToDto(e), ToBook(e.Book))).ToArray();
+        return entries.Select(e => new LibraryItemDto(ToDto(e), ToBook(e.Book, e.Edition))).ToArray();
     }
 
     public async Task<LibraryEntryDto?> GetAsync(Guid userId, long bookId, CancellationToken ct) =>
@@ -197,7 +197,7 @@ public class LibraryService(CarrelDbContext db)
             .Select(r => new ReadDto(r.Id, r.StartedOn, r.FinishedOn))
             .ToArray());
 
-    private static LibraryBookDto ToBook(Book book)
+    private static LibraryBookDto ToBook(Book book, Edition? edition)
     {
         var series = book.Series
             .OrderByDescending(bs => bs.IsFeatured)
@@ -206,12 +206,15 @@ public class LibraryService(CarrelDbContext db)
             .FirstOrDefault();
         return new LibraryBookDto(
             book.Id,
+            book.HardcoverId,
             book.Title,
             book.Authors.Where(ba => ba.Role == "author").OrderBy(ba => ba.Position).Select(ba => ba.Author.Name).ToArray(),
             book.CoverSuppressed ? null : book.CoverUrl,
             series,
             book.FirstPublishedYear,
             book.HardcoverRating,
-            book.HardcoverRatingsCount);
+            book.HardcoverRatingsCount,
+            // The reader's edition, else the first edition with a page count (an audiobook edition has none).
+            edition?.PageCount ?? book.Editions.OrderBy(e => e.Id).Select(e => e.PageCount).FirstOrDefault(p => p > 0));
     }
 }

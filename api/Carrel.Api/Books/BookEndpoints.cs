@@ -55,6 +55,17 @@ public static class BookEndpoints
             FromBookSource(async () => await service.GetByIdAsync(id, ct) is { } book
                 ? Results.Ok(book)
                 : Results.NotFound()));
+
+        books.MapGet("/{id:long}/related", (long id, RecommendationService service, CancellationToken ct) =>
+            FromBookSource(async () => await service.GetRelatedAsync(id, ct) is { } related
+                ? Results.Ok(related)
+                : Results.NotFound()));
+
+        // Outside /books, so the home page doesn't count against signed-out visitors' book lookups: it's the same
+        // shelves for everyone, cached for a day.
+        app.MapGet("/discover", (RecommendationService service, CancellationToken ct) =>
+                FromBookSource(async () => Results.Ok(await service.GetDiscoverAsync(ct))))
+            .AllowAnonymous();
     }
 
     private static async Task<IResult> FromBookSource(Func<Task<IResult>> action)

@@ -83,6 +83,38 @@ export interface SeriesBook {
   hardcoverRatingsCount: number | null
 }
 
+/** A suggested book from Hardcover; opening it imports it. */
+export interface BookSuggestion {
+  hardcoverId: number
+  title: string
+  authors: string[]
+  releaseYear: number | null
+  coverUrl: string | null
+  seriesName: string | null
+  seriesPosition: number | null
+}
+
+export interface RelatedBooks {
+  similar: BookSuggestion[]
+  /** The book's first author, whose other books are in byAuthor. */
+  author: string | null
+  byAuthor: BookSuggestion[]
+}
+
+/** Popular books in the reader's top genre; genre is null until their books have one. */
+export interface GenrePicks {
+  genre: string | null
+  books: BookSuggestion[]
+}
+
+/** The Discover shelves on the home page, the same for every reader. */
+export interface DiscoverShelves {
+  popular: BookSuggestion[]
+  newReleases: BookSuggestion[]
+  comingSoon: BookSuggestion[]
+  topRated: BookSuggestion[]
+}
+
 export type ReadingStatus = 'want_to_read' | 'reading' | 'read' | 'did_not_finish'
 export type ProgressUnit = 'page' | 'percent' | 'seconds'
 
@@ -123,6 +155,7 @@ export interface LibraryItem {
   entry: LibraryEntry
   book: {
     id: number
+    hardcoverId: number | null
     title: string
     authors: string[]
     coverUrl: string | null
@@ -130,6 +163,8 @@ export interface LibraryItem {
     firstPublishedYear: number | null
     hardcoverRating: number | null
     hardcoverRatingsCount: number | null
+    /** From the reader's edition, else the first edition with one. */
+    pageCount: number | null
   }
 }
 

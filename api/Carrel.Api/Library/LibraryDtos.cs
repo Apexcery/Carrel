@@ -24,13 +24,15 @@ public record LibraryItemDto(LibraryEntryDto Entry, LibraryBookDto Book);
 
 public record LibraryBookDto(
     long Id,
+    long? HardcoverId,
     string Title,
     string[] Authors,
     string? CoverUrl,
     SeriesEntryDto? Series,
     int? FirstPublishedYear,
     decimal? HardcoverRating,
-    int? HardcoverRatingsCount);
+    int? HardcoverRatingsCount,
+    int? PageCount);
 
 /// <summary>
 /// The entry's desired state. <paramref name="Today"/> is the reader's local date, used for automatic read dates

@@ -72,7 +72,8 @@ public record HardcoverBook(
 
 public record HardcoverImage(string? Url);
 
-public record HardcoverTag(string Tag);
+/// <summary>A tag in a book's cached_tags; Count is how many readers gave the book this tag.</summary>
+public record HardcoverTag(string Tag, int Count);
 
 // Series can be missing: search documents sometimes carry an empty featured_series object.
 public record HardcoverBookSeries(decimal? Position, bool Featured, HardcoverSeries? Series);
@@ -99,3 +100,32 @@ public record HardcoverEdition(
 public record HardcoverPublisher(string Name);
 
 public record HardcoverLanguage(string? Code2);
+
+public record HardcoverBookTagsData(HardcoverBookTags? BooksByPk);
+
+public record HardcoverBookTags(
+    Dictionary<string, HardcoverTag[]>? CachedTags,
+    HardcoverContribution[] Contributions,
+    HardcoverBookSeries[] BookSeries,
+    HardcoverTagging[] Taggings);
+
+public record HardcoverTagging(HardcoverTagDetail Tag);
+
+/// <summary>A tag itself; Count is how many books it's on across Hardcover.</summary>
+public record HardcoverTagDetail(int Id, string Tag, int Count, HardcoverTagCategory TagCategory);
+
+public record HardcoverTagCategory(string Slug);
+
+public record HardcoverTrendingData(HardcoverTrending BooksTrending);
+
+public record HardcoverTrending(int[] Ids);
+
+public record HardcoverListedBook(
+    int Id,
+    string Title,
+    int? ReleaseYear,
+    int UsersCount,
+    HardcoverImage? CachedImage,
+    HardcoverContribution[] Contributions,
+    HardcoverBookSeries[] BookSeries,
+    HardcoverTag[]? Genres); // The book's genre tags, most votes first.

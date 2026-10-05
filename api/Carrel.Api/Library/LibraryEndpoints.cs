@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Carrel.Api.Books;
 
 namespace Carrel.Api.Library;
 
@@ -10,6 +11,14 @@ public static class LibraryEndpoints
 
         library.MapGet("/", (ClaimsPrincipal user, LibraryService service, CancellationToken ct) =>
             service.ListAsync(UserId(user), ct));
+
+        library.MapGet("/next-in-series", (ClaimsPrincipal user, RecommendationService service, CancellationToken ct) =>
+                service.GetNextInSeriesAsync(UserId(user), ct))
+            .RequireRateLimiting(BookEndpoints.BookSourcesRateLimit);
+
+        library.MapGet("/genre-picks", (ClaimsPrincipal user, RecommendationService service, CancellationToken ct) =>
+                service.GetGenrePicksAsync(UserId(user), ct))
+            .RequireRateLimiting(BookEndpoints.BookSourcesRateLimit);
 
         library.MapGet("/books/{bookId:long}", async (long bookId, ClaimsPrincipal user, LibraryService service, CancellationToken ct) =>
             await service.GetAsync(UserId(user), bookId, ct) is { } entry ? Results.Ok(entry) : Results.NotFound());
