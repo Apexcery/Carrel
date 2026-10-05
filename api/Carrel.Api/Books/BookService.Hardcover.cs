@@ -64,7 +64,36 @@ public partial class BookService
             // Hardcover merged it into a canonical book, which may already be stored.
             book = await LoadAsync(b => b.HardcoverId == source.Id, ct);
         }
+        return await StoreHardcoverAsync(source, book, mergeInto, ct);
+    }
 
+    /// <summary>
+    /// Stores Hardcover books fetched in a batch (library imports), one at a time inside the import lock so readers
+    /// opening book pages never wait long. Books stored recently are left as they are. Returns stored ids by Hardcover id.
+    /// </summary>
+    public async Task<Dictionary<int, long>> StoreHardcoverBooksAsync(IEnumerable<HardcoverBook> sources, CancellationToken ct)
+    {
+        var stored = new Dictionary<int, long>();
+        foreach (var source in sources.DistinctBy(s => s.Id))
+        {
+            stored[source.Id] = await WithImportLockAsync(async () =>
+            {
+                var book = await LoadAsync(b => b.HardcoverId == source.Id, ct);
+                if (book is null || !IsFresh(book))
+                {
+                    book = await StoreHardcoverAsync(source, book, null, ct);
+                }
+                return book.Id;
+            }, ct);
+            // Each book is saved; letting the tracked entities pile up would slow every later save.
+            db.ChangeTracker.Clear();
+        }
+        return stored;
+    }
+
+    /// <summary>Writes a fetched Hardcover book into <paramref name="book"/> (its stored copy, if any). Call inside the import lock.</summary>
+    private async Task<Book> StoreHardcoverAsync(HardcoverBook source, Book? book, Book? mergeInto, CancellationToken ct)
+    {
         var editions = source.Editions.Select(e => ToEditionData(e)).ToList();
         var isbns = editions.SelectMany(e => new[] { e.Isbn13, e.Isbn10 }).OfType<string>().ToList();
         if (book is not null && mergeInto is not null && book != mergeInto)

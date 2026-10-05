@@ -10,6 +10,7 @@ import { ChooseUsernamePage } from './pages/ChooseUsernamePage'
 import { ConfirmEmailPage } from './pages/ConfirmEmailPage'
 import { CopyrightPage } from './pages/CopyrightPage'
 import { HomePage } from './pages/HomePage'
+import { ImportSettings } from './pages/ImportSettings'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { PrivacyPage } from './pages/PrivacyPage'
 import { SearchPage } from './pages/SearchPage'
@@ -68,6 +69,7 @@ function App() {
           <Route path="appearance" element={<AppearanceSettings />} />
           <Route element={<RequireSignIn />}>
             <Route path="account" element={<AccountSettings />} />
+            <Route path="import" element={<ImportSettings />} />
           </Route>
         </Route>
         <Route element={<RequireSignIn />}>

@@ -95,7 +95,7 @@ public class LibraryService(CarrelDbContext db)
         {
             return;
         }
-        var openRead = entry.Reads.Where(r => r.FinishedOn is null).OrderByDescending(r => r.Id).FirstOrDefault();
+        var openRead = entry.Reads.Where(r => r.IsOpen).OrderByDescending(r => r.Id).FirstOrDefault();
         switch (newStatus)
         {
             case ReadingStatus.Reading when openRead is null:
@@ -127,6 +127,7 @@ public class LibraryService(CarrelDbContext db)
             }
             read.StartedOn = input.StartedOn;
             read.FinishedOn = input.FinishedOn;
+            read.FinishedDateUnknown = input.FinishedDateUnknown && input.FinishedOn is null;
         }
     }
 
@@ -191,10 +192,11 @@ public class LibraryService(CarrelDbContext db)
         ProgressTotal(entry),
         entry.AddedAt,
         entry.UpdatedAt,
+        // Most recent first: an open read, then by finish date, then reads finished on an unknown date.
         entry.Reads
-            .OrderByDescending(r => r.FinishedOn ?? DateOnly.MaxValue)
+            .OrderByDescending(r => r.FinishedOn ?? (r.FinishedDateUnknown ? DateOnly.MinValue : DateOnly.MaxValue))
             .ThenByDescending(r => r.StartedOn)
-            .Select(r => new ReadDto(r.Id, r.StartedOn, r.FinishedOn))
+            .Select(r => new ReadDto(r.Id, r.StartedOn, r.FinishedOn, r.FinishedDateUnknown))
             .ToArray());
 
     private static LibraryBookDto ToBook(Book book, Edition? edition)

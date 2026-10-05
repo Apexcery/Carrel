@@ -138,6 +138,8 @@ export interface Read {
   id: number
   startedOn: string | null
   finishedOn: string | null
+  /** Finished, but when isn't known; never set alongside finishedOn. */
+  finishedDateUnknown: boolean
 }
 
 export interface SaveEntryRequest {
@@ -148,7 +150,7 @@ export interface SaveEntryRequest {
   progressValue: number | null
   today: string
   /** When given, replaces the reading history: reads with an id are updated, without one added, missing ones deleted. */
-  reads?: { id: number | null; startedOn: string | null; finishedOn: string | null }[]
+  reads?: { id: number | null; startedOn: string | null; finishedOn: string | null; finishedDateUnknown: boolean }[]
 }
 
 export interface LibraryItem {
@@ -176,4 +178,44 @@ export interface Profile {
 export interface UsernameAvailability {
   available: boolean
   reason: string | null
+}
+
+export type ImportSource = 'goodreads' | 'story_graph'
+
+/** Matching rows to books, waiting for Hardcover's daily allowance, finished, or given up after repeated failures. */
+export type ImportState = 'matching' | 'waiting' | 'done' | 'failed'
+
+export interface ImportStatus {
+  id: number
+  source: ImportSource
+  state: ImportState
+  overwriteExisting: boolean
+  createdAt: string
+  finishedAt: string | null
+  total: number
+  matched: number
+  /** Matched by title and not checked yet. */
+  toCheck: number
+  notFound: number
+  /** Still being matched. */
+  remaining: number
+}
+
+export interface ImportReviewItem {
+  id: number
+  row: number
+  /** As the export has it. */
+  title: string
+  authors: string[]
+  match: 'by_title' | 'not_found'
+  /** The book a title match found; null when nothing matched. */
+  book: {
+    id: number
+    title: string
+    authors: string[]
+    coverUrl: string | null
+    firstPublishedYear: number | null
+    seriesName: string | null
+    seriesPosition: number | null
+  } | null
 }

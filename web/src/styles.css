@@ -1446,6 +1446,11 @@ a.primary-button:hover {
   color: var(--ink-soft);
 }
 
+.read-row .read-unknown input {
+  padding: 0;
+  accent-color: var(--accent);
+}
+
 /* ---------- Library (home) ---------- */
 
 .library-header {
@@ -1862,6 +1867,201 @@ a.primary-button:hover {
 
 .shelf-grid-author {
   color: var(--ink-soft);
+}
+
+/* ---------- Import ---------- */
+
+.import-page {
+  max-width: 760px;
+}
+
+.import-progress,
+.import-form {
+  display: grid;
+  gap: 14px;
+  justify-items: start;
+  margin-bottom: 36px;
+}
+
+/* The status card of a running, failed, or finished import, styled like the book page's shelf panel. */
+.import-progress {
+  padding: 20px 22px 18px;
+  background: var(--paper-raised);
+  border-top: 2px solid var(--accent);
+  box-shadow: var(--card-shadow);
+}
+
+.import-progress .progress-bar {
+  width: 100%;
+}
+
+.import-progress p,
+.import-sources p {
+  margin: 0;
+}
+
+.import-sources {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px 28px;
+}
+
+.import-source-name {
+  margin: 0 0 6px;
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.import-file,
+.import-existing {
+  display: grid;
+  gap: 8px;
+}
+
+.another-import {
+  margin-bottom: 28px;
+}
+
+.another-import .import-form {
+  margin: 24px 0 8px;
+}
+
+.disclosure-arrow {
+  display: inline-block;
+  margin-left: 0.3em;
+  transition: transform 150ms ease;
+}
+
+[aria-expanded='true'] > .disclosure-arrow {
+  transform: rotate(180deg);
+}
+
+.file-choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  min-width: 0;
+}
+
+.file-name {
+  overflow-wrap: anywhere;
+}
+
+/* The primary button's outline: for a second action beside it, like choosing a file. */
+.secondary-button {
+  display: inline-block;
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  background: none;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.65em 1.2em;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.secondary-button:hover {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+/* The file input is hidden inside the label, so the label shows its keyboard focus. */
+.secondary-button:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.import-existing .setting-hint {
+  margin: 0;
+}
+
+.import-review {
+  margin-bottom: 36px;
+}
+
+.import-review > .muted {
+  margin: 0 0 16px;
+}
+
+.import-review ul,
+.book-picker ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.review-row {
+  display: grid;
+  gap: 10px;
+  padding: 16px 0;
+  border-top: 1px solid var(--rule);
+}
+
+/* What the export said beside what it was matched to; stacked on narrow screens. */
+.review-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px 24px;
+  align-items: start;
+}
+
+.review-match,
+.picker-result {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  color: inherit;
+  text-decoration: none;
+}
+
+.picker-result {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 10px 0;
+  border-top: 1px solid var(--rule);
+}
+
+.review-title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.review-series {
+  margin: 2px 0 0;
+  color: var(--accent);
+}
+
+.review-match:hover .review-title {
+  color: var(--accent);
+}
+
+.review-row .muted,
+.picker-result .muted {
+  margin: 2px 0 0;
+}
+
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+
+.book-picker {
+  display: grid;
+  gap: 10px;
+  padding: 12px 0 0;
+}
+
+.book-picker .filter-box {
+  max-width: none;
 }
 
 /* ---------- Notices, skeletons ---------- */

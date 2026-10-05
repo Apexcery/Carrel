@@ -109,9 +109,11 @@ public partial class HardcoverClient(HttpClient http, ILogger<HardcoverClient> l
     }
 
     /// <param name="queries">How many top-level queries the request holds; Hardcover counts each against its limits.</param>
-    private async Task<T> QueryAsync<T>(string query, object variables, CancellationToken ct, int queries = 1) where T : class
+    /// <param name="background">Work nobody is waiting on (imports): only uses spare capacity; see AcquireSpareAsync.</param>
+    private async Task<T> QueryAsync<T>(string query, object variables, CancellationToken ct, int queries = 1, bool background = false)
+        where T : class
     {
-        using var lease = await Throttle.AcquireAsync(queries, ct);
+        using var lease = background ? await AcquireSpareAsync(queries, ct) : await Throttle.AcquireAsync(queries, ct);
         if (!lease.IsAcquired)
         {
             throw new BookSourceUnavailableException("Too many Hardcover requests are queued.");
@@ -179,9 +181,15 @@ public partial class HardcoverClient(HttpClient http, ILogger<HardcoverClient> l
             return;
         }
         var match = DailyRemaining().Match(string.Join(",", values));
-        if (match.Success && int.Parse(match.Groups[1].Value) < DailyQuotaWarningThreshold)
+        if (!match.Success)
         {
-            logger.LogWarning("Hardcover daily quota low: {Remaining} requests left.", match.Groups[1].Value);
+            return;
+        }
+        var remaining = int.Parse(match.Groups[1].Value);
+        Volatile.Write(ref dailyRemaining, remaining);
+        if (remaining < DailyQuotaWarningThreshold)
+        {
+            logger.LogWarning("Hardcover daily quota low: {Remaining} requests left.", remaining);
         }
     }
 

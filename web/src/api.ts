@@ -47,6 +47,12 @@ export async function apiSend<T>(method: 'POST' | 'PUT' | 'DELETE', path: string
   return (response.status === 204 ? undefined : await response.json()) as T
 }
 
+/** POSTs a file as the request body (CSV exports); resolves to the parsed response. */
+export async function apiUpload<T>(path: string, file: File): Promise<T> {
+  const response = await send(path, { method: 'POST', headers: { 'Content-Type': 'text/csv' }, body: file })
+  return response.json() as Promise<T>
+}
+
 async function send(path: string, init?: RequestInit): Promise<Response> {
   let response: Response
   try {

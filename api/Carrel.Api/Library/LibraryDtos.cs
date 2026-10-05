@@ -17,7 +17,7 @@ public record LibraryEntryDto(
     DateTimeOffset UpdatedAt,
     ReadDto[] Reads);
 
-public record ReadDto(long Id, DateOnly? StartedOn, DateOnly? FinishedOn);
+public record ReadDto(long Id, DateOnly? StartedOn, DateOnly? FinishedOn, bool FinishedDateUnknown);
 
 /// <summary>A library entry with enough of its book to show on a shelf.</summary>
 public record LibraryItemDto(LibraryEntryDto Entry, LibraryBookDto Book);
@@ -48,4 +48,5 @@ public record SaveEntryRequest(
     DateOnly? Today,
     ReadInput[]? Reads = null);
 
-public record ReadInput(long? Id, DateOnly? StartedOn, DateOnly? FinishedOn);
+/// <param name="FinishedDateUnknown">Finished on a date that isn't known; ignored when <paramref name="FinishedOn"/> is set.</param>
+public record ReadInput(long? Id, DateOnly? StartedOn, DateOnly? FinishedOn, bool FinishedDateUnknown = false);

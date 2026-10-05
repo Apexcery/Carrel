@@ -310,7 +310,13 @@ function Library() {
       </header>
 
       {library.data.length === 0 && (
-        <p className="muted">Nothing on your shelves yet. Books you add to your library will appear here.</p>
+        <p className="muted">
+          Nothing on your shelves yet. Books you add to your library will appear here, or{' '}
+          <Link to="/settings/import" className="series-link">
+            import them from Goodreads or StoryGraph
+          </Link>
+          .
+        </p>
       )}
 
       {reading.length > 0 && (
