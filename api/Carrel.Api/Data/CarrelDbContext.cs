@@ -15,6 +15,7 @@ public class CarrelDbContext(DbContextOptions<CarrelDbContext> options) : DbCont
     public DbSet<LibraryEntry> LibraryEntries => Set<LibraryEntry>();
     public DbSet<Read> Reads => Set<Read>();
     public DbSet<Profile> Profiles => Set<Profile>();
+    public DbSet<ReadingGoal> ReadingGoals => Set<ReadingGoal>();
     public DbSet<LibraryImport> LibraryImports => Set<LibraryImport>();
     public DbSet<ImportItem> ImportItems => Set<ImportItem>();
 
@@ -110,6 +111,18 @@ public class CarrelDbContext(DbContextOptions<CarrelDbContext> options) : DbCont
             profile.ToTable(t => t.HasCheckConstraint("ck_profiles_username", "username ~ '^[A-Za-z0-9_-]{3,20}$'"));
             profile.Property(p => p.CreatedAt).HasDefaultValueSql("now()");
             profile.Property(p => p.UpdatedAt).HasDefaultValueSql("now()");
+            // The default makes profiles from before the column public. EF always sends the value, since it would
+            // otherwise leave out false (the CLR default) and the database would fill in true.
+            profile.Property(p => p.IsPublic).HasDefaultValue(true).ValueGeneratedNever();
+        });
+
+        modelBuilder.Entity<ReadingGoal>(goal =>
+        {
+            // user_id references auth.users; added in the migration.
+            goal.HasKey(g => new { g.UserId, g.Year });
+            goal.ToTable(t => t.HasCheckConstraint("ck_reading_goals_books", $"books between 1 and {ReadingGoal.MaxBooks}"));
+            goal.Property(g => g.CreatedAt).HasDefaultValueSql("now()");
+            goal.Property(g => g.UpdatedAt).HasDefaultValueSql("now()");
         });
 
         modelBuilder.Entity<Read>(read =>

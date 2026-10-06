@@ -119,6 +119,13 @@ builder.Services.AddRateLimiter(options =>
             PermitLimit = IsSignedIn(context) ? 30 : 15,
             Window = TimeSpan.FromMinutes(1),
         }));
+    // Each profile loads a whole library, and anyone can ask for one.
+    options.AddPolicy(ProfileEndpoints.ReadersRateLimit, context =>
+        RateLimitPartition.GetFixedWindowLimiter(RateLimitPartitionKey(context), _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = IsSignedIn(context) ? 30 : 15,
+            Window = TimeSpan.FromMinutes(1),
+        }));
     options.AddPolicy(AccountEndpoints.AccountRateLimit, context =>
         RateLimitPartition.GetFixedWindowLimiter(RateLimitPartitionKey(context),
             _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1) }));

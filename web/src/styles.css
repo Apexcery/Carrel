@@ -298,10 +298,11 @@ a.primary-button:hover {
   flex-direction: column;
 }
 
-/* On very wide screens, the home page widens just enough for its shelves to sit two to a row (see .home-shelves).
-   Other pages are mostly text, kept to a comfortable line length. */
+/* On very wide screens, the home and profile pages widen just enough for their shelves to sit two to a row (see
+   .home-shelves and .profile-shelves). Other pages are mostly text, kept to a comfortable line length. */
 @media (min-width: 1840px) {
-  .shell:has(.home-layout) {
+  .shell:has(.home-layout),
+  .shell:has(.profile-layout) {
     max-width: 1800px;
   }
 }
@@ -398,6 +399,13 @@ a.primary-button:hover {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-decoration: none;
+}
+
+/* Links to the reader's profile. */
+.account-name:hover,
+.account-name[aria-current='page'] {
+  color: var(--accent);
 }
 
 .page {
@@ -1753,6 +1761,133 @@ a.primary-button:hover {
   margin-left: 0;
 }
 
+/* ---------- Profile ---------- */
+
+/* Shelves on the left, the year so far in a column on the right, as on the home page. */
+.profile-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  gap: 56px;
+  align-items: start;
+}
+
+/* Sized by the layout; its shelves sit two to a row when both fit, as on the home page. */
+.profile-main {
+  container-type: inline-size;
+}
+
+/* The book count follows the username on the same line. */
+.profile-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
+.profile-header .library-title {
+  margin-bottom: 0;
+}
+
+/* Centred on the username's lowercase letters rather than its line, which has Literata's tall ascender space above
+   them: their middle is 0.27em above the baseline (0.59rem at 2.2rem), the count's lowercase middle 0.27em too
+   (0.22rem at its size), so it's raised by the difference. */
+.profile-header p {
+  position: relative;
+  top: calc(0.22rem - 0.59rem);
+}
+
+/* Literata's @ is centred on the lowercase letters, so it sits below the capitals beside it. */
+.profile-at {
+  position: relative;
+  top: -0.08em;
+}
+
+.profile-shelves {
+  display: grid;
+  grid-template-columns: minmax(0, 640px);
+  gap: 36px 48px;
+}
+
+@container (min-width: 1328px) {
+  .profile-shelves {
+    grid-template-columns: repeat(2, minmax(0, 640px));
+  }
+}
+
+/* The grid spaces them instead. */
+.profile-shelves .shelf + .shelf {
+  margin-top: 0;
+}
+
+/* Side by side, a shelf without ratings under its covers is shorter than one with; stretch it so the two shelves'
+   bottom borders line up. */
+.profile-shelves .shelf {
+  display: flex;
+  flex-direction: column;
+}
+
+.profile-shelves .shelf-scroll {
+  flex: 1;
+  display: flex;
+}
+
+/* Wider than the home page's column, so the cards sit side by side. */
+.profile-shelves .reading-now {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.profile-year {
+  padding-left: 32px;
+  border-left: 1px solid var(--rule);
+}
+
+.profile-year .year-in-books:first-child {
+  margin-top: 0;
+}
+
+/* This year's reading goal, above the year so far. */
+.goal-count {
+  margin-bottom: 10px;
+  color: var(--ink-soft);
+}
+
+.goal-number {
+  font-family: var(--font-display);
+  font-size: var(--text-heading);
+  color: var(--ink);
+}
+
+.goal-pace {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-top: 8px;
+  color: var(--ink-soft);
+}
+
+.goal-form {
+  display: grid;
+  gap: 14px;
+  justify-items: start;
+}
+
+.goal-input {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  color: var(--ink-soft);
+}
+
+.goal-input input {
+  width: 6em;
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  background: var(--paper);
+  padding: 0.35em 0.6em;
+  font-size: var(--text-body);
+}
+
 /* ---------- Shelf page ---------- */
 
 .shelf-toolbar {
@@ -2237,29 +2372,37 @@ a.primary-button:hover {
   color: var(--ink-soft);
 }
 
-/* Deleting book data and the account: apart from the other details, in a box marked in the danger colour. */
-.danger-zone {
+/* A group of settings under its own heading, in a box apart from the account details. */
+.settings-section {
   margin-top: 48px;
 }
 
-.danger-zone .section-title {
+.settings-section .section-title {
   margin-bottom: 0;
   border-bottom: 0;
+}
+
+.settings-section .setting-rows {
+  padding: 0 16px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+}
+
+.settings-section .setting-row:first-child {
+  border-top: 0;
+}
+
+.settings-section .setting-row:last-child {
+  border-bottom: 0;
+}
+
+/* Deleting book data and the account: marked in the danger colour. */
+.danger-zone .section-title {
   color: var(--danger);
 }
 
 .danger-zone .setting-rows {
-  padding: 0 16px;
-  border: 1px solid color-mix(in srgb, var(--danger) 50%, transparent);
-  border-radius: 2px;
-}
-
-.danger-zone .setting-row:first-child {
-  border-top: 0;
-}
-
-.danger-zone .setting-row:last-child {
-  border-bottom: 0;
+  border-color: color-mix(in srgb, var(--danger) 50%, transparent);
 }
 
 .danger-zone .setting-row > .link-button,
@@ -2433,6 +2576,57 @@ a.primary-button:hover {
   border-bottom: 2px solid var(--accent);
 }
 
+/* The public profile choice when choosing a username: a checkbox labelled like the fields, and a ? that opens a
+   note below. */
+.public-profile-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sign-in-form .public-profile-choice label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.public-profile-help {
+  display: inline-grid;
+  place-items: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  border: 1px solid var(--rule-strong);
+  border-radius: 50%;
+  background: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+  line-height: 1;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.public-profile-help:hover,
+.public-profile-help[aria-expanded='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.sign-in-form .public-profile-choice input {
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
+
+.public-profile-hint {
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+  line-height: 1.5;
+  color: var(--ink-faint);
+  overflow-wrap: anywhere;
+}
+
 .sign-in-form .primary-button {
   margin-top: 10px;
   justify-self: start;
@@ -2580,6 +2774,18 @@ a.primary-button:hover {
   }
 
   .home-library {
+    padding-left: 0;
+    padding-top: 28px;
+    border-left: 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .profile-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+  }
+
+  .profile-year {
     padding-left: 0;
     padding-top: 28px;
     border-left: 0;

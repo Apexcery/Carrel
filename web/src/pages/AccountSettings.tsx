@@ -1,12 +1,13 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { ApiError, apiSend } from '../api'
 import { useSession } from '../auth'
 import { usePageTitle } from '../pageTitle'
 import { passwordProblem } from '../passwords'
 import { PROFILE_KEY, useProfile } from '../profile'
 import { clearRecentSearches } from '../recentSearches'
+import { profilePath } from '../shelves'
 import { supabase } from '../supabase'
 import type { Profile } from '../types'
 import { useUsernameStatus } from '../username'
@@ -21,8 +22,16 @@ export function AccountSettings() {
         <EmailRow />
         <PasswordRow />
       </div>
+      <section className="settings-section" aria-labelledby="privacy-title">
+        <h2 id="privacy-title" className="section-title">
+          Privacy
+        </h2>
+        <div className="setting-rows">
+          <ProfileRow />
+        </div>
+      </section>
       {/* Set apart, so nobody reaches them while changing their details. */}
-      <section className="danger-zone" aria-labelledby="danger-zone-title">
+      <section className="settings-section danger-zone" aria-labelledby="danger-zone-title">
         <h2 id="danger-zone-title" className="section-title">
           Danger zone
         </h2>
@@ -158,6 +167,43 @@ function UsernameRow() {
         </p>
         <FormActions saving={save.isPending} disabled={!status.canSave} label="Save" savingLabel="Saving…" onCancel={() => setEditing(false)} />
       </form>
+    </SettingRow>
+  )
+}
+
+/** Public or private, switched straight away: there's nothing to type. */
+function ProfileRow() {
+  const queryClient = useQueryClient()
+  const profile = useProfile().data
+  const save = useMutation({
+    mutationFn: () => apiSend<Profile>('PUT', '/profile', { username: profile!.username, isPublic: !profile!.isPublic }),
+    onSuccess: (saved) => queryClient.setQueryData(PROFILE_KEY, saved),
+  })
+  if (!profile?.username) {
+    return null
+  }
+  return (
+    <SettingRow
+      label="Profile"
+      value={
+        <>
+          {profile.isPublic ? 'Public: anyone can see ' : 'Private: only you can see '}
+          <Link to={profilePath(profile.username)} className="series-link">
+            your profile
+          </Link>{' '}
+          and shelves.
+        </>
+      }
+      hint={save.error?.message}
+      action={save.isPending ? 'Saving…' : profile.isPublic ? 'Make private' : 'Make public'}
+      editing={false}
+      onEdit={() => {
+        if (!save.isPending) {
+          save.mutate()
+        }
+      }}
+    >
+      {null}
     </SettingRow>
   )
 }

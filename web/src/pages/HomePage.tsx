@@ -3,17 +3,13 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router'
 import { apiGet } from '../api'
 import { useSession } from '../auth'
-import { Cover } from '../components/Cover'
 import { ErrorNotice } from '../components/ErrorNotice'
-import { ShelfRow } from '../components/ShelfRow'
+import { ReadingNow, ShelfStrip, ShelfTitle } from '../components/LibraryShelves'
 import { SignInPrompt } from '../components/SignInPrompt'
-import { StarDisplay } from '../components/StarRating'
 import { SuggestionShelf, SuggestionShelfSkeleton, useOwnedHardcoverIds } from '../components/SuggestionShelf'
-import { Tooltip } from '../components/Tooltip'
-import { YearInBooks } from '../components/YearInBooks'
-import { listNames, STATUS_LABELS } from '../format'
 import { usePageTitle } from '../pageTitle'
-import { shelfItems, shelfPath } from '../shelves'
+import { useProfile } from '../profile'
+import { shelfItems } from '../shelves'
 import type { BookSuggestion, DiscoverShelves, GenrePicks, LibraryItem, ReadingStatus, RelatedBooks } from '../types'
 
 const SHELVES: ReadingStatus[] = ['want_to_read', 'read', 'did_not_finish']
@@ -293,6 +289,8 @@ function LibrarySkeleton() {
 
 function Library() {
   const library = useQuery({ queryKey: ['library'], queryFn: () => apiGet<LibraryItem[]>('/library') })
+  // Signed in, so the profile has loaded (see App).
+  const username = useProfile().data!.username!
 
   if (library.isError) {
     return <ErrorNotice error={library.error} onRetry={() => library.refetch()} />
@@ -324,26 +322,8 @@ function Library() {
 
       {reading.length > 0 && (
         <section className="shelf">
-          <ShelfTitle status="reading" count={reading.length} />
-          <ul className="reading-now">
-            {reading.map((item) => (
-              <li key={item.entry.id}>
-                <Link to={`/books/${item.book.id}`} className="reading-card">
-                  <Cover url={item.book.coverUrl} title={item.book.title} author={item.book.authors[0]} size="small" />
-                  <div>
-                    <p className="reading-card-title">{item.book.title}</p>
-                    {item.book.authors.length > 0 && <p className="reading-card-byline">{listNames(item.book.authors)}</p>}
-                    <div className="progress-bar" aria-hidden="true">
-                      <span style={{ width: `${item.entry.progressPercent ?? 0}%` }} />
-                    </div>
-                    <p className="progress-summary mono">
-                      {item.entry.progressPercent === null ? 'Just started' : `${Math.round(item.entry.progressPercent)}%`}
-                    </p>
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <ShelfTitle username={username} status="reading" count={reading.length} level="h3" />
+          <ReadingNow items={reading} />
         </section>
       )}
 
@@ -352,34 +332,15 @@ function Library() {
         return (
           items.length > 0 && (
             <section key={status} className="shelf">
-              <ShelfRow heading={<ShelfTitle status={status} count={items.length} />}>
-                {items.slice(0, SHELF_BOOKS).map((item) => (
-                  <li key={item.entry.id}>
-                    <Tooltip content={item.book.title}>
-                      <Link to={`/books/${item.book.id}`} className="shelf-book">
-                        <Cover url={item.book.coverUrl} title={item.book.title} author={item.book.authors[0]} />
-                        {item.entry.rating !== null && <StarDisplay value={item.entry.rating} />}
-                      </Link>
-                    </Tooltip>
-                  </li>
-                ))}
-              </ShelfRow>
+              <ShelfStrip
+                heading={<ShelfTitle username={username} status={status} count={items.length} level="h3" />}
+                items={items}
+                limit={SHELF_BOOKS}
+              />
             </section>
           )
         )
       })}
-
-      {library.data.length > 0 && <YearInBooks items={library.data} />}
     </>
-  )
-}
-
-function ShelfTitle({ status, count }: { status: ReadingStatus; count: number }) {
-  return (
-    <h3 className="section-title">
-      <Link to={shelfPath(status)} className="shelf-title-link">
-        {STATUS_LABELS[status]} ({count})
-      </Link>
-    </h3>
   )
 }

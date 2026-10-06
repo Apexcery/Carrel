@@ -1,3 +1,4 @@
+import { readsFinishedIn } from '../shelves'
 import type { LibraryItem } from '../types'
 import { Tooltip } from './Tooltip'
 
@@ -9,16 +10,15 @@ const monthLetter = new Intl.DateTimeFormat(undefined, { month: 'narrow' })
 const TOOLTIP_TITLES = 4
 
 /**
- * The reader's year so far: books finished (rereads count again), pages read, average rating, and books finished each
- * month, with their titles on hover or focus. Pages come from each book's edition, so books without a page count add
- * none.
+ * A reader's year so far, on their profile: books finished (rereads count again), pages read, average rating, and
+ * books finished each month, with their titles on hover or focus. Pages come from each book's edition, so books without
+ * a page count add none.
  */
-export function YearInBooks({ items }: { items: LibraryItem[] }) {
-  const finished = items.flatMap((item) =>
-    item.entry.reads
-      .filter((read) => read.finishedOn?.startsWith(`${THIS_YEAR}-`))
-      .map((read) => ({ item, month: Number(read.finishedOn!.slice(5, 7)) - 1 })),
-  )
+export function YearInBooks({ items, username, isOwn }: { items: LibraryItem[]; username: string; isOwn: boolean }) {
+  const finished = readsFinishedIn(items, THIS_YEAR).map(({ item, finishedOn }) => ({
+    item,
+    month: Number(finishedOn.slice(5, 7)) - 1,
+  }))
   const perMonth = MONTHS.map((_, month) => finished.filter((f) => f.month === month).length)
   const most = Math.max(...perMonth, 1)
   const pages = finished.reduce((sum, f) => sum + (f.item.book.pageCount ?? 0), 0)
@@ -27,9 +27,9 @@ export function YearInBooks({ items }: { items: LibraryItem[] }) {
 
   return (
     <section className="year-in-books">
-      <h3 className="section-title">Your {THIS_YEAR}</h3>
+      <h2 className="section-title">{isOwn ? `Your ${THIS_YEAR}` : `@${username}’s ${THIS_YEAR}`}</h2>
       {finished.length === 0 ? (
-        <p className="muted">Nothing finished yet this year. Books you mark as read will add up here.</p>
+        <p className="muted">Nothing finished yet this year.{isOwn && ' Books you mark as read will add up here.'}</p>
       ) : (
         <>
           <dl className="year-stats">

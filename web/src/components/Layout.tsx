@@ -1,6 +1,7 @@
 import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { useSession } from '../auth'
 import { useProfile } from '../profile'
+import { profilePath } from '../shelves'
 import { isMembersOnly, signInPath } from '../signIn'
 import { supabase } from '../supabase'
 import { SearchBox } from './SearchBox'
@@ -44,23 +45,28 @@ function Footer() {
 /** Settings are for everyone (appearance needs no account); the rest depends on whether someone is signed in. */
 function Account() {
   const signedIn = Boolean(useSession())
-  const username = useProfile().data?.username
+  const profile = useProfile().data
+  const username = profile?.username
   const navigate = useNavigate()
   const { pathname } = useLocation()
 
   async function signOut() {
-    await supabase.auth.signOut()
-    if (isMembersOnly(pathname)) {
+    // A private profile, and its shelves, are only there for its reader.
+    const ownPrivateProfile =
+      username && !profile.isPublic && pathname.split('/')[1]?.toLowerCase() === `@${username.toLowerCase()}`
+    // Leave first: once signed out, a page that needs signing in sends the visitor to sign in instead.
+    if (isMembersOnly(pathname) || ownPrivateProfile) {
       navigate('/', { replace: true })
     }
+    await supabase.auth.signOut()
   }
 
   return (
     <div className="account">
-      {signedIn && (
-        <Tooltip content={username}>
-          <span className="account-name">{username}</span>
-        </Tooltip>
+      {signedIn && username && (
+        <NavLink to={profilePath(username)} className="account-name">
+          {username}
+        </NavLink>
       )}
       <Tooltip content="Settings">
         <NavLink to="/settings" className="account-settings" aria-label="Settings">
