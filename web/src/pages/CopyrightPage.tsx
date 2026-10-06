@@ -27,7 +27,8 @@ export function CopyrightPage() {
         <a href="https://openlibrary.org" rel="noreferrer">
           Open Library
         </a>
-        , and covers load from their servers. Readers can’t upload anything to Carrel.
+        , and covers load from their servers. The only thing readers upload that Carrel shows is their profile
+        picture.
       </p>
 
       <h2>Asking for something to be taken down</h2>
@@ -54,8 +55,8 @@ export function CopyrightPage() {
 
       <h2>What happens next</h2>
       <p>
-        When a complete notice arrives, the material is removed from Carrel promptly and the source (Hardcover or Open
-        Library) is told, so it can be dealt with there too.
+        When a complete notice arrives, the material is removed from Carrel promptly. For book information, the source
+        (Hardcover or Open Library) is told, so it can be dealt with there too.
       </p>
 
       <h2>If you think something was removed by mistake</h2>

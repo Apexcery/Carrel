@@ -78,3 +78,17 @@ update books set description_suppressed = true where id = <book id>;
 ```
 
 The book id is the number in the page address, e.g. `/books/20`. A book that only appears in search results has no row yet: open its page once to store it, then set the flag. Tell the source (Hardcover or Open Library) as well.
+
+A profile picture is the reader's own upload, so it's removed outright. Find its file by the username in the profile's address (`/@username`):
+
+```sql
+select avatar_path from profiles where lower(username) = lower('<username>');
+```
+
+Delete that file in the Supabase dashboard (Storage, the `avatars` bucket; the path is a folder named after the reader's id, then the file), then clear it on the profile so the site shows the silhouette instead:
+
+```sql
+update profiles set avatar_path = null where lower(username) = lower('<username>');
+```
+
+The reader can upload another picture afterwards.

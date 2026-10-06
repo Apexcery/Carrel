@@ -1,5 +1,8 @@
+import { useState } from 'react'
 import { Link, useParams } from 'react-router'
+import { Avatar } from '../components/Avatar'
 import { ErrorNotice } from '../components/ErrorNotice'
+import { ImageViewer } from '../components/ImageViewer'
 import { ReadingStrip, ShelfStrip, ShelfTitle } from '../components/LibraryShelves'
 import { ReadingGoalPanel } from '../components/ReadingGoal'
 import { YearInBooks } from '../components/YearInBooks'
@@ -43,15 +46,18 @@ export function ProfilePage() {
     <div className="profile-layout">
       <section className="profile-main">
         <header className="library-header profile-header">
-          <h1 className="library-title">
-            {/* Literata's @ sits low, centred on the lowercase letters; this lines it up with the capitals. */}
-            <span className="profile-at">@</span>
-            {reader.username}
-          </h1>
-          {/* Every book in the library, on any shelf. */}
-          <p className="muted mono">
-            – {library.length} {library.length === 1 ? 'book' : 'books'}
-          </p>
+          <ProfilePicture url={reader.avatarUrl} username={reader.username} />
+          <div className="profile-title">
+            <h1 className="library-title">
+              {/* Literata's @ sits low, centred on the lowercase letters; this lines it up with the capitals. */}
+              <span className="profile-at">@</span>
+              {reader.username}
+            </h1>
+            {/* Every book in the library, on any shelf. */}
+            <p className="muted mono">
+              – {library.length} {library.length === 1 ? 'book' : 'books'}
+            </p>
+          </div>
         </header>
 
         {library.length === 0 ? (
@@ -94,5 +100,32 @@ export function ProfilePage() {
         <YearInBooks items={library} username={reader.username} isOwn={isOwn} />
       </aside>
     </div>
+  )
+}
+
+/** The reader's picture, which opens larger when clicked; the silhouette for a reader without one doesn't. */
+function ProfilePicture({ url, username }: { url: string | null; username: string }) {
+  const [zoomed, setZoomed] = useState(false)
+  if (!url) {
+    return <Avatar url={null} size="large" />
+  }
+  return (
+    <>
+      <button
+        type="button"
+        className="zoom-button avatar-zoom"
+        aria-label={`View @${username}’s picture larger`}
+        onClick={() => setZoomed(true)}
+      >
+        <Avatar url={url} size="large" />
+      </button>
+      <ImageViewer
+        src={url}
+        alt={`@${username}’s profile picture`}
+        open={zoomed}
+        onClose={() => setZoomed(false)}
+        round
+      />
+    </>
   )
 }

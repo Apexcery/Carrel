@@ -19,7 +19,13 @@ export function useReader(username: string) {
   const query = isOwn ? library : other
   const reader: Reader | undefined = isOwn
     ? library.data &&
-      profile && { username: profile.username!, isPublic: profile.isPublic, goals: profile.goals, library: library.data }
+      profile && {
+        username: profile.username!,
+        isPublic: profile.isPublic,
+        avatarUrl: profile.avatarUrl,
+        goals: profile.goals,
+        library: library.data,
+      }
     : other.data
   return {
     reader,

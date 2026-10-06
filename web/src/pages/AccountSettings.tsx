@@ -1,10 +1,14 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import type { Area } from 'react-easy-crop'
 import { Link, useNavigate } from 'react-router'
-import { ApiError, apiSend } from '../api'
+import { ApiError, apiSend, apiUpload } from '../api'
 import { useSession } from '../auth'
+import { Avatar } from '../components/Avatar'
+import { PictureCropper } from '../components/PictureCropper'
 import { usePageTitle } from '../pageTitle'
 import { passwordProblem } from '../passwords'
+import { cropPicture } from '../pictures'
 import { PROFILE_KEY, useProfile } from '../profile'
 import { clearRecentSearches } from '../recentSearches'
 import { profilePath } from '../shelves'
@@ -17,6 +21,7 @@ export function AccountSettings() {
   usePageTitle('Account')
   return (
     <>
+      <PictureSetting />
       <div className="setting-rows">
         <UsernameRow />
         <EmailRow />
@@ -168,6 +173,134 @@ function UsernameRow() {
         <FormActions saving={save.isPending} disabled={!status.canSave} label="Save" savingLabel="Saving…" onCancel={() => setEditing(false)} />
       </form>
     </SettingRow>
+  )
+}
+
+/** Pictures bigger than this aren't opened for cropping; only the cropped square is uploaded. */
+const MAX_PICTURE_BYTES = 20 * 1024 * 1024
+
+/**
+ * The reader's picture, above their other details. Add or Change opens the file picker straight away; a chosen picture
+ * opens for cropping to a circle, then Save uploads it.
+ */
+function PictureSetting() {
+  const queryClient = useQueryClient()
+  const current = useProfile().data?.avatarUrl ?? null
+  // The chosen file, opened for cropping, and the square the reader has picked out of it.
+  const [src, setSrc] = useState<string | null>(null)
+  const [area, setArea] = useState<Area | null>(null)
+  const [problem, setProblem] = useState<string | null>(null)
+  const [hint, setHint] = useState<string>()
+
+  // Let go of each chosen file once it's replaced or cropping ends.
+  useEffect(() => () => {
+    if (src) {
+      URL.revokeObjectURL(src)
+    }
+  }, [src])
+
+  function stopCropping() {
+    setSrc(null)
+    setArea(null)
+  }
+
+  const saved = (message: string) => (profile: Profile) => {
+    queryClient.setQueryData(PROFILE_KEY, profile)
+    stopCropping()
+    setHint(message)
+  }
+  const save = useMutation({
+    mutationFn: async () => apiUpload<Profile>('/profile/picture', await cropPicture(src!, area!), 'image/png'),
+    onSuccess: saved('Picture saved.'),
+  })
+  const remove = useMutation({
+    mutationFn: () => apiSend<Profile>('DELETE', '/profile/picture'),
+    onSuccess: saved('Picture removed.'),
+  })
+  const busy = save.isPending || remove.isPending
+  const error = problem ?? save.error?.message ?? remove.error?.message
+
+  // Opened first, so a file the browser can't show (an iPhone's HEIC, say) is turned away before cropping.
+  function choose(file: File | undefined) {
+    setProblem(null)
+    setHint(undefined)
+    save.reset()
+    remove.reset()
+    if (!file) {
+      return
+    }
+    if (file.size > MAX_PICTURE_BYTES) {
+      setProblem('That picture is too large. Choose one of up to 20 MB.')
+      return
+    }
+    const url = URL.createObjectURL(file)
+    const image = new Image()
+    image.onload = () => {
+      setArea(null)
+      setSrc(url)
+    }
+    image.onerror = () => {
+      URL.revokeObjectURL(url)
+      setProblem('Carrel can’t read that picture. Try a JPEG, PNG, or WebP.')
+    }
+    image.src = url
+  }
+
+  // The browser's own file button doesn't match the site, so the input is hidden inside a label styled as a link;
+  // clicking the label opens the picker.
+  const chooser = (text: string) => (
+    <label className="link-button">
+      <input
+        type="file"
+        className="visually-hidden"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        disabled={busy}
+        onChange={(e) => {
+          choose(e.target.files?.[0])
+          // So choosing the same file again still counts as a change.
+          e.target.value = ''
+        }}
+      />
+      {text}
+    </label>
+  )
+
+  return (
+    <section className="picture-setting" aria-labelledby="picture-setting-title">
+      <h2 id="picture-setting-title" className="setting-label">
+        Profile picture
+      </h2>
+      {src ? (
+        <div className="settings-form">
+          <PictureCropper src={src} onCropped={setArea} />
+          {error && <p className="form-message error">{error}</p>}
+          <div className="settings-actions">
+            <button type="button" className="primary-button" disabled={!area || busy} onClick={() => save.mutate()}>
+              {save.isPending ? 'Saving…' : 'Save'}
+            </button>
+            {chooser('Choose another')}
+            <button type="button" className="link-button" disabled={busy} onClick={stopCropping}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="picture-current">
+          <Avatar url={current} size="large" />
+          <div className="picture-actions">
+            <div className="settings-actions">
+              {chooser(current ? 'Change' : 'Add')}
+              {current && (
+                <button type="button" className="link-button" disabled={busy} onClick={() => remove.mutate()}>
+                  {remove.isPending ? 'Removing…' : 'Remove'}
+                </button>
+              )}
+            </div>
+            {error ? <p className="form-message error">{error}</p> : hint && <p className="setting-hint">{hint}</p>}
+          </div>
+        </div>
+      )}
+    </section>
   )
 }
 

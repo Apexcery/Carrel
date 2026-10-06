@@ -53,9 +53,9 @@ export async function apiDownload(path: string): Promise<Blob> {
   return response.blob()
 }
 
-/** POSTs a file as the request body (CSV exports); resolves to the parsed response. */
-export async function apiUpload<T>(path: string, file: File): Promise<T> {
-  const response = await send(path, { method: 'POST', headers: { 'Content-Type': 'text/csv' }, body: file })
+/** POSTs a file as the request body (CSV exports, profile pictures); resolves to the parsed response. */
+export async function apiUpload<T>(path: string, file: Blob, contentType = 'text/csv'): Promise<T> {
+  const response = await send(path, { method: 'POST', headers: { 'Content-Type': contentType }, body: file })
   return response.json() as Promise<T>
 }
 

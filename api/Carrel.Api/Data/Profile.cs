@@ -12,6 +12,9 @@ public class Profile
     /// <summary>Whether anyone can see the profile and library at /@username; if not, only the reader can.</summary>
     public bool IsPublic { get; set; } = true;
 
+    /// <summary>The profile picture's path in Supabase Storage's avatars bucket; null for none.</summary>
+    public string? AvatarPath { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 }

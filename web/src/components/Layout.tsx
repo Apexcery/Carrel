@@ -4,6 +4,7 @@ import { useProfile } from '../profile'
 import { profilePath } from '../shelves'
 import { isMembersOnly, signInPath } from '../signIn'
 import { supabase } from '../supabase'
+import { Avatar } from './Avatar'
 import { SearchBox } from './SearchBox'
 import { Tooltip } from './Tooltip'
 
@@ -64,8 +65,9 @@ function Account() {
   return (
     <div className="account">
       {signedIn && username && (
-        <NavLink to={profilePath(username)} className="account-name">
-          {username}
+        <NavLink to={profilePath(username)} className="account-profile">
+          <Avatar url={profile.avatarUrl} size="small" />
+          <span className="account-name">{username}</span>
         </NavLink>
       )}
       <Tooltip content="Settings">
