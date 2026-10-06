@@ -10,12 +10,15 @@ export function ImageViewer({
   open,
   onClose,
   round = false,
+  crossOrigin,
 }: {
   src: string
   alt: string
   open: boolean
   onClose: () => void
   round?: boolean
+  /** As on the image shown in the page, so the browser can reuse it (see Avatar). */
+  crossOrigin?: 'anonymous'
 }) {
   return (
     <Dialog open={open} onClose={onClose} className="image-viewer">
@@ -29,6 +32,7 @@ export function ImageViewer({
             src={src}
             alt={alt}
             referrerPolicy="no-referrer"
+            crossOrigin={crossOrigin}
             className={round ? 'image-viewer-image round' : 'image-viewer-image'}
           />
         </DialogPanel>

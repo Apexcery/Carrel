@@ -125,6 +125,7 @@ function ProfilePicture({ url, username }: { url: string | null; username: strin
         open={zoomed}
         onClose={() => setZoomed(false)}
         round
+        crossOrigin="anonymous"
       />
     </>
   )
