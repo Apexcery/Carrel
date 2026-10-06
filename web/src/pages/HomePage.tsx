@@ -4,7 +4,7 @@ import { Link, useSearchParams } from 'react-router'
 import { apiGet } from '../api'
 import { useSession } from '../auth'
 import { ErrorNotice } from '../components/ErrorNotice'
-import { ReadingNow, ShelfStrip, ShelfTitle } from '../components/LibraryShelves'
+import { ReadingStrip, ShelfStrip, ShelfTitle } from '../components/LibraryShelves'
 import { SignInPrompt } from '../components/SignInPrompt'
 import { SuggestionShelf, SuggestionShelfSkeleton, useOwnedHardcoverIds } from '../components/SuggestionShelf'
 import { usePageTitle } from '../pageTitle'
@@ -322,8 +322,10 @@ function Library() {
 
       {reading.length > 0 && (
         <section className="shelf">
-          <ShelfTitle username={username} status="reading" count={reading.length} level="h3" />
-          <ReadingNow items={reading} />
+          <ReadingStrip
+            heading={<ShelfTitle username={username} status="reading" count={reading.length} level="h3" />}
+            items={reading}
+          />
         </section>
       )}
 

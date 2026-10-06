@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router'
 import { ErrorNotice } from '../components/ErrorNotice'
-import { ReadingNow, ShelfStrip, ShelfTitle } from '../components/LibraryShelves'
+import { ReadingStrip, ShelfStrip, ShelfTitle } from '../components/LibraryShelves'
 import { ReadingGoalPanel } from '../components/ReadingGoal'
 import { YearInBooks } from '../components/YearInBooks'
 import { usePageTitle } from '../pageTitle'
@@ -9,10 +9,12 @@ import { shelfItems } from '../shelves'
 import type { ReadingStatus } from '../types'
 import { NOT_FOUND_TITLE, NotFoundPage } from './NotFoundPage'
 
-/** Every shelf, Paused included, in this order; Reading shows its books' progress. */
+/** Every shelf, Paused included, in this order; Reading shows its books' progress, on cards. */
 const SHELVES: ReadingStatus[] = ['reading', 'paused', 'want_to_read', 'read', 'did_not_finish']
 /** Books shown on each shelf; the shelf title links to the whole shelf. */
 const SHELF_BOOKS = 12
+/** More on Read, which runs the full width of two columns on very wide screens (see .profile-shelves). */
+const READ_SHELF_BOOKS = 24
 
 /**
  * A reader's profile at /@username: every shelf and their year so far. Anyone can see a public profile; a private one
@@ -70,19 +72,16 @@ export function ProfilePage() {
               const items = shelfItems(library, status)
               const heading = <ShelfTitle username={reader.username} status={status} count={items.length} level="h2" />
               return (
-                <section key={status} className="shelf">
+                <section key={status} className={`shelf shelf-${status}`}>
                   {items.length === 0 ? (
                     <>
                       {heading}
                       <p className="muted">Nothing on this shelf yet.</p>
                     </>
                   ) : status === 'reading' ? (
-                    <>
-                      {heading}
-                      <ReadingNow items={items} />
-                    </>
+                    <ReadingStrip heading={heading} items={items} />
                   ) : (
-                    <ShelfStrip heading={heading} items={items} limit={SHELF_BOOKS} />
+                    <ShelfStrip heading={heading} items={items} limit={status === 'read' ? READ_SHELF_BOOKS : SHELF_BOOKS} />
                   )}
                 </section>
               )

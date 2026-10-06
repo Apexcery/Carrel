@@ -1,16 +1,20 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 
-// A book's width plus the gap after it, matching .shelf-strip in styles.css.
-const BOOK_GAP = 14
-const BOOK_STEP = 92 + BOOK_GAP
-
 /**
  * A shelf: its heading, then one row of books above a thick bottom border. The row scrolls sideways without a
  * scrollbar (the border already looks like one); when it holds more than fits, ‹ › buttons beside the heading move it
  * along.
- * Children are the row's <li> items.
+ * Children are the row's <li> items; stripClassName adds a class to the row, for items other than covers.
  */
-export function ShelfRow({ heading, children }: { heading: ReactNode; children: ReactNode }) {
+export function ShelfRow({
+  heading,
+  stripClassName,
+  children,
+}: {
+  heading: ReactNode
+  stripClassName?: string
+  children: ReactNode
+}) {
   const scroller = useRef<HTMLDivElement>(null)
   const [room, setRoom] = useState({ left: false, right: false })
   // Where an arrow's smooth scroll will stop, while it's on its way.
@@ -53,16 +57,22 @@ export function ShelfRow({ heading, children }: { heading: ReactNode; children: 
     return () => observer.disconnect()
   }, [measure])
 
-  // Move by a shelf's worth of whole books, so each click shows a new set and a cover edge stays lined up with the
+  // Move by a shelf's worth of whole items, so each click shows a new set and an item's edge stays lined up with the
   // start of the shelf. Smooth unless the reader prefers less motion; it's set here rather than in CSS, where it would
   // also slow scrolling by wheel, middle-click, or touchpad.
   const move = (direction: 1 | -1) => {
     const el = scroller.current
-    if (el) {
-      const perShelf = Math.floor((el.clientWidth + BOOK_GAP) / BOOK_STEP)
+    const strip = el?.firstElementChild
+    const item = strip?.firstElementChild
+    if (el && strip && item) {
+      // An item's width plus the gap after it, measured, so covers and wider cards both move by whole items.
+      const gap = parseFloat(getComputedStyle(strip).columnGap) || 0
+      const step = item.getBoundingClientRect().width + gap
+      // A little slack, since items sized to fit the shelf exactly can measure a fraction short.
+      const perShelf = Math.floor((el.clientWidth + gap) / step + 0.01)
       // From the previous click's stopping point, so quick clicks add up.
       const from = target.current ?? el.scrollLeft
-      const to = Math.min(Math.max(from + direction * Math.max(perShelf, 1) * BOOK_STEP, 0), el.scrollWidth - el.clientWidth)
+      const to = Math.min(Math.max(from + direction * Math.max(perShelf, 1) * step, 0), el.scrollWidth - el.clientWidth)
       target.current = to
       measure()
       el.scrollTo({ left: to, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
@@ -85,7 +95,7 @@ export function ShelfRow({ heading, children }: { heading: ReactNode; children: 
         )}
       </div>
       <div className="shelf-scroll" ref={scroller} onScroll={measure} onScrollEnd={scrollEnded}>
-        <ul className="shelf-strip">{children}</ul>
+        <ul className={stripClassName ? `shelf-strip ${stripClassName}` : 'shelf-strip'}>{children}</ul>
       </div>
     </>
   )

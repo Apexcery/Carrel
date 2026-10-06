@@ -23,7 +23,7 @@ export function statusFromSlug(slug: string | undefined): ReadingStatus | null {
   return match ? (match[0] as ReadingStatus) : null
 }
 
-export type SortKey = 'added' | 'title' | 'author' | 'rating' | 'hardcover' | 'popularity' | 'published' | 'finished' | 'progress'
+export type SortKey = 'added' | 'updated' | 'title' | 'author' | 'rating' | 'hardcover' | 'popularity' | 'published' | 'finished' | 'progress'
 export type SortDirection = 'asc' | 'desc'
 
 type Kind = 'text' | 'number' | 'date'
@@ -39,6 +39,8 @@ interface SortOption {
 
 const SORT_OPTIONS: SortOption[] = [
   { key: 'added', label: 'Date added', kind: 'date', value: (i) => i.entry.addedAt },
+  // Any save stamps it, but for a book being read that's nearly always a progress update or starting it.
+  { key: 'updated', label: 'Last updated', kind: 'date', shelves: ['reading', 'paused'], value: (i) => i.entry.updatedAt },
   { key: 'finished', label: 'Date finished', kind: 'date', shelves: ['read', 'did_not_finish'], value: lastFinished },
   { key: 'progress', label: 'Progress', kind: 'number', shelves: ['reading', 'paused'], value: (i) => i.entry.progressPercent },
   { key: 'title', label: 'Title', kind: 'text', value: (i) => i.book.title },
@@ -53,8 +55,12 @@ export function sortOptions(status: ReadingStatus): SortOption[] {
   return SORT_OPTIONS.filter((o) => !o.shelves || o.shelves.includes(status))
 }
 
+/**
+ * Read by when it was finished; Reading and Paused by when the book was last updated, so the latest progress comes
+ * first; the rest by when the book was added.
+ */
 export function defaultSort(status: ReadingStatus): SortKey {
-  return status === 'read' ? 'finished' : 'added'
+  return status === 'read' ? 'finished' : status === 'reading' || status === 'paused' ? 'updated' : 'added'
 }
 
 /** Names sort A–Z; dates, ratings and counts sort newest or highest first. */
