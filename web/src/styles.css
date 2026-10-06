@@ -206,6 +206,26 @@ p {
   white-space: nowrap;
 }
 
+/* The site's tooltip (components/Tooltip.tsx), placed over the page by script; under the paper grain. */
+.tooltip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: max-content;
+  max-width: 220px;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: var(--paper-raised);
+  box-shadow: var(--card-shadow);
+  color: var(--ink);
+  pointer-events: none;
+}
+
 .link-button {
   padding: 0;
   border: 0;
@@ -758,10 +778,6 @@ a.primary-button:hover {
 .book-cover {
   position: sticky;
   top: 32px;
-}
-
-.book-cover .cover {
-  transform: rotate(-1.2deg);
 }
 
 .book-header {
@@ -1524,41 +1540,6 @@ a.primary-button:hover {
 }
 
 /* A month's tooltip: how many books, and which. */
-.year-tooltip {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 50%;
-  z-index: 2;
-  display: none;
-  flex-direction: column;
-  gap: 2px;
-  width: max-content;
-  max-width: 220px;
-  padding: 8px 10px;
-  border: 1px solid var(--rule);
-  border-radius: 2px;
-  background: var(--paper-raised);
-  box-shadow: var(--card-shadow);
-  transform: translateX(-50%);
-  pointer-events: none;
-}
-
-.year-months li:hover .year-tooltip,
-.year-months li:focus-visible .year-tooltip {
-  display: flex;
-}
-
-.year-months li.align-start .year-tooltip {
-  left: 0;
-  transform: none;
-}
-
-.year-months li.align-end .year-tooltip {
-  right: 0;
-  left: auto;
-  transform: none;
-}
-
 .year-tooltip-heading {
   margin-bottom: 2px;
   font-family: var(--font-mono);
@@ -1753,6 +1734,16 @@ a.primary-button:hover {
   transform: translateY(-4px) rotate(-1deg);
 }
 
+/* Tilting about the middle pushes a corner out past the row's ends, where scrolling clips it, so the books at either
+   end tilt about a corner that keeps them inside. */
+.shelf-strip > li:last-child .cover {
+  transform-origin: bottom right;
+}
+
+.shelf-strip > li:first-child .cover {
+  transform-origin: top left;
+}
+
 .shelf-book .badge {
   justify-self: start;
   margin-left: 0;
@@ -1913,6 +1904,10 @@ a.primary-button:hover {
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ink-soft);
+}
+
+.import-recommended {
+  color: var(--accent);
 }
 
 .import-file,

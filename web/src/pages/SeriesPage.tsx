@@ -5,6 +5,7 @@ import { Cover } from '../components/Cover'
 import { ErrorNotice } from '../components/ErrorNotice'
 import { HardcoverRating } from '../components/HardcoverRating'
 import { listNames, seriesPosition } from '../format'
+import { usePageTitle } from '../pageTitle'
 import type { SeriesBook, SeriesDetail } from '../types'
 
 const THIS_YEAR = new Date().getFullYear()
@@ -19,6 +20,7 @@ export function SeriesPage() {
     queryKey: ['series', hardcoverId],
     queryFn: () => apiGet<SeriesDetail>(`/series/hardcover/${hardcoverId}`),
   })
+  usePageTitle(series.data?.name)
 
   if (series.isError) {
     return <ErrorNotice error={series.error} onRetry={() => series.refetch()} />

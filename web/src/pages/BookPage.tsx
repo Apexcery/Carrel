@@ -10,6 +10,7 @@ import { LibraryPanel } from '../components/LibraryPanel'
 import { SignInPrompt } from '../components/SignInPrompt'
 import { SuggestionShelf, useOwnedHardcoverIds } from '../components/SuggestionShelf'
 import { displaySubtitle, formatDate, formatDuration, listNames, otherCredits, seriesPosition } from '../format'
+import { usePageTitle } from '../pageTitle'
 import type { BookDetail, BookSuggestion, Edition, RelatedBooks, SeriesEntry } from '../types'
 
 const EDITIONS_SHOWN = 6
@@ -21,6 +22,7 @@ export function BookPage() {
     queryKey: ['book', id],
     queryFn: () => apiGet<BookDetail>(`/books/${id}`),
   })
+  usePageTitle(book.data?.title)
 
   if (book.isError) {
     return <ErrorNotice error={book.error} onRetry={() => book.refetch()} />

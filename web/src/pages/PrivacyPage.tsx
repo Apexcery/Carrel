@@ -1,8 +1,10 @@
 import { Contact } from '../components/Contact'
 import { LEGAL_UPDATED } from '../legal'
+import { usePageTitle } from '../pageTitle'
 
 /** The privacy notice (UK GDPR). Keep it in step with what the code actually stores and who it's shared with. */
 export function PrivacyPage() {
+  usePageTitle('Privacy')
   return (
     <article className="legal">
       <header className="search-header">

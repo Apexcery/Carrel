@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiSend } from '../api'
+import { usePageTitle } from '../pageTitle'
 import { PROFILE_KEY } from '../profile'
 import { supabase } from '../supabase'
 import type { Profile } from '../types'
@@ -8,6 +9,7 @@ import { useUsernameStatus } from '../username'
 
 /** Shown after sign-in until the reader has chosen their public username. */
 export function ChooseUsernamePage() {
+  usePageTitle('Choose a username')
   const queryClient = useQueryClient()
   const [username, setUsername] = useState('')
   const trimmed = username.trim()

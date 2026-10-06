@@ -1,8 +1,10 @@
 import { Contact } from '../components/Contact'
 import { LEGAL_UPDATED } from '../legal'
+import { usePageTitle } from '../pageTitle'
 
 /** Copyright and takedown policy (follows the DMCA notice format). */
 export function CopyrightPage() {
+  usePageTitle('Copyright')
   return (
     <article className="legal">
       <header className="search-header">

@@ -9,8 +9,10 @@ import { ShelfRow } from '../components/ShelfRow'
 import { SignInPrompt } from '../components/SignInPrompt'
 import { StarDisplay } from '../components/StarRating'
 import { SuggestionShelf, SuggestionShelfSkeleton, useOwnedHardcoverIds } from '../components/SuggestionShelf'
+import { Tooltip } from '../components/Tooltip'
 import { YearInBooks } from '../components/YearInBooks'
 import { listNames, STATUS_LABELS } from '../format'
+import { usePageTitle } from '../pageTitle'
 import { shelfItems, shelfPath } from '../shelves'
 import type { BookSuggestion, DiscoverShelves, GenrePicks, LibraryItem, ReadingStatus, RelatedBooks } from '../types'
 
@@ -44,6 +46,7 @@ export function HomePage() {
   const home = useHomeData(signedIn, params.get('tab'))
   const library = useRef<HTMLElement>(null)
   const fits = useFitsInWindow(library)
+  usePageTitle()
   return (
     <div className="home-layout">
       <section className="home-main" aria-busy={!home.ready}>
@@ -352,10 +355,12 @@ function Library() {
               <ShelfRow heading={<ShelfTitle status={status} count={items.length} />}>
                 {items.slice(0, SHELF_BOOKS).map((item) => (
                   <li key={item.entry.id}>
-                    <Link to={`/books/${item.book.id}`} className="shelf-book" title={item.book.title}>
-                      <Cover url={item.book.coverUrl} title={item.book.title} author={item.book.authors[0]} />
-                      {item.entry.rating !== null && <StarDisplay value={item.entry.rating} />}
-                    </Link>
+                    <Tooltip content={item.book.title}>
+                      <Link to={`/books/${item.book.id}`} className="shelf-book">
+                        <Cover url={item.book.coverUrl} title={item.book.title} author={item.book.authors[0]} />
+                        {item.entry.rating !== null && <StarDisplay value={item.entry.rating} />}
+                      </Link>
+                    </Tooltip>
                   </li>
                 ))}
               </ShelfRow>

@@ -1,4 +1,5 @@
 import type { LibraryItem } from '../types'
+import { Tooltip } from './Tooltip'
 
 const THIS_YEAR = new Date().getFullYear()
 const MONTHS = Array.from({ length: 12 }, (_, month) => new Date(2000, month, 1))
@@ -53,35 +54,38 @@ export function YearInBooks({ items }: { items: LibraryItem[] }) {
               const titles = finished.filter((f) => f.month === month).map((f) => f.item.book.title)
               const count = titles.length === 0 ? 'none finished' : `${titles.length} ${titles.length === 1 ? 'book' : 'books'}`
               const summary = `${monthName.format(date)}: ${count}`
-              // Months near either end open their tooltip inwards, so it stays within the column.
-              const align = month < 3 ? ' align-start' : month > 8 ? ' align-end' : ''
               return (
-                <li
+                <Tooltip
                   key={month}
-                  className={`year-month-column${align}`}
-                  tabIndex={titles.length > 0 ? 0 : undefined}
-                  aria-label={titles.length > 0 ? `${summary}: ${titles.join('; ')}` : summary}
-                >
-                  <span className="year-tooltip" aria-hidden="true">
-                    <span className="year-tooltip-heading">
-                      {monthName.format(date)} · {count}
-                    </span>
-                    {titles.slice(0, TOOLTIP_TITLES).map((title, i) => (
-                      <span key={i} className="year-tooltip-title">
-                        {title}
+                  content={
+                    <>
+                      <span className="year-tooltip-heading">
+                        {monthName.format(date)} · {count}
                       </span>
-                    ))}
-                    {titles.length > TOOLTIP_TITLES && (
-                      <span className="year-tooltip-more">and {titles.length - TOOLTIP_TITLES} more</span>
-                    )}
-                  </span>
-                  <span className="year-bar-track">
-                    {titles.length > 0 && <span className="year-bar" style={{ height: `${(titles.length / most) * 100}%` }} />}
-                  </span>
-                  <span className="year-month mono" aria-hidden="true">
-                    {monthLetter.format(date)}
-                  </span>
-                </li>
+                      {titles.slice(0, TOOLTIP_TITLES).map((title, i) => (
+                        <span key={i} className="year-tooltip-title">
+                          {title}
+                        </span>
+                      ))}
+                      {titles.length > TOOLTIP_TITLES && (
+                        <span className="year-tooltip-more">and {titles.length - TOOLTIP_TITLES} more</span>
+                      )}
+                    </>
+                  }
+                >
+                  <li
+                    className="year-month-column"
+                    tabIndex={titles.length > 0 ? 0 : undefined}
+                    aria-label={titles.length > 0 ? `${summary}: ${titles.join('; ')}` : summary}
+                  >
+                    <span className="year-bar-track">
+                      {titles.length > 0 && <span className="year-bar" style={{ height: `${(titles.length / most) * 100}%` }} />}
+                    </span>
+                    <span className="year-month mono" aria-hidden="true">
+                      {monthLetter.format(date)}
+                    </span>
+                  </li>
+                </Tooltip>
               )
             })}
           </ol>

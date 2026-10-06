@@ -7,6 +7,7 @@ import { listNames, seriesPosition } from '../format'
 import type { BookSuggestion, LibraryItem } from '../types'
 import { Cover } from './Cover'
 import { ShelfRow } from './ShelfRow'
+import { Tooltip } from './Tooltip'
 
 const THIS_YEAR = new Date().getFullYear()
 const NONE = new Set<number>()
@@ -32,14 +33,24 @@ export function SuggestionShelf({
   return (
     <section className="book-section">
       <ShelfRow heading={<h2 className="section-title">{title}</h2>}>
-        {books.slice(0, limit).map((book) => (
-          <li key={book.hardcoverId}>
-            <Link to={`/books/hardcover/${book.hardcoverId}`} className="shelf-book" title={describe(book)}>
-              <Cover url={book.coverUrl} title={book.title} author={book.authors[0]} />
-              {markUpcoming && book.releaseYear !== null && book.releaseYear > THIS_YEAR && <span className="badge">Upcoming</span>}
-            </Link>
-          </li>
-        ))}
+        {books.slice(0, limit).map((book) => {
+          const upcoming = markUpcoming && book.releaseYear !== null && book.releaseYear > THIS_YEAR
+          return (
+            <li key={book.hardcoverId}>
+              <Tooltip content={describe(book)}>
+                {/* Labelled with the same, since the tooltip is only for sighted readers. */}
+                <Link
+                  to={`/books/hardcover/${book.hardcoverId}`}
+                  className="shelf-book"
+                  aria-label={upcoming ? `${describe(book)}. Upcoming` : describe(book)}
+                >
+                  <Cover url={book.coverUrl} title={book.title} author={book.authors[0]} />
+                  {upcoming && <span className="badge">Upcoming</span>}
+                </Link>
+              </Tooltip>
+            </li>
+          )
+        })}
       </ShelfRow>
     </section>
   )
@@ -79,7 +90,7 @@ export function useOwnedHardcoverIds(): Set<number> | null {
   return !signedIn || library.isError ? NONE : owned
 }
 
-/** Hover text: title, authors, and place in its series. */
+/** Tooltip and label: title, authors, and place in its series. */
 function describe(book: BookSuggestion): string {
   const position = seriesPosition(book.seriesPosition)
   const series = book.seriesName ? ` (${book.seriesName}${position ? `, book ${position}` : ''})` : ''

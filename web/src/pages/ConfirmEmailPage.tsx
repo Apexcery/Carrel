@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import type { EmailOtpType } from '@supabase/supabase-js'
+import { usePageTitle } from '../pageTitle'
 import { supabase } from '../supabase'
 
 /** The link types Carrel's email templates use (configured in Supabase; see the README). */
@@ -11,6 +12,7 @@ const TYPES: EmailOtpType[] = ['email', 'invite', 'recovery', 'email_change']
  * address rather than Supabase's. It confirms the link with Supabase, which signs the reader in, then sends them on.
  */
 export function ConfirmEmailPage() {
+  usePageTitle('Confirm your email')
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const tokenHash = params.get('token_hash')

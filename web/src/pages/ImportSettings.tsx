@@ -5,6 +5,7 @@ import { apiGet, apiGetOrNull, apiSend, apiUpload } from '../api'
 import { Cover } from '../components/Cover'
 import { ErrorNotice } from '../components/ErrorNotice'
 import { listNames, seriesPosition } from '../format'
+import { usePageTitle } from '../pageTitle'
 import type { BookSearchResponse, BookSearchResult, ImportReviewItem, ImportSource, ImportStatus, LibraryItem } from '../types'
 
 const SOURCE_NAMES: Record<ImportSource, string> = { goodreads: 'Goodreads', story_graph: 'StoryGraph' }
@@ -16,6 +17,7 @@ const PICKER_RESULTS = 5
  * it couldn't match for sure.
  */
 export function ImportSettings() {
+  usePageTitle('Import')
   const queryClient = useQueryClient()
   const latest = useQuery({
     queryKey: ['import-latest'],
@@ -35,6 +37,13 @@ export function ImportSettings() {
     previousState.current = state
   }, [state, queryClient])
 
+  // An import with nothing left to sort out is cleared away, but not while the reader watches: only one that was
+  // already sorted out when the page opened is hidden.
+  const [hiddenId, setHiddenId] = useState<number | null>()
+  if (hiddenId === undefined && latest.data !== undefined) {
+    setHiddenId(latest.data && isSettled(latest.data) ? latest.data.id : null)
+  }
+
   if (latest.isError) {
     return <ErrorNotice error={latest.error} onRetry={() => latest.refetch()} />
   }
@@ -42,7 +51,7 @@ export function ImportSettings() {
     return <section className="import-page" aria-busy="true" />
   }
 
-  const status = latest.data
+  const status = latest.data?.id === hiddenId ? null : latest.data
   const libraryHasBooks = (library.data?.length ?? 0) > 0
 
   return (
@@ -64,6 +73,11 @@ export function ImportSettings() {
 
 function isActive(status: ImportStatus | null | undefined): status is ImportStatus {
   return status?.state === 'matching' || status?.state === 'waiting'
+}
+
+/** Finished, with every book it flagged checked, chosen, or skipped. */
+function isSettled(status: ImportStatus): boolean {
+  return status.state === 'done' && status.toCheck === 0 && status.notFound === 0
 }
 
 /** After an import, the form for the next one stays folded away above the results until it's wanted. */
@@ -110,7 +124,10 @@ function UploadForm({ libraryHasBooks, heading = false }: { libraryHasBooks: boo
       {heading && <h2 className="section-title">Upload your export</h2>}
       <div className="import-sources">
         <div>
-          <h3 className="import-source-name">Goodreads</h3>
+          {/* Recommended: Goodreads exports carry Goodreads ids, which match almost every book exactly. */}
+          <h3 className="import-source-name">
+            Goodreads <span className="import-recommended">(Recommended)</span>
+          </h3>
           <p>
             Go to <strong>My Books</strong>, choose <strong>Import and export</strong>, then <strong>Export Library</strong>.
             Download the file once it’s ready.
@@ -242,7 +259,7 @@ function ImportResults({ status }: { status: ImportStatus }) {
         <p>
           Found {status.matched.toLocaleString()} of the {status.total.toLocaleString()} books in your export.
         </p>
-        {status.toCheck === 0 && status.notFound === 0 && <p className="muted">Everything matched, so there’s nothing to check.</p>}
+        {isSettled(status) && <p className="muted">Everything’s sorted, so there’s nothing left to check.</p>}
       </div>
 
       {review.isError && <ErrorNotice error={review.error} onRetry={() => review.refetch()} />}
