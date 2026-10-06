@@ -158,6 +158,11 @@ builder.Services.AddHttpClient<SupabaseAuthClient>(client =>
     client.BaseAddress = new Uri($"{supabaseUrl}/auth/v1/");
     client.Timeout = TimeSpan.FromSeconds(15);
 });
+builder.Services.AddHttpClient<ProfilePictures>(client =>
+{
+    client.BaseAddress = new Uri($"{supabaseUrl}/storage/v1/");
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
 builder.Services.AddScoped<CoverSuppression>();
 builder.Services.AddScoped<BookService>();
 builder.Services.AddScoped<SeriesService>();

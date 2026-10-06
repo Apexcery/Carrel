@@ -181,6 +181,8 @@ export interface Profile {
   username: string | null
   /** Whether anyone can see the reader's profile and library; if not, only they can. */
   isPublic: boolean
+  /** Null without a picture. */
+  avatarUrl: string | null
   /** Every year's goal the reader has set, oldest first. */
   goals: ReadingGoal[]
 }
@@ -189,6 +191,7 @@ export interface Profile {
 export interface Reader {
   username: string
   isPublic: boolean
+  avatarUrl: string | null
   goals: ReadingGoal[]
   library: LibraryItem[]
 }

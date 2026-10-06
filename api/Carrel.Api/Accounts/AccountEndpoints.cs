@@ -1,5 +1,8 @@
 using System.Security.Claims;
+using Carrel.Api.Data;
 using Carrel.Api.Library;
+using Carrel.Api.Profiles;
+using Microsoft.EntityFrameworkCore;
 
 namespace Carrel.Api.Accounts;
 
@@ -14,10 +17,23 @@ public static class AccountEndpoints
     public static void MapAccountEndpoints(this IEndpointRouteBuilder app)
     {
         // POST rather than DELETE: these carry the password, and DELETE bodies aren't reliably passed along.
+        // The profile picture's file goes first: deleting the user cascades through the database, but not into storage.
         app.MapPost("/account/delete", (PasswordConfirmation request, ClaimsPrincipal user, SupabaseAuthClient auth,
-                ILogger<SupabaseAuthClient> logger, CancellationToken ct) =>
+                CarrelDbContext db, ProfilePictures pictures, ILogger<SupabaseAuthClient> logger, CancellationToken ct) =>
             AfterPasswordCheckAsync(request, user, auth, logger, "Account deletion", async userId =>
             {
+                var picture = await db.Profiles.Where(p => p.UserId == userId).Select(p => p.AvatarPath).FirstOrDefaultAsync(ct);
+                if (picture is not null)
+                {
+                    try
+                    {
+                        await pictures.DeleteAsync(picture, ct);
+                    }
+                    catch (PictureStorageUnavailableException e)
+                    {
+                        throw new AccountServiceUnavailableException("The profile picture could not be deleted.", e);
+                    }
+                }
                 await auth.DeleteUserAsync(userId, ct);
                 return Results.NoContent();
             }, ct)).RequireRateLimiting(AccountRateLimit);

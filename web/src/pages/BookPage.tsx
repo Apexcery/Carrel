@@ -41,7 +41,7 @@ function BookView({ book }: { book: BookDetail }) {
   return (
     <article className="book">
       <div className="book-cover">
-        <Cover url={book.coverUrl} title={book.title} author={authors[0]} size="large" />
+        <Cover url={book.coverUrl} title={book.title} author={authors[0]} size="large" zoomable />
       </div>
 
       <div className="book-main">

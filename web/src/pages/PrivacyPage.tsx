@@ -34,6 +34,10 @@ export function PrivacyPage() {
           <strong>Your username</strong>, which is how other readers will see you.
         </li>
         <li>
+          <strong>Your profile picture</strong>, if you add one. Carrel keeps a small copy of the part you choose, made
+          from your picture without its photo details (such as where and when it was taken).
+        </li>
+        <li>
           <strong>Your library:</strong> the books on your shelves, their status, your ratings, your reading progress,
           the editions you chose, and the dates you started and finished reading. It’s shown on your profile (see
           below).
@@ -62,12 +66,12 @@ export function PrivacyPage() {
 
       <h2>Your profile</h2>
       <p>
-        Your profile, at your username after <span className="mono">carrel.zenithal.co.uk/@</span>, shows your username
-        and your library: your shelves, ratings, reading progress, reading dates, and reading goals. Profiles are public
-        unless you
-        make yours private, so anyone can see it, including people who aren’t signed in. You can make it private when
-        you choose your username, or at any time in Settings, under Account; then only you can see it. Your email
-        address is never shown.
+        Your profile, at your username after <span className="mono">carrel.zenithal.co.uk/@</span>, shows your username,
+        your picture, and your library: your shelves, ratings, reading progress, reading dates, and reading goals.
+        Profiles are public unless you make yours private, so anyone can see it, including people who aren’t signed in.
+        You can make it private when you choose your username, or at any time in Settings, under Account; then only you
+        can see it. Your picture also shows beside your username at the top of each page you visit while signed in. Your
+        email address is never shown.
       </p>
 
       <h2>What stays in your browser</h2>
@@ -100,7 +104,8 @@ export function PrivacyPage() {
       <p>Carrel relies on these services, which handle information only to provide their service to Carrel:</p>
       <ul>
         <li>
-          <strong>Supabase</strong> stores Carrel’s database and handles signing in. The data is stored in London.
+          <strong>Supabase</strong> stores Carrel’s database and profile pictures, and handles signing in. The data is
+          stored in London.
         </li>
         <li>
           <strong>Google Cloud</strong> runs Carrel’s server, in Belgium.
@@ -127,10 +132,11 @@ export function PrivacyPage() {
 
       <h2>How long it’s kept</h2>
       <p>
-        Your account, library, reading goals, and imports are kept until you delete your account. Deleting it (in
-        Settings, under Account) removes your account, username, library, reading goals, and imports straight away. You
-        can also delete just your library and imports there, under Delete book data, and keep your account. Sign-in
-        records end with each session, and logs are deleted automatically, after 30 days by default.
+        Your account, picture, library, reading goals, and imports are kept until you delete your account. Deleting it
+        (in Settings, under Account) removes your account, username, picture, library, reading goals, and imports
+        straight away. You can also remove just your picture there at any time, or delete just your library and imports
+        (under Delete book data) and keep your account. Sign-in records end with each session, and logs are deleted
+        automatically, after 30 days by default.
       </p>
       {/* "Straight away" holds while the Supabase plan keeps no backups; revisit this if backups are turned on. */}
 
