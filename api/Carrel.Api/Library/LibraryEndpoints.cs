@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text;
 using Carrel.Api.Books;
 
 namespace Carrel.Api.Library;
@@ -19,6 +20,15 @@ public static class LibraryEndpoints
         library.MapGet("/genre-picks", (ClaimsPrincipal user, RecommendationService service, CancellationToken ct) =>
                 service.GetGenrePicksAsync(UserId(user), ct))
             .RequireRateLimiting(BookEndpoints.BookSourcesRateLimit);
+
+        // ?format=goodreads (Goodreads' columns) or carrel (everything). The website names the downloaded file.
+        library.MapGet("/export", async (string? format, ClaimsPrincipal user, LibraryExport export, CancellationToken ct) =>
+            format?.ToLowerInvariant() switch
+            {
+                "goodreads" => Results.Text(await export.WriteAsync(UserId(user), ExportFormat.Goodreads, ct), "text/csv", Encoding.UTF8),
+                "carrel" => Results.Text(await export.WriteAsync(UserId(user), ExportFormat.Carrel, ct), "text/csv", Encoding.UTF8),
+                _ => Results.ValidationProblem(new Dictionary<string, string[]> { ["format"] = ["Choose goodreads or carrel."] }),
+            });
 
         library.MapGet("/books/{bookId:long}", async (long bookId, ClaimsPrincipal user, LibraryService service, CancellationToken ct) =>
             await service.GetAsync(UserId(user), bookId, ct) is { } entry ? Results.Ok(entry) : Results.NotFound());

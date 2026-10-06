@@ -180,7 +180,7 @@ export interface UsernameAvailability {
   reason: string | null
 }
 
-export type ImportSource = 'goodreads' | 'story_graph'
+export type ImportSource = 'goodreads' | 'story_graph' | 'carrel'
 
 /** Matching rows to books, waiting for Hardcover's daily allowance, finished, or given up after repeated failures. */
 export type ImportState = 'matching' | 'waiting' | 'done' | 'failed'

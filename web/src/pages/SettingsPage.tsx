@@ -2,7 +2,7 @@ import { NavLink, Outlet } from 'react-router'
 import { useSession } from '../auth'
 
 /**
- * Settings, split into sections with their own addresses (/settings/account, /settings/import, /settings/appearance).
+ * Settings, split into sections with their own addresses (/settings/account, /settings/import-export, /settings/appearance).
  * Signed-out visitors only get Appearance.
  */
 export function SettingsPage() {
@@ -15,7 +15,7 @@ export function SettingsPage() {
       <div className="settings-layout">
         <nav className="settings-nav" aria-label="Settings sections">
           {signedIn && <NavLink to="account">Account</NavLink>}
-          {signedIn && <NavLink to="import">Import</NavLink>}
+          {signedIn && <NavLink to="import-export">Import &amp; Export</NavLink>}
           <NavLink to="appearance">Appearance</NavLink>
         </nav>
         <div className="settings-content">

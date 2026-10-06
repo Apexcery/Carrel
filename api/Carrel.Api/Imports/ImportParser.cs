@@ -8,7 +8,7 @@ namespace Carrel.Api.Imports;
 /// <summary>Thrown when an upload can't be imported; the message is shown to the reader.</summary>
 public class ImportFileException(string message) : Exception(message);
 
-/// <summary>One export row, mapped to Carrel's terms.</summary>
+/// <summary>One export row, mapped to Carrel's terms. The fields after Reads only come from Carrel's own exports.</summary>
 public record ParsedRow(
     string Title,
     string[] Authors,
@@ -19,9 +19,15 @@ public record ParsedRow(
     ReadingStatus Status,
     decimal? Rating,
     DateOnly? AddedOn,
-    List<ImportedRead> Reads);
+    List<ImportedRead> Reads,
+    int? HardcoverBookId = null,
+    long? HardcoverEditionId = null,
+    DateTimeOffset? AddedAt = null,
+    ProgressUnit? ProgressUnit = null,
+    decimal? ProgressValue = null,
+    decimal? ProgressPercent = null);
 
-/// <summary>Reads Goodreads and StoryGraph CSV exports, telling them apart by their columns.</summary>
+/// <summary>Reads Goodreads, StoryGraph, and Carrel CSV exports, telling them apart by their columns.</summary>
 public static class ImportParser
 {
     public const int MaxRows = 5000;
@@ -42,7 +48,8 @@ public static class ImportParser
         var header = records[0].Select(h => h.Trim()).ToArray();
         var source = header.Contains("Exclusive Shelf") && header.Contains("Book Id") ? ImportSource.Goodreads
             : header.Contains("Read Status") && header.Contains("ISBN/UID") ? ImportSource.StoryGraph
-            : throw new ImportFileException("That doesn’t look like a Goodreads or StoryGraph export. Upload the CSV file they give you.");
+            : header.Contains("Hardcover Book Id") && header.Contains("Reads") ? ImportSource.Carrel
+            : throw new ImportFileException("That doesn’t look like a Goodreads, StoryGraph, or Carrel export. Upload the CSV file they give you.");
         if (records.Count - 1 > MaxRows)
         {
             throw new ImportFileException($"That export has more than {MaxRows:N0} books, which is more than Carrel can import at once.");
@@ -54,7 +61,12 @@ public static class ImportParser
             var fields = header.Select((name, i) => (name, value: i < record.Length ? record[i].Trim() : ""))
                 .GroupBy(f => f.name)
                 .ToDictionary(g => g.Key, g => g.First().value);
-            var row = source == ImportSource.Goodreads ? FromGoodreads(fields) : FromStoryGraph(fields);
+            var row = source switch
+            {
+                ImportSource.Goodreads => FromGoodreads(fields),
+                ImportSource.StoryGraph => FromStoryGraph(fields),
+                _ => FromCarrel(fields),
+            };
             if (row is not null)
             {
                 rows.Add(row);
@@ -164,6 +176,55 @@ public static class ImportParser
             ParseDate(f.GetValueOrDefault("Date Added")),
             BuildReads(status, dated, ReadCount(f.GetValueOrDefault("Read Count"))));
     }
+
+    /// <summary>Carrel's own export: everything as the reader had it, including reads as they were and progress.</summary>
+    private static ParsedRow? FromCarrel(Dictionary<string, string> f)
+    {
+        var title = f.GetValueOrDefault("Title", "");
+        if (title.Length == 0)
+        {
+            return null;
+        }
+        var statusText = f.GetValueOrDefault("Status", "").ToLowerInvariant();
+        var status = CarrelCsv.Statuses.Where(s => s.Value == statusText).Select(s => s.Key).DefaultIfEmpty(ReadingStatus.WantToRead).First();
+        var rating = Number(f.GetValueOrDefault("Rating")) is { } stars && stars is >= 0.5m and <= 5 && stars * 2 == decimal.Truncate(stars * 2)
+            ? stars
+            : (decimal?)null;
+
+        var unitText = f.GetValueOrDefault("Progress Unit", "").ToLowerInvariant();
+        var unit = CarrelCsv.ProgressUnits.Where(u => u.Value == unitText).Select(u => (ProgressUnit?)u.Key).FirstOrDefault();
+        var value = Number(f.GetValueOrDefault("Progress Value"));
+        var percent = Number(f.GetValueOrDefault("Progress Percent")) is { } p && p is >= 0 and <= 100 ? p : (decimal?)null;
+        // Out of range, or half a pair: left out, as the book page would refuse it.
+        if (unit is null || value is null || value < 0 || value > 1_000_000 || (unit == ProgressUnit.Percent && value > 100))
+        {
+            unit = null;
+            value = null;
+        }
+        var added = DateTimeOffset.TryParseExact(f.GetValueOrDefault("Date Added"), CarrelCsv.AddedFormat, CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal, out var addedAt) ? addedAt : (DateTimeOffset?)null;
+
+        return new ParsedRow(
+            title,
+            f.GetValueOrDefault("Authors", "").Split(CarrelCsv.AuthorSeparator, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries),
+            ValidIsbn(f.GetValueOrDefault("ISBN13")),
+            ValidIsbn(f.GetValueOrDefault("ISBN10")),
+            null,
+            null,
+            status,
+            rating,
+            added is { } a ? DateOnly.FromDateTime(a.UtcDateTime) : null,
+            CarrelCsv.ParseReads(f.GetValueOrDefault("Reads", "")),
+            int.TryParse(f.GetValueOrDefault("Hardcover Book Id"), out var bookId) && bookId > 0 ? bookId : null,
+            long.TryParse(f.GetValueOrDefault("Hardcover Edition Id"), out var editionId) && editionId > 0 ? editionId : null,
+            added,
+            unit,
+            value,
+            percent);
+    }
+
+    private static decimal? Number(string? text) =>
+        decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var number) ? number : null;
 
     /// <summary>
     /// The reads to record. Dated reads come from the export. Exports count more reads than they date, so the rest are

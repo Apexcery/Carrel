@@ -42,6 +42,14 @@ public class ImportService(CarrelDbContext db, BookService books, IImportQueue q
             Rating = row.Rating,
             AddedOn = row.AddedOn,
             Reads = row.Reads,
+            // Carrel's own exports name the Hardcover book, so there's nothing to look up.
+            Match = row.HardcoverBookId is null ? ImportMatch.Pending : ImportMatch.Exact,
+            HardcoverBookId = row.HardcoverBookId,
+            HardcoverEditionId = row.HardcoverEditionId,
+            AddedAt = row.AddedAt,
+            ProgressUnit = row.ProgressUnit,
+            ProgressValue = row.ProgressValue,
+            ProgressPercent = row.ProgressPercent,
         }));
         db.LibraryImports.Add(import);
         await db.SaveChangesAsync(ct);
