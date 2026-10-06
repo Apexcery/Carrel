@@ -30,28 +30,34 @@ export function ShelfTitle({
   )
 }
 
-/** Books being read, each as a card with its progress. */
-export function ReadingNow({ items }: { items: LibraryItem[] }) {
+/** Books being read as a shelf: cards with their progress in a row that scrolls like the other shelves. */
+export function ReadingStrip({ heading, items }: { heading: ReactNode; items: LibraryItem[] }) {
   return (
-    <ul className="reading-now">
+    <ShelfRow heading={heading} stripClassName="reading-strip">
       {items.map((item) => (
         <li key={item.entry.id}>
-          <Link to={`/books/${item.book.id}`} className="reading-card">
-            <Cover url={item.book.coverUrl} title={item.book.title} author={item.book.authors[0]} size="small" />
-            <div>
-              <p className="reading-card-title">{item.book.title}</p>
-              {item.book.authors.length > 0 && <p className="reading-card-byline">{listNames(item.book.authors)}</p>}
-              <div className="progress-bar" aria-hidden="true">
-                <span style={{ width: `${item.entry.progressPercent ?? 0}%` }} />
-              </div>
-              <p className="progress-summary mono">
-                {item.entry.progressPercent === null ? 'Just started' : `${Math.round(item.entry.progressPercent)}%`}
-              </p>
-            </div>
-          </Link>
+          <ReadingCard item={item} />
         </li>
       ))}
-    </ul>
+    </ShelfRow>
+  )
+}
+
+function ReadingCard({ item }: { item: LibraryItem }) {
+  return (
+    <Link to={`/books/${item.book.id}`} className="reading-card">
+      <Cover url={item.book.coverUrl} title={item.book.title} author={item.book.authors[0]} size="small" />
+      <div>
+        <p className="reading-card-title">{item.book.title}</p>
+        {item.book.authors.length > 0 && <p className="reading-card-byline">{listNames(item.book.authors)}</p>}
+        <div className="progress-bar" aria-hidden="true">
+          <span style={{ width: `${item.entry.progressPercent ?? 0}%` }} />
+        </div>
+        <p className="progress-summary mono">
+          {item.entry.progressPercent === null ? 'Just started' : `${Math.round(item.entry.progressPercent)}%`}
+        </p>
+      </div>
+    </Link>
   )
 }
 
