@@ -3,6 +3,7 @@ using System;
 using Carrel.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Carrel.Api.Data.Migrations
 {
     [DbContext(typeof(CarrelDbContext))]
-    partial class CarrelDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261006212814_AddPublicProfiles")]
+    partial class AddPublicProfiles
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -682,41 +685,6 @@ namespace Carrel.Api.Data.Migrations
                             t.HasCheckConstraint("ck_reads_dates", "finished_on >= started_on");
 
                             t.HasCheckConstraint("ck_reads_finished_date_unknown", "not (finished_date_unknown and finished_on is not null)");
-                        });
-                });
-
-            modelBuilder.Entity("Carrel.Api.Data.ReadingGoal", b =>
-                {
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("user_id");
-
-                    b.Property<int>("Year")
-                        .HasColumnType("integer")
-                        .HasColumnName("year");
-
-                    b.Property<int>("Books")
-                        .HasColumnType("integer")
-                        .HasColumnName("books");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at")
-                        .HasDefaultValueSql("now()");
-
-                    b.HasKey("UserId", "Year")
-                        .HasName("pk_reading_goals");
-
-                    b.ToTable("reading_goals", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_reading_goals_books", "books between 1 and 1000");
                         });
                 });
 

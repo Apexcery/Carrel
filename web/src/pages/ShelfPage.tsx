@@ -1,7 +1,5 @@
 import { Field, Label } from '@headlessui/react'
-import { useQuery } from '@tanstack/react-query'
-import { Link, useParams, useSearchParams } from 'react-router'
-import { apiGet } from '../api'
+import { Link, Navigate, useLocation, useParams, useSearchParams } from 'react-router'
 import { Cover } from '../components/Cover'
 import { ErrorNotice } from '../components/ErrorNotice'
 import { Select } from '../components/Select'
@@ -9,32 +7,48 @@ import { StarDisplay } from '../components/StarRating'
 import { Tooltip } from '../components/Tooltip'
 import { listNames, STATUS_LABELS } from '../format'
 import { usePageTitle } from '../pageTitle'
+import { useProfile } from '../profile'
+import { useReader } from '../readers'
 import {
   defaultSort,
   directionLabel,
   filterItems,
   naturalDirection,
+  profilePath,
+  shelfPath,
   sortItems,
   sortOptions,
   statusFromSlug,
   type SortDirection,
   type SortKey,
 } from '../shelves'
-import type { LibraryItem } from '../types'
 import { NOT_FOUND_TITLE, NotFoundPage } from './NotFoundPage'
 
+/** The old address of the signed-in reader's shelves, /shelves/read, now under their profile. */
+export function OwnShelfRedirect() {
+  const status = statusFromSlug(useParams().slug)
+  const { search } = useLocation()
+  // Signed in, so the profile has loaded (see App).
+  const username = useProfile().data!.username!
+  return status ? <Navigate to={`${shelfPath(username, status)}${search}`} replace /> : <NotFoundPage />
+}
+
 /**
- * Every book on one of the reader's shelves, e.g. /shelves/want-to-read, with a filter and sort.
+ * Every book on one of a reader's shelves, e.g. /@reader/shelves/want-to-read, with a filter and sort. Anyone can see
+ * a public profile's shelves; a private one's only its reader.
  * The filter, sort and direction live in the URL (?q=&sort=&dir=), so they survive back/forward and bookmarks.
  */
 export function ShelfPage() {
-  const status = statusFromSlug(useParams().slug)
+  const { handle = '', slug } = useParams()
+  const status = statusFromSlug(slug)
+  const username = handle.startsWith('@') ? handle.slice(1) : ''
   const [params, setParams] = useSearchParams()
-  const library = useQuery({ queryKey: ['library'], queryFn: () => apiGet<LibraryItem[]>('/library') })
-  // Set here for an unknown shelf too, since this runs after NotFoundPage's own.
-  usePageTitle(status ? STATUS_LABELS[status] : NOT_FOUND_TITLE)
+  const { reader, isOwn, notFound, error, refetch } = useReader(username)
+  const found = Boolean(status && username && !notFound)
+  // Set here for an unknown shelf or reader too, since this runs after NotFoundPage's own.
+  usePageTitle(!found ? NOT_FOUND_TITLE : isOwn || !reader ? STATUS_LABELS[status!] : `@${reader.username} · ${STATUS_LABELS[status!]}`)
 
-  if (!status) {
+  if (!status || !found) {
     return <NotFoundPage />
   }
 
@@ -55,23 +69,29 @@ export function ShelfPage() {
     setParams(next, { replace: true })
   }
 
-  if (library.isError) {
-    return <ErrorNotice error={library.error} onRetry={() => library.refetch()} />
+  if (error) {
+    return <ErrorNotice error={error} onRetry={() => refetch()} />
   }
-  if (!library.data) {
+  if (!reader) {
     return <section aria-busy="true" />
   }
 
-  const all = library.data.filter((item) => item.entry.status === status)
+  const all = reader.library.filter((item) => item.entry.status === status)
   const items = sortItems(filterItems(all, query), sort, dir)
 
   return (
     <section className="shelf-page">
       <header className="search-header">
         <p className="kicker">
-          <Link to="/" className="series-link">
-            Your library
-          </Link>
+          {isOwn ? (
+            <Link to="/" className="series-link">
+              Your library
+            </Link>
+          ) : (
+            <Link to={profilePath(reader.username)} className="series-link">
+              @{reader.username}
+            </Link>
+          )}
         </p>
         <h1 className="search-title">{STATUS_LABELS[status]}</h1>
         <p className="muted mono">

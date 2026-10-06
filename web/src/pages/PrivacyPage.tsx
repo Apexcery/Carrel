@@ -35,7 +35,14 @@ export function PrivacyPage() {
         </li>
         <li>
           <strong>Your library:</strong> the books on your shelves, their status, your ratings, your reading progress,
-          the editions you chose, and the dates you started and finished reading. Your library is private.
+          the editions you chose, and the dates you started and finished reading. It’s shown on your profile (see
+          below).
+        </li>
+        <li>
+          <strong>Your reading goals:</strong> how many books you mean to read each year, if you set a goal.
+        </li>
+        <li>
+          <strong>Whether your profile is public</strong>, which you choose.
         </li>
         <li>
           <strong>Your imports:</strong> when you import a Goodreads or StoryGraph export, each book’s title, authors,
@@ -53,6 +60,16 @@ export function PrivacyPage() {
         </li>
       </ul>
 
+      <h2>Your profile</h2>
+      <p>
+        Your profile, at your username after <span className="mono">carrel.zenithal.co.uk/@</span>, shows your username
+        and your library: your shelves, ratings, reading progress, reading dates, and reading goals. Profiles are public
+        unless you
+        make yours private, so anyone can see it, including people who aren’t signed in. You can make it private when
+        you choose your username, or at any time in Settings, under Account; then only you can see it. Your email
+        address is never shown.
+      </p>
+
       <h2>What stays in your browser</h2>
       <p>
         Carrel doesn’t use cookies, analytics, or advertising trackers. It keeps a few things in your browser’s storage
@@ -68,7 +85,8 @@ export function PrivacyPage() {
       <h2>Why Carrel uses your information</h2>
       <ul>
         <li>
-          <strong>To provide the service you signed up for:</strong> your account and your library. The legal basis is
+          <strong>To provide the service you signed up for:</strong> your account, your library, and your profile. The
+          legal basis is
           performing our agreement with you.
         </li>
         <li>
@@ -109,10 +127,10 @@ export function PrivacyPage() {
 
       <h2>How long it’s kept</h2>
       <p>
-        Your account, library, and imports are kept until you delete your account. Deleting it (in Settings, under
-        Account) removes your account, username, library, and imports straight away. You can also delete just your library
-        and imports there, under Delete book data, and keep your account. Sign-in records end with each session, and logs
-        are deleted automatically, after 30 days by default.
+        Your account, library, reading goals, and imports are kept until you delete your account. Deleting it (in
+        Settings, under Account) removes your account, username, library, reading goals, and imports straight away. You
+        can also delete just your library and imports there, under Delete book data, and keep your account. Sign-in
+        records end with each session, and logs are deleted automatically, after 30 days by default.
       </p>
       {/* "Straight away" holds while the Supabase plan keeps no backups; revisit this if backups are turned on. */}
 

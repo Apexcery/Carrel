@@ -20,5 +20,5 @@ export function safeNext(next: string | null): string {
 
 /** Pages that only make sense signed in; signing out on one of them goes home. */
 export function isMembersOnly(pathname: string): boolean {
-  return pathname.startsWith('/shelves/') || pathname === '/settings/account'
+  return pathname.startsWith('/shelves/') || pathname === '/settings/account' || pathname === '/settings/import-export'
 }

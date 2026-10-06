@@ -1,6 +1,6 @@
 import type { LibraryItem, ReadingStatus } from './types'
 
-/** URL slugs for each shelf, e.g. /shelves/want-to-read. */
+/** URL slugs for each shelf, e.g. /@reader/shelves/want-to-read. */
 const SLUGS: Record<ReadingStatus, string> = {
   want_to_read: 'want-to-read',
   reading: 'reading',
@@ -9,8 +9,13 @@ const SLUGS: Record<ReadingStatus, string> = {
   did_not_finish: 'did-not-finish',
 }
 
-export function shelfPath(status: ReadingStatus): string {
-  return `/shelves/${SLUGS[status]}`
+/** A reader's profile page, e.g. /@reader. */
+export function profilePath(username: string): string {
+  return `/@${username}`
+}
+
+export function shelfPath(username: string, status: ReadingStatus): string {
+  return `${profilePath(username)}/shelves/${SLUGS[status]}`
 }
 
 export function statusFromSlug(slug: string | undefined): ReadingStatus | null {
@@ -96,6 +101,15 @@ export function filterItems(items: LibraryItem[], query: string): LibraryItem[] 
     const text = [item.book.title, ...item.book.authors, item.book.series?.name ?? ''].join(' ').toLowerCase()
     return terms.every((term) => text.includes(term))
   })
+}
+
+/** Reads finished in a year, one for each read, so a book read twice that year counts twice. */
+export function readsFinishedIn(items: LibraryItem[], year: number): { item: LibraryItem; finishedOn: string }[] {
+  return items.flatMap((item) =>
+    item.entry.reads
+      .filter((read) => read.finishedOn?.startsWith(`${year}-`))
+      .map((read) => ({ item, finishedOn: read.finishedOn! })),
+  )
 }
 
 /** A shelf's books in its default order. */

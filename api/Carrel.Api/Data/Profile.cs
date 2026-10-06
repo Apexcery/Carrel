@@ -9,6 +9,9 @@ public class Profile
     /// <summary>Public handle, shown as typed; unique ignoring case (enforced by a lower(username) index).</summary>
     public required string Username { get; set; }
 
+    /// <summary>Whether anyone can see the profile and library at /@username; if not, only the reader can.</summary>
+    public bool IsPublic { get; set; } = true;
+
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 }

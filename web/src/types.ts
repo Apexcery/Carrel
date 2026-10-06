@@ -170,9 +170,27 @@ export interface LibraryItem {
   }
 }
 
+/** How many books a reader means to finish in a year. */
+export interface ReadingGoal {
+  year: number
+  books: number
+}
+
 export interface Profile {
   /** Null until the reader chooses one. */
   username: string | null
+  /** Whether anyone can see the reader's profile and library; if not, only they can. */
+  isPublic: boolean
+  /** Every year's goal the reader has set, oldest first. */
+  goals: ReadingGoal[]
+}
+
+/** A reader's profile page: their username, reading goals, and whole library. */
+export interface Reader {
+  username: string
+  isPublic: boolean
+  goals: ReadingGoal[]
+  library: LibraryItem[]
 }
 
 export interface UsernameAvailability {

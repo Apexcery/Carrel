@@ -13,11 +13,12 @@ import { HomePage } from './pages/HomePage'
 import { ImportExportSettings } from './pages/ImportExportSettings'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { PrivacyPage } from './pages/PrivacyPage'
+import { ProfilePage } from './pages/ProfilePage'
 import { SearchPage } from './pages/SearchPage'
 import { SeriesPage } from './pages/SeriesPage'
 import { SetPasswordPage } from './pages/SetPasswordPage'
 import { SettingsPage } from './pages/SettingsPage'
-import { ShelfPage } from './pages/ShelfPage'
+import { OwnShelfRedirect, ShelfPage } from './pages/ShelfPage'
 import { SignInPage } from './pages/SignInPage'
 import { useProfile } from './profile'
 import { signInPath } from './signIn'
@@ -75,8 +76,12 @@ function App() {
           </Route>
         </Route>
         <Route element={<RequireSignIn />}>
-          <Route path="shelves/:slug" element={<ShelfPage />} />
+          {/* Shelves' old address, from before they were under the reader's profile. */}
+          <Route path="shelves/:slug" element={<OwnShelfRedirect />} />
         </Route>
+        {/* Profiles are at /@username; a route can't match part of a segment, so the pages check for the @. */}
+        <Route path=":handle" element={<ProfilePage />} />
+        <Route path=":handle/shelves/:slug" element={<ShelfPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

@@ -12,11 +12,13 @@ export function ChooseUsernamePage() {
   usePageTitle('Choose a username')
   const queryClient = useQueryClient()
   const [username, setUsername] = useState('')
+  const [isPublic, setIsPublic] = useState(true)
+  const [explained, setExplained] = useState(false)
   const trimmed = username.trim()
   const status = useUsernameStatus(username, '3 to 20 letters, numbers, underscores, or hyphens. You can change it later.')
 
   const save = useMutation({
-    mutationFn: () => apiSend<Profile>('PUT', '/profile', { username: trimmed }),
+    mutationFn: () => apiSend<Profile>('PUT', '/profile', { username: trimmed, isPublic }),
     onSuccess: (profile) => queryClient.setQueryData(PROFILE_KEY, profile),
   })
 
@@ -54,6 +56,35 @@ export function ChooseUsernamePage() {
           <p id="username-status" className={`form-message ${status.tone}`} aria-live="polite">
             {save.error ? save.error.message : status.text}
           </p>
+          <div className="public-profile-choice">
+            <div className="public-profile-row">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={isPublic}
+                  aria-describedby={explained ? 'public-profile-hint' : undefined}
+                  onChange={(e) => setIsPublic(e.target.checked)}
+                />
+                <span>Public profile</span>
+              </label>
+              <button
+                type="button"
+                className="public-profile-help"
+                aria-label="What’s on a public profile?"
+                aria-expanded={explained}
+                aria-controls="public-profile-hint"
+                onClick={() => setExplained(!explained)}
+              >
+                ?
+              </button>
+            </div>
+            {explained && (
+              <p id="public-profile-hint" className="public-profile-hint">
+                Anyone can see your shelves, ratings, reading progress, and reading dates at {window.location.host}/@
+                {trimmed || 'username'}. You can change this in Settings.
+              </p>
+            )}
+          </div>
           <button type="submit" className="primary-button" disabled={!canSave}>
             {save.isPending ? 'Saving…' : 'Continue'}
           </button>
