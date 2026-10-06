@@ -145,10 +145,13 @@ public class CarrelDbContext(DbContextOptions<CarrelDbContext> options) : DbCont
                 t.HasCheckConstraint("ck_import_items_status", SnakeCaseEnumConverter<ReadingStatus>.CheckSql("status"));
                 t.HasCheckConstraint("ck_import_items_match", SnakeCaseEnumConverter<ImportMatch>.CheckSql("match"));
                 t.HasCheckConstraint("ck_import_items_rating", "rating between 0.5 and 5 and mod(rating * 2, 1) = 0");
+                t.HasCheckConstraint("ck_import_items_progress_unit", SnakeCaseEnumConverter<ProgressUnit>.CheckSql("progress_unit"));
             });
             item.Property(i => i.Status).HasConversion<SnakeCaseEnumConverter<ReadingStatus>>();
             item.Property(i => i.Match).HasConversion<SnakeCaseEnumConverter<ImportMatch>>();
             item.Property(i => i.Rating).HasPrecision(2, 1);
+            item.Property(i => i.ProgressUnit).HasConversion<SnakeCaseEnumConverter<ProgressUnit>>();
+            item.Property(i => i.ProgressPercent).HasPrecision(5, 2);
             item.OwnsMany(i => i.Reads, reads => reads.ToJson());
             item.HasIndex(i => new { i.ImportId, i.Row }).IsUnique();
             item.HasIndex(i => i.BookId);

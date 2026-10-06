@@ -1,7 +1,7 @@
 namespace Carrel.Api.Data;
 
 /// <summary>
-/// A reader's upload of a Goodreads or StoryGraph export. Its rows are matched to books and written to the library
+/// A reader's upload of a Goodreads, StoryGraph, or Carrel export. Its rows are matched to books and written to the library
 /// in the background, in batches, with all progress stored here so a restart or deploy carries on where it stopped.
 /// </summary>
 public class LibraryImport
@@ -64,10 +64,22 @@ public class ImportItem
 
     public DateOnly? AddedOn { get; set; }
 
+    /// <summary>When the book was added, to the second; only Carrel's own exports have it.</summary>
+    public DateTimeOffset? AddedAt { get; set; }
+
     /// <summary>Reads to record, oldest first (JSON).</summary>
     public List<ImportedRead> Reads { get; set; } = [];
 
     public ImportMatch Match { get; set; }
+
+    /// <summary>
+    /// The edition the reader picked and their progress in it; only Carrel's own exports have them. Pages and seconds
+    /// only mean something in that edition, so without it the percentage is kept instead.
+    /// </summary>
+    public long? HardcoverEditionId { get; set; }
+    public ProgressUnit? ProgressUnit { get; set; }
+    public decimal? ProgressValue { get; set; }
+    public decimal? ProgressPercent { get; set; }
 
     /// <summary>The matched Hardcover book, before it's stored as <see cref="BookId"/>.</summary>
     public int? HardcoverBookId { get; set; }
@@ -92,6 +104,8 @@ public enum ImportSource
 {
     Goodreads,
     StoryGraph,
+    /// <summary>Carrel's own full export, matched by Hardcover id.</summary>
+    Carrel,
 }
 
 public enum ImportState
@@ -110,7 +124,7 @@ public enum ImportMatch
     Pending,
     /// <summary>The id lookups found nothing; a title and author search is next.</summary>
     NeedsSearch,
-    /// <summary>Found by Goodreads id, ISBN, or ASIN.</summary>
+    /// <summary>Found by Hardcover id (Carrel exports), Goodreads id, ISBN, or ASIN.</summary>
     Exact,
     /// <summary>Found by title and author search, so the reader is asked to check it.</summary>
     ByTitle,

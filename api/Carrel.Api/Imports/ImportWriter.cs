@@ -23,6 +23,11 @@ public static class ImportWriter
             .Include(e => e.Reads)
             .Where(e => e.UserId == import.UserId && bookIds.Contains(e.BookId))
             .ToDictionaryAsync(e => e.BookId, ct);
+        // Editions named by Carrel exports, by book and Hardcover edition id.
+        var hardcoverEditionIds = books.SelectMany(b => b).Select(i => i.HardcoverEditionId).OfType<long>().Distinct().ToList();
+        var editions = await db.Editions
+            .Where(e => bookIds.Contains(e.BookId) && e.HardcoverEditionId != null && hardcoverEditionIds.Contains(e.HardcoverEditionId.Value))
+            .ToDictionaryAsync(e => (e.BookId, e.HardcoverEditionId!.Value), e => e.Id, ct);
         // Entries this import already created (another row for the same book, written earlier) take more rows in.
         var created = await db.ImportItems
             .Where(i => i.ImportId == import.Id && i.CreatedEntry && i.BookId != null && bookIds.Contains(i.BookId.Value))
@@ -37,24 +42,24 @@ public static class ImportWriter
             {
                 entry = new LibraryEntry { UserId = import.UserId, BookId = book.Key };
                 db.LibraryEntries.Add(entry);
-                Replace(entry, rows);
+                Replace(entry, rows, editions);
                 rows.ForEach(r => r.CreatedEntry = true);
             }
             else if (created.Contains(book.Key))
             {
-                Merge(entry, rows);
+                Merge(entry, rows, editions);
                 rows.ForEach(r => r.CreatedEntry = true);
             }
             else if (import.OverwriteExisting)
             {
-                Replace(entry, rows);
+                Replace(entry, rows, editions);
             }
             // Otherwise the book was already in the library and the reader chose to leave those alone.
             rows.ForEach(r => r.Written = true);
         }
     }
 
-    private static void Replace(LibraryEntry entry, List<ImportItem> rows)
+    private static void Replace(LibraryEntry entry, List<ImportItem> rows, Dictionary<(long, long), long> editions)
     {
         entry.Status = Furthest(rows.Select(r => r.Status));
         entry.Rating = rows.Max(r => r.Rating);
@@ -64,11 +69,12 @@ public static class ImportWriter
             entry.Reads.Add(read);
         }
         entry.AddedAt = Earliest(rows) ?? DateTimeOffset.UtcNow;
+        RestoreProgress(entry, rows, editions);
         ApplyProgress(entry);
         entry.UpdatedAt = LastActivity(entry);
     }
 
-    private static void Merge(LibraryEntry entry, List<ImportItem> rows)
+    private static void Merge(LibraryEntry entry, List<ImportItem> rows, Dictionary<(long, long), long> editions)
     {
         entry.Status = Furthest(rows.Select(r => r.Status).Append(entry.Status));
         entry.Rating ??= rows.Max(r => r.Rating);
@@ -79,6 +85,10 @@ public static class ImportWriter
         if (Earliest(rows) is { } added && added < entry.AddedAt)
         {
             entry.AddedAt = added;
+        }
+        if (entry.EditionId is null && entry.ProgressUnit is null)
+        {
+            RestoreProgress(entry, rows, editions);
         }
         ApplyProgress(entry);
         entry.UpdatedAt = LastActivity(entry);
@@ -105,7 +115,34 @@ public static class ImportWriter
 
     private static ReadingStatus Furthest(IEnumerable<ReadingStatus> statuses) => statuses.MinBy(s => Array.IndexOf(Precedence, s));
 
-    private static DateTimeOffset? Earliest(List<ImportItem> rows) => rows.Min(r => r.AddedOn) is { } date ? AtMidnight(date) : null;
+    private static DateTimeOffset? Earliest(List<ImportItem> rows) =>
+        rows.Select(r => r.AddedAt ?? (r.AddedOn is { } date ? AtMidnight(date) : null)).Min();
+
+    /// <summary>
+    /// The edition and progress from a Carrel export. Pages and seconds only mean something in their edition, so if
+    /// that edition isn't found (Hardcover dropped it, or Carrel doesn't have it), the progress is kept as a percentage.
+    /// </summary>
+    private static void RestoreProgress(LibraryEntry entry, List<ImportItem> rows, Dictionary<(long, long), long> editions)
+    {
+        if (rows.FirstOrDefault(r => r.HardcoverEditionId is not null || r.ProgressUnit is not null) is not { } row)
+        {
+            return;
+        }
+        long? editionId = row.HardcoverEditionId is { } id && editions.TryGetValue((entry.BookId, id), out var found) ? found : null;
+        entry.EditionId = editionId;
+        if (row.ProgressUnit == ProgressUnit.Percent || (row.ProgressUnit is not null && editionId is not null))
+        {
+            entry.ProgressUnit = row.ProgressUnit;
+            entry.ProgressValue = row.ProgressValue;
+            entry.ProgressPercent = row.ProgressPercent;
+        }
+        else if (row.ProgressPercent is { } percent)
+        {
+            entry.ProgressUnit = ProgressUnit.Percent;
+            entry.ProgressValue = percent;
+            entry.ProgressPercent = percent;
+        }
+    }
 
     /// <summary>Finished books are complete; books not being read have no progress.</summary>
     private static void ApplyProgress(LibraryEntry entry)

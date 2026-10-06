@@ -119,7 +119,10 @@ export function PrivacyPage() {
       <h2>Your rights</h2>
       <p>Under UK data protection law, you can ask to:</p>
       <ul>
-        <li>get a copy of your information, including in a form you can take elsewhere;</li>
+        <li>
+          get a copy of your information, including in a form you can take elsewhere (you can download your library
+          yourself in Settings, under Import &amp; Export);
+        </li>
         <li>correct it (you can change your username, email, and password yourself in Settings);</li>
         <li>delete it (Settings, then Account, then Delete account); and</li>
         <li>object to or limit how it’s used.</li>

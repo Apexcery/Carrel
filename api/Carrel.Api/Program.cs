@@ -155,6 +155,7 @@ builder.Services.AddScoped<CoverSuppression>();
 builder.Services.AddScoped<BookService>();
 builder.Services.AddScoped<SeriesService>();
 builder.Services.AddScoped<LibraryService>();
+builder.Services.AddScoped<LibraryExport>();
 builder.Services.AddScoped<RecommendationService>();
 builder.Services.AddSingleton(importQueue);
 if (importQueue.UsesCloudTasks)

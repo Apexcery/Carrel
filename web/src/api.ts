@@ -47,6 +47,12 @@ export async function apiSend<T>(method: 'POST' | 'PUT' | 'DELETE', path: string
   return (response.status === 204 ? undefined : await response.json()) as T
 }
 
+/** GETs a file (library exports) as a Blob, to save. */
+export async function apiDownload(path: string): Promise<Blob> {
+  const response = await send(path)
+  return response.blob()
+}
+
 /** POSTs a file as the request body (CSV exports); resolves to the parsed response. */
 export async function apiUpload<T>(path: string, file: File): Promise<T> {
   const response = await send(path, { method: 'POST', headers: { 'Content-Type': 'text/csv' }, body: file })

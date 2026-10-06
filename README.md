@@ -47,9 +47,11 @@ The running site keeps using the old code until the new version has started, so 
 
 To apply migrations without starting the API, `dotnet ef database update --project api/Carrel.Api` still works against the dev database.
 
-## Library imports
+## Library imports and exports
 
-Goodreads and StoryGraph imports run in batches of about a minute, each queuing the next. Cloud Run only gives the API CPU while it handles a request, so in production each batch arrives from the Cloud Tasks queue `carrel-imports` (europe-west1) as a request to `/internal/imports/{id}/process`, signed as the `carrel-api` service account (settings under `Imports:Queue` in `appsettings.json`). Locally there's no queue, and batches run in the API process.
+Readers can export their library from Settings → Import & Export in two formats: Goodreads' columns (which Goodreads, StoryGraph, and Carrel can import; it loses start dates, earlier reads, half stars, and progress) and Carrel's own (`Imports/CarrelCsv.cs`), which keeps everything and is matched by Hardcover id when imported back.
+
+Goodreads, StoryGraph, and Carrel imports run in batches of about a minute, each queuing the next. Cloud Run only gives the API CPU while it handles a request, so in production each batch arrives from the Cloud Tasks queue `carrel-imports` (europe-west1) as a request to `/internal/imports/{id}/process`, signed as the `carrel-api` service account (settings under `Imports:Queue` in `appsettings.json`). Locally there's no queue, and batches run in the API process.
 
 Imports only use Hardcover capacity readers aren't using, and pause for the day once fewer than 1,000 of Hardcover's daily requests are left. Progress is saved per row, so an import carries on after a restart; one that stalls is queued again when the reader opens the import page.
 

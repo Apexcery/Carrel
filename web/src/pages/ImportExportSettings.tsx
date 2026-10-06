@@ -1,23 +1,23 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router'
-import { apiGet, apiGetOrNull, apiSend, apiUpload } from '../api'
+import { apiDownload, apiGet, apiGetOrNull, apiSend, apiUpload } from '../api'
 import { Cover } from '../components/Cover'
 import { ErrorNotice } from '../components/ErrorNotice'
 import { listNames, seriesPosition } from '../format'
 import { usePageTitle } from '../pageTitle'
 import type { BookSearchResponse, BookSearchResult, ImportReviewItem, ImportSource, ImportStatus, LibraryItem } from '../types'
 
-const SOURCE_NAMES: Record<ImportSource, string> = { goodreads: 'Goodreads', story_graph: 'StoryGraph' }
+const SOURCE_NAMES: Record<ImportSource, string> = { goodreads: 'Goodreads', story_graph: 'StoryGraph', carrel: 'Carrel' }
 const POLL_MS = 3000
 const PICKER_RESULTS = 5
 
 /**
- * The Import section of Settings: import a Goodreads or StoryGraph export, follow its progress, and sort out the books
- * it couldn't match for sure.
+ * The Import & Export section of Settings: import a Goodreads, StoryGraph, or Carrel export, follow its progress, and
+ * sort out the books it couldn't match for sure; or download the library to take elsewhere.
  */
-export function ImportSettings() {
-  usePageTitle('Import')
+export function ImportExportSettings() {
+  usePageTitle('Import & Export')
   const queryClient = useQueryClient()
   const latest = useQuery({
     queryKey: ['import-latest'],
@@ -56,8 +56,11 @@ export function ImportSettings() {
 
   return (
     <section className="import-page">
-      <p className="settings-note">Bring your shelves, ratings, and reading dates over from Goodreads or StoryGraph.</p>
+      <p className="settings-note">
+        Bring your shelves, ratings, and reading dates over from Goodreads or StoryGraph, or take them with you.
+      </p>
 
+      <ExportLibrary libraryHasBooks={libraryHasBooks} />
       {status && isActive(status) && <ImportProgress status={status} />}
       {!isActive(status) &&
         (status ? (
@@ -121,7 +124,7 @@ function UploadForm({ libraryHasBooks, heading = false }: { libraryHasBooks: boo
 
   return (
     <form className="import-form" onSubmit={submit}>
-      {heading && <h2 className="section-title">Upload your export</h2>}
+      {heading && <h2 className="section-title">Import your library</h2>}
       <div className="import-sources">
         <div>
           {/* Recommended: Goodreads exports carry Goodreads ids, which match almost every book exactly. */}
@@ -138,6 +141,13 @@ function UploadForm({ libraryHasBooks, heading = false }: { libraryHasBooks: boo
           <p>
             Open <strong>Manage Account</strong>, choose <strong>Export StoryGraph Library</strong>, then download the
             file once it’s ready.
+          </p>
+        </div>
+        <div>
+          <h3 className="import-source-name">Carrel</h3>
+          <p>
+            A <strong>Full Carrel export</strong> from above brings back everything, including every read’s dates and
+            your progress.
           </p>
         </div>
       </div>
@@ -196,6 +206,68 @@ function UploadForm({ libraryHasBooks, heading = false }: { libraryHasBooks: boo
         </button>
       </div>
     </form>
+  )
+}
+
+const EXPORTS = [
+  {
+    format: 'goodreads',
+    name: 'For Goodreads or StoryGraph',
+    file: 'carrel-library-goodreads',
+    description:
+      'In Goodreads’ format, which Goodreads and StoryGraph can both import. It keeps your shelves, ratings (rounded down to whole stars), latest finish dates, and how many times you’ve read each book.',
+  },
+  {
+    format: 'carrel',
+    name: 'Full Carrel export',
+    file: 'carrel-library',
+    description:
+      'Everything, including every read’s start and finish dates, half stars, and your progress. Keep it as a backup, or import it back into Carrel.',
+  },
+] as const
+
+/** Downloads of the reader's library, in Goodreads' format or Carrel's own. */
+function ExportLibrary({ libraryHasBooks }: { libraryHasBooks: boolean }) {
+  const download = useMutation({
+    mutationFn: async ({ format, file }: (typeof EXPORTS)[number]) => {
+      const blob = await apiDownload(`/library/export?format=${format}`)
+      // Saved through a temporary link, since the request needs the reader's token and a plain link can't send it.
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${file}-${new Date().toLocaleDateString('en-CA')}.csv`
+      link.click()
+      URL.revokeObjectURL(url)
+    },
+  })
+
+  return (
+    <section className="import-export">
+      <h2 className="section-title">Export your library</h2>
+      {!libraryHasBooks ? (
+        <p className="muted">Nothing to export yet. Books you add to your library can be downloaded here.</p>
+      ) : (
+        <>
+          <div className="import-sources">
+            {EXPORTS.map((option) => (
+              <div key={option.format} className="export-option">
+                <h3 className="import-source-name">{option.name}</h3>
+                <p>{option.description}</p>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={download.isPending}
+                  onClick={() => download.mutate(option)}
+                >
+                  {download.isPending && download.variables?.format === option.format ? 'Preparing…' : 'Download CSV'}
+                </button>
+              </div>
+            ))}
+          </div>
+          {download.isError && <ErrorNotice error={download.error} />}
+        </>
+      )}
+    </section>
   )
 }
 

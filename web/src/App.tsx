@@ -10,7 +10,7 @@ import { ChooseUsernamePage } from './pages/ChooseUsernamePage'
 import { ConfirmEmailPage } from './pages/ConfirmEmailPage'
 import { CopyrightPage } from './pages/CopyrightPage'
 import { HomePage } from './pages/HomePage'
-import { ImportSettings } from './pages/ImportSettings'
+import { ImportExportSettings } from './pages/ImportExportSettings'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { PrivacyPage } from './pages/PrivacyPage'
 import { SearchPage } from './pages/SearchPage'
@@ -69,7 +69,9 @@ function App() {
           <Route path="appearance" element={<AppearanceSettings />} />
           <Route element={<RequireSignIn />}>
             <Route path="account" element={<AccountSettings />} />
-            <Route path="import" element={<ImportSettings />} />
+            <Route path="import-export" element={<ImportExportSettings />} />
+            {/* The section's old address, from before it had exports. */}
+            <Route path="import" element={<Navigate to="/settings/import-export" replace />} />
           </Route>
         </Route>
         <Route element={<RequireSignIn />}>

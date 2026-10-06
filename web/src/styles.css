@@ -1866,10 +1866,6 @@ a.primary-button:hover {
 
 /* ---------- Import ---------- */
 
-.import-page {
-  max-width: 760px;
-}
-
 .import-progress,
 .import-form {
   display: grid;
@@ -1891,6 +1887,22 @@ a.primary-button:hover {
 }
 
 .import-progress p,
+/* Sized by the settings column, so the three import sources can be all in a row or one per row, never two and one. */
+.import-page {
+  container-type: inline-size;
+}
+
+@container (max-width: 775px) {
+  .import-form .import-sources {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The form's items keep to their own width, but its heading's rule runs the full width, like the export's. */
+.import-form > .section-title {
+  justify-self: stretch;
+}
+
 .import-sources p {
   margin: 0;
 }
@@ -1976,6 +1988,27 @@ a.primary-button:hover {
 .secondary-button:has(input:focus-visible) {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
+}
+
+.secondary-button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* Downloads of the library, above everything to do with importing. */
+.import-export {
+  margin-bottom: 36px;
+}
+
+.export-option {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  justify-items: start;
+}
+
+.export-option p {
+  margin: 0;
 }
 
 .import-existing .setting-hint {
@@ -2144,7 +2177,7 @@ a.primary-button:hover {
 }
 
 .settings-content {
-  max-width: 560px;
+  max-width: 780px;
 }
 
 .settings-section + .settings-section {
