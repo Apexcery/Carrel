@@ -15,12 +15,23 @@ import { useUsernameStatus } from '../username'
 export function AccountSettings() {
   usePageTitle('Account')
   return (
-    <div className="setting-rows">
-      <UsernameRow />
-      <EmailRow />
-      <PasswordRow />
-      <DeleteAccountRow />
-    </div>
+    <>
+      <div className="setting-rows">
+        <UsernameRow />
+        <EmailRow />
+        <PasswordRow />
+      </div>
+      {/* Set apart, so nobody reaches them while changing their details. */}
+      <section className="danger-zone" aria-labelledby="danger-zone-title">
+        <h2 id="danger-zone-title" className="section-title">
+          Danger zone
+        </h2>
+        <div className="setting-rows">
+          <DeleteLibraryRow />
+          <DeleteAccountRow />
+        </div>
+      </section>
+    </>
   )
 }
 
@@ -312,6 +323,75 @@ function PasswordRow() {
           </p>
         )}
         <FormActions saving={change.isPending} label="Change password" savingLabel="Saving…" onCancel={() => setEditing(false)} />
+      </form>
+    </SettingRow>
+  )
+}
+
+function DeleteLibraryRow() {
+  const queryClient = useQueryClient()
+  const user = useSession()?.user
+  const [editing, setEditing] = useState(false)
+  const [password, setPassword] = useState('')
+  const [deleted, setDeleted] = useState(false)
+
+  const remove = useMutation({
+    mutationFn: () => apiSend<void>('POST', '/account/delete-library', { password }),
+    onSuccess: () => {
+      // Shelves, suggestions, stats, and imports were all built from the library.
+      queryClient.invalidateQueries()
+      setDeleted(true)
+      setEditing(false)
+    },
+  })
+
+  function submit(event: FormEvent) {
+    event.preventDefault()
+    remove.mutate()
+  }
+
+  const error =
+    remove.error instanceof ApiError && remove.error.status === 503
+      ? 'Deleting book data is unavailable right now. Try again later.'
+      : remove.error?.message
+
+  return (
+    <SettingRow
+      label="Delete book data"
+      value={<span className="muted">Empty your library but keep your account.</span>}
+      hint={deleted ? 'Your book data has been deleted.' : undefined}
+      action="Delete"
+      editing={editing}
+      onEdit={() => {
+        setPassword('')
+        setDeleted(false)
+        remove.reset()
+        setEditing(true)
+      }}
+    >
+      <form className="settings-form" onSubmit={submit}>
+        <p className="setting-warning">
+          This deletes every book in your library, along with your ratings, progress, reading history, and imports. Your
+          account and username stay. It can’t be undone.
+        </p>
+        <input type="email" autoComplete="username" value={user?.email ?? ''} readOnly hidden />
+        <label>
+          <span>Your password</span>
+          <input
+            type="password"
+            autoComplete="current-password"
+            required
+            autoFocus
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </label>
+        {error && (
+          <p className="form-message error" role="alert">
+            {error}
+          </p>
+        )}
+        <FormActions saving={remove.isPending} label="Delete my book data" savingLabel="Deleting…" onCancel={() => setEditing(false)} />
       </form>
     </SettingRow>
   )

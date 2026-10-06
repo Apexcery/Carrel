@@ -86,6 +86,23 @@ public class LibraryService(CarrelDbContext db)
         await db.LibraryEntries.Where(e => e.UserId == userId && e.BookId == bookId).ExecuteDeleteAsync(ct) > 0;
 
     /// <summary>
+    /// Deletes every entry in the user's library (their reads go with them) and their imports, keeping the account. False,
+    /// deleting nothing, while an import is running, since it would carry on adding books.
+    /// </summary>
+    public async Task<bool> DeleteAllAsync(Guid userId, CancellationToken ct)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        if (await db.LibraryImports.AnyAsync(i => i.UserId == userId && (i.State == ImportState.Matching || i.State == ImportState.Waiting), ct))
+        {
+            return false;
+        }
+        await db.LibraryImports.Where(i => i.UserId == userId).ExecuteDeleteAsync(ct);
+        await db.LibraryEntries.Where(e => e.UserId == userId).ExecuteDeleteAsync(ct);
+        await transaction.CommitAsync(ct);
+        return true;
+    }
+
+    /// <summary>
     /// Keeps read dates in step with status: starting to read opens a read dated today; finishing closes the open
     /// read today (or records a read finished today if there was none). Other changes leave reads alone.
     /// </summary>

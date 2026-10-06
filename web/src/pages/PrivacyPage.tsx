@@ -110,7 +110,8 @@ export function PrivacyPage() {
       <h2>How long it’s kept</h2>
       <p>
         Your account, library, and imports are kept until you delete your account. Deleting it (in Settings, under
-        Account) removes your account, username, library, and imports straight away. Sign-in records end with each session, and logs
+        Account) removes your account, username, library, and imports straight away. You can also delete just your library
+        and imports there, under Delete book data, and keep your account. Sign-in records end with each session, and logs
         are deleted automatically, after 30 days by default.
       </p>
       {/* "Straight away" holds while the Supabase plan keeps no backups; revisit this if backups are turned on. */}
