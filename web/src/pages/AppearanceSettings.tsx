@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ThemeSwitch } from '../components/ThemeSwitch'
+import { usePageTitle } from '../pageTitle'
 import { getAccent, setAccent, type Accent } from '../theme'
 
 const ACCENTS: { value: Accent; label: string }[] = [
@@ -10,6 +11,7 @@ const ACCENTS: { value: Accent; label: string }[] = [
 ]
 
 export function AppearanceSettings() {
+  usePageTitle('Appearance')
   return (
     <>
       <section className="settings-section">

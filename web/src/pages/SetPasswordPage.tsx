@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useSession } from '../auth'
+import { usePageTitle } from '../pageTitle'
 import { MIN_PASSWORD_LENGTH, passwordProblem } from '../passwords'
 import { supabase } from '../supabase'
 
@@ -9,6 +10,7 @@ import { supabase } from '../supabase'
  * it's them, so unlike Settings this doesn't ask for the current password.
  */
 export function SetPasswordPage() {
+  usePageTitle('Set a password')
   const session = useSession()
   const navigate = useNavigate()
   const [password, setPassword] = useState('')

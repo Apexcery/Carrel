@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
 import { ApiError, apiSend } from '../api'
 import { useSession } from '../auth'
+import { usePageTitle } from '../pageTitle'
 import { passwordProblem } from '../passwords'
 import { PROFILE_KEY, useProfile } from '../profile'
 import { clearRecentSearches } from '../recentSearches'
@@ -12,6 +13,7 @@ import { useUsernameStatus } from '../username'
 
 /** One row per detail: label, current value, and a link that opens a small form in place. */
 export function AccountSettings() {
+  usePageTitle('Account')
   return (
     <div className="setting-rows">
       <UsernameRow />

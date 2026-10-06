@@ -6,7 +6,9 @@ import { Cover } from '../components/Cover'
 import { ErrorNotice } from '../components/ErrorNotice'
 import { Select } from '../components/Select'
 import { StarDisplay } from '../components/StarRating'
+import { Tooltip } from '../components/Tooltip'
 import { listNames, STATUS_LABELS } from '../format'
+import { usePageTitle } from '../pageTitle'
 import {
   defaultSort,
   directionLabel,
@@ -19,7 +21,7 @@ import {
   type SortKey,
 } from '../shelves'
 import type { LibraryItem } from '../types'
-import { NotFoundPage } from './NotFoundPage'
+import { NOT_FOUND_TITLE, NotFoundPage } from './NotFoundPage'
 
 /**
  * Every book on one of the reader's shelves, e.g. /shelves/want-to-read, with a filter and sort.
@@ -29,6 +31,8 @@ export function ShelfPage() {
   const status = statusFromSlug(useParams().slug)
   const [params, setParams] = useSearchParams()
   const library = useQuery({ queryKey: ['library'], queryFn: () => apiGet<LibraryItem[]>('/library') })
+  // Set here for an unknown shelf too, since this runs after NotFoundPage's own.
+  usePageTitle(status ? STATUS_LABELS[status] : NOT_FOUND_TITLE)
 
   if (!status) {
     return <NotFoundPage />
@@ -100,16 +104,17 @@ export function ShelfPage() {
                 onChange={(key) => update({ sort: key, dir: naturalDirection(key) })}
                 options={options.map((o) => ({ value: o.key, label: o.label }))}
               />
-              <button
-                type="button"
-                className="sort-direction"
-                aria-label={`${directionLabel(sort, dir)}. Reverse the order`}
-                // The arrow alone doesn't say what "up" means for this sort, so the tooltip does.
-                title={`${directionLabel(sort, dir)}. Click to reverse`}
-                onClick={() => update({ dir: dir === 'asc' ? 'desc' : 'asc' })}
-              >
-                <span aria-hidden="true">{dir === 'asc' ? '↑' : '↓'}</span>
-              </button>
+              {/* The arrow alone doesn't say what "up" means for this sort, so the tooltip does. */}
+              <Tooltip content={`${directionLabel(sort, dir)}. Click to reverse`}>
+                <button
+                  type="button"
+                  className="sort-direction"
+                  aria-label={`${directionLabel(sort, dir)}. Reverse the order`}
+                  onClick={() => update({ dir: dir === 'asc' ? 'desc' : 'asc' })}
+                >
+                  <span aria-hidden="true">{dir === 'asc' ? '↑' : '↓'}</span>
+                </button>
+              </Tooltip>
             </div>
           </Field>
         </div>

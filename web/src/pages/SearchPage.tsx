@@ -3,6 +3,7 @@ import { useInfiniteQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router'
 import { apiGet } from '../api'
 import { useSession } from '../auth'
+import { usePageTitle } from '../pageTitle'
 import { addRecentSearch } from '../recentSearches'
 import { Cover } from '../components/Cover'
 import { ErrorNotice } from '../components/ErrorNotice'
@@ -17,6 +18,7 @@ export function SearchPage() {
   const [params] = useSearchParams()
   const q = (params.get('q') ?? '').trim()
   const userId = useSession()?.user.id
+  usePageTitle('Search')
 
   // Every search shown here goes into this browser's recent searches, however it was reached.
   useEffect(() => {

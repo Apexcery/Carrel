@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, Navigate, useSearchParams } from 'react-router'
 import { useSession } from '../auth'
+import { usePageTitle } from '../pageTitle'
 import { MIN_PASSWORD_LENGTH, passwordProblem } from '../passwords'
 import { safeNext } from '../signIn'
 import { supabase } from '../supabase'
@@ -11,6 +12,13 @@ const TITLES: Record<Mode, string> = {
   'sign-in': 'Welcome back.',
   'sign-up': 'Take a seat.',
   reset: 'Forgot your password?',
+}
+
+/** The browser tab's title for each. */
+const PAGE_TITLES: Record<Mode, string> = {
+  'sign-in': 'Sign in',
+  'sign-up': 'Create an account',
+  reset: 'Reset your password',
 }
 
 const SUBMIT_LABELS: Record<Mode, string> = {
@@ -31,6 +39,7 @@ export function SignInPage() {
   const session = useSession()
   const [params] = useSearchParams()
   const [mode, setMode] = useState<Mode>(modeFrom(params.get('mode')))
+  usePageTitle(PAGE_TITLES[mode])
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)

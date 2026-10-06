@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router'
 import { apiGet } from '../api'
 import { ErrorNotice } from '../components/ErrorNotice'
+import { usePageTitle } from '../pageTitle'
 import type { BookDetail } from '../types'
 import { BookSkeleton } from './BookPage'
 
@@ -14,6 +15,7 @@ export function BookResolver({ source }: { source: 'hardcover' | 'openlibrary' }
   const { sourceId } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  usePageTitle()
 
   const book = useQuery({
     queryKey: ['book', source, sourceId],

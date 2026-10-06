@@ -4,6 +4,7 @@ import { useProfile } from '../profile'
 import { isMembersOnly, signInPath } from '../signIn'
 import { supabase } from '../supabase'
 import { SearchBox } from './SearchBox'
+import { Tooltip } from './Tooltip'
 
 export function Layout() {
   const [params] = useSearchParams()
@@ -57,13 +58,15 @@ function Account() {
   return (
     <div className="account">
       {signedIn && (
-        <span className="account-name" title={username ?? undefined}>
-          {username}
-        </span>
+        <Tooltip content={username}>
+          <span className="account-name">{username}</span>
+        </Tooltip>
       )}
-      <NavLink to="/settings" className="account-settings" aria-label="Settings" title="Settings">
-        <CogIcon />
-      </NavLink>
+      <Tooltip content="Settings">
+        <NavLink to="/settings" className="account-settings" aria-label="Settings">
+          <CogIcon />
+        </NavLink>
+      </Tooltip>
       {signedIn ? (
         <button type="button" className="link-button" onClick={signOut}>
           Sign out
