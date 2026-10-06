@@ -23,6 +23,13 @@ const queryClient = new QueryClient({
   },
 })
 
+// Cloudflare redirects a profile opened by its address, /@reader, to /%40reader. Put the @ back before the app starts,
+// so the address bar and copied links show it and the app sees the same path its own links use.
+if (window.location.pathname.includes('%40')) {
+  const { pathname, search, hash } = window.location
+  window.history.replaceState(window.history.state, '', pathname.replace(/%40/gi, '@') + search + hash)
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
