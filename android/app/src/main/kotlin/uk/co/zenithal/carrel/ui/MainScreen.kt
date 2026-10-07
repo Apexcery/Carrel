@@ -43,12 +43,16 @@ import kotlinx.serialization.Serializable
 import uk.co.zenithal.carrel.LocalContainer
 import uk.co.zenithal.carrel.auth.Session
 import uk.co.zenithal.carrel.data.GenreLink
+import uk.co.zenithal.carrel.data.ReadingStatus
 import uk.co.zenithal.carrel.data.Profile
 import uk.co.zenithal.carrel.ui.book.BookScreen
 import uk.co.zenithal.carrel.ui.book.ShelfPanelSignedOut
 import uk.co.zenithal.carrel.ui.browse.GenreScreen
 import uk.co.zenithal.carrel.ui.browse.GenresScreen
 import uk.co.zenithal.carrel.ui.browse.SeriesScreen
+import uk.co.zenithal.carrel.ui.library.LibraryScreen
+import uk.co.zenithal.carrel.ui.library.ShelfPanel
+import uk.co.zenithal.carrel.ui.library.ShelfScreen
 import uk.co.zenithal.carrel.ui.search.SearchScreen
 import uk.co.zenithal.carrel.ui.auth.SignInMode
 import uk.co.zenithal.carrel.ui.auth.SignInScreen
@@ -73,6 +77,8 @@ import kotlin.reflect.KClass
 @Serializable data class SeriesRoute(val hardcoverId: Int, val fromBook: Int? = null)
 @Serializable data class GenreRoute(val slug: String)
 @Serializable data object GenresRoute
+/** One of the reader's shelves, by its slug (want-to-read), not the enum, for the same reason as SignInRoute. */
+@Serializable data class ShelfRoute(val slug: String)
 
 private data class Tab(val route: Any, val type: KClass<*>, val label: String, val icon: ImageVector)
 
@@ -112,7 +118,7 @@ fun MainScreen(nav: NavHostController, session: Session, profile: Profile?) {
                     if (profile == null) {
                         ShelfPanelSignedOut({ signIn(SignInMode.SignIn) }, { signIn(SignInMode.SignUp) })
                     } else {
-                        Text("Shelving this book arrives in the next update.", style = Carrel.type.mono, color = Carrel.colors.inkSoft)
+                        ShelfPanel(it)
                     }
                 }
             }
@@ -127,18 +133,22 @@ fun MainScreen(nav: NavHostController, session: Session, profile: Profile?) {
                 GenresScreen(openGenre)
             }
             composable<LibraryRoute> {
-                TabPage {
-                    if (profile == null) {
+                if (profile == null) {
+                    TabPage {
                         SignInPrompt(
                             "Your library",
                             "Sign in to keep track of what you’re reading, what you’ve read, and what you want to read next.",
                             { signIn(SignInMode.SignIn) },
                             { signIn(SignInMode.SignUp) },
                         )
-                    } else {
-                        Placeholder("Your library", "Your shelves arrive in a coming update.")
                     }
+                } else {
+                    LibraryScreen(openBook) { status -> nav.navigate(ShelfRoute(status.slug)) }
                 }
+            }
+            composable<ShelfRoute> { backStackEntry ->
+                val status = ReadingStatus.fromSlug(backStackEntry.toRoute<ShelfRoute>().slug)
+                if (profile != null && status != null) ShelfScreen(status, openBook)
             }
             composable<YouRoute> {
                 TabPage { YouPage(session, profile, signIn, openLegal) }
@@ -168,11 +178,13 @@ private fun TabBar(nav: NavHostController) {
                     selected = current?.hasRoute(tab.type) == true,
                     onClick = {
                         nav.navigate(tab.route) {
-                            // One copy of each tab, keeping its place when coming back to it.
+                            // One copy of each tab, keeping its own page as it was (a search, a scroll position).
                             popUpTo(nav.graph.findStartDestination().id) { saveState = true }
                             launchSingleTop = true
                             restoreState = true
                         }
+                        // Always the tab's own page, not a book or shelf that was open on top of it.
+                        nav.popBackStack(tab.route, inclusive = false)
                     },
                     icon = { Icon(tab.icon, contentDescription = null) },
                     label = { Text(tab.label.uppercase(), style = Carrel.type.mono.copy(letterSpacing = 0.1.em)) },

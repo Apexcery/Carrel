@@ -195,11 +195,7 @@ fun SuggestionShelf(
             modifier = Modifier
                 .padding(top = 18.dp)
                 .fillMaxWidth()
-                .drawBehind {
-                    val edge = 6.dp.toPx()
-                    drawLine(colors.ruleStrong, Offset(0f, size.height - edge / 2), Offset(size.width, size.height - edge / 2), edge)
-                }
-                .padding(bottom = 24.dp),
+                .shelfEdge(colors.ruleStrong),
         ) {
             items(books, key = { it.hardcoverId }) { book ->
                 val upcoming = markUpcoming && book.releaseYear != null && book.releaseYear > THIS_YEAR
@@ -217,6 +213,12 @@ fun SuggestionShelf(
         }
     }
 }
+
+/** The website's thick shelf edge under a row of books, with room above it. */
+fun Modifier.shelfEdge(color: Color) = drawBehind {
+    val edge = 6.dp.toPx()
+    drawLine(color, Offset(0f, size.height - edge / 2), Offset(size.width, size.height - edge / 2), edge)
+}.padding(bottom = 24.dp)
 
 /** Title, authors, and place in its series, for screen readers. */
 private fun describe(book: BookSuggestion): String {

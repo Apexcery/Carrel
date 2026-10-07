@@ -44,6 +44,8 @@ fun CarrelTheme(dark: Boolean = isSystemInDarkTheme(), accent: Accent = Accent.R
     val typography = Typography(
         displayLarge = type.displayLarge,
         displayMedium = type.displayMedium,
+        // The headline of Material's date picker.
+        headlineLarge = type.heading,
         headlineMedium = type.heading,
         titleMedium = type.body,
         bodyLarge = type.body,
