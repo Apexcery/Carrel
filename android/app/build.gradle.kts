@@ -82,6 +82,8 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.browser)
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
