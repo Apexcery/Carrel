@@ -37,7 +37,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.Hyphens
+import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -95,17 +100,19 @@ fun Cover(url: String?, title: String, author: String?, width: Dp, modifier: Mod
 private fun Binding(title: String, author: String?, width: Dp, modifier: Modifier) {
     val small = width < 80.dp
     val colour = BINDINGS[(title.fold(0L) { h, c -> (h * 31 + c.code) and 0xFFFFFFFFL } % BINDINGS.size).toInt()]
+    val sidePadding = if (small) 6.dp else width * 0.1f
+    val room = width - sidePadding * 2
     Column(
         modifier
             .background(colour)
             .semantics { contentDescription = "No cover for $title" }
-            .padding(horizontal = if (small) 6.dp else width * 0.1f, vertical = if (small) 8.dp else width * 0.12f),
+            .padding(horizontal = sidePadding, vertical = if (small) 8.dp else width * 0.12f),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
         val rule = BINDING_TEXT.copy(alpha = 0.5f)
         Text(
             title,
-            style = if (small) Carrel.type.mono else Carrel.type.body,
+            style = fitWords(title, if (small) Carrel.type.mono else Carrel.type.body, room),
             color = BINDING_TEXT,
             maxLines = if (small) 4 else 5,
             overflow = TextOverflow.Ellipsis,
@@ -117,8 +124,33 @@ private fun Binding(title: String, author: String?, width: Dp, modifier: Modifie
                 .padding(vertical = 4.dp),
         )
         if (author != null && !small) {
-            Text(author.uppercase(), style = Carrel.type.mono.copy(letterSpacing = 0.1.em), color = BINDING_TEXT.copy(alpha = 0.85f), maxLines = 2)
+            val name = author.uppercase()
+            Text(name, style = fitWords(name, Carrel.type.mono.copy(letterSpacing = 0.1.em), room), color = BINDING_TEXT.copy(alpha = 0.85f), maxLines = 2)
         }
+    }
+}
+
+/** The smallest a binding's text shrinks to, so a long word fits on a line rather than breaking. */
+private const val MIN_TEXT_SCALE = 0.7f
+
+/**
+ * The style, made just small enough (down to MIN_TEXT_SCALE) for the text's longest word to fit in `room`, so words
+ * don't break mid-way on a narrow cover. A word still too long is hyphenated rather than split bare.
+ */
+@Composable
+private fun fitWords(text: String, style: TextStyle, room: Dp): TextStyle {
+    val measurer = rememberTextMeasurer()
+    val roomPx = with(LocalDensity.current) { room.toPx() }
+    return remember(text, style, roomPx) {
+        val widest = text.split(' ').maxOfOrNull { measurer.measure(it, style, softWrap = false, maxLines = 1).size.width } ?: 0
+        val scale = if (widest > roomPx) (roomPx / widest).coerceAtLeast(MIN_TEXT_SCALE) else 1f
+        val fitted = style.copy(
+            fontSize = style.fontSize * scale,
+            // Line heights given in sp shrink with the text; ones in em already follow it.
+            lineHeight = if (style.lineHeight.isSp) style.lineHeight * scale else style.lineHeight,
+        )
+        // Only hyphenate when a word is too long even at the smallest size; otherwise words that fit stay whole.
+        if (widest * scale > roomPx) fitted.copy(hyphens = Hyphens.Auto, lineBreak = LineBreak.Paragraph) else fitted
     }
 }
 

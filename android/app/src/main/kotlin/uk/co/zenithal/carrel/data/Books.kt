@@ -121,6 +121,19 @@ data class GenreShelves(
     val newReleases: List<BookSuggestion>,
 )
 
+/** Popular books in the reader's top genre; genre is null until their books have one. */
+@Serializable
+data class GenrePicks(val genre: String?, val books: List<BookSuggestion>)
+
+/** The Discover tab's shelves, the same for everyone. */
+@Serializable
+data class DiscoverShelves(
+    val popular: List<BookSuggestion>,
+    val newReleases: List<BookSuggestion>,
+    val comingSoon: List<BookSuggestion>,
+    val topRated: List<BookSuggestion>,
+)
+
 /** Only the part of a library entry the browsing screens use: which books the reader has, to leave out suggestions. */
 @Serializable
 data class OwnedBook(val book: OwnedBookIds)

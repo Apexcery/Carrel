@@ -2,6 +2,7 @@ package uk.co.zenithal.carrel.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -19,16 +20,19 @@ import uk.co.zenithal.carrel.data.OwnedBook
 /** Something a screen loads from the API, and a way to try again after it fails. */
 class Loadable<T>(val loaded: Loaded<T>, val retry: () -> Unit)
 
-/** The saved copy of `path` straight away, then a fresh one (see Store). Nothing while `path` is null. */
+/**
+ * The saved copy of `path` straight away, then a fresh one (see Store). Nothing while `path` is null. A new path starts
+ * afresh, rather than showing the old path's data until the new one arrives.
+ */
 @Composable
-fun <T> rememberLoaded(path: String?, serializer: KSerializer<T>): Loadable<T> {
+fun <T> rememberLoaded(path: String?, serializer: KSerializer<T>): Loadable<T> = key(path) {
     val store = LocalContainer.current.store
     var attempt by remember { mutableIntStateOf(0) }
-    val flow: Flow<Loaded<T>> = remember(path, attempt) {
+    val flow: Flow<Loaded<T>> = remember(attempt) {
         if (path == null) flowOf(Loaded(null, refreshing = false, error = null)) else store.observe(path, serializer)
     }
     val loaded by flow.collectAsStateWithLifecycle(Loaded<T>(null, refreshing = path != null, error = null))
-    return Loadable(loaded) { attempt++ }
+    Loadable(loaded) { attempt++ }
 }
 
 /**
