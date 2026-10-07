@@ -22,6 +22,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
@@ -41,7 +42,14 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import uk.co.zenithal.carrel.LocalContainer
 import uk.co.zenithal.carrel.auth.Session
+import uk.co.zenithal.carrel.data.GenreLink
 import uk.co.zenithal.carrel.data.Profile
+import uk.co.zenithal.carrel.ui.book.BookScreen
+import uk.co.zenithal.carrel.ui.book.ShelfPanelSignedOut
+import uk.co.zenithal.carrel.ui.browse.GenreScreen
+import uk.co.zenithal.carrel.ui.browse.GenresScreen
+import uk.co.zenithal.carrel.ui.browse.SeriesScreen
+import uk.co.zenithal.carrel.ui.search.SearchScreen
 import uk.co.zenithal.carrel.ui.auth.SignInMode
 import uk.co.zenithal.carrel.ui.auth.SignInScreen
 import uk.co.zenithal.carrel.ui.components.Gap
@@ -60,6 +68,11 @@ import kotlin.reflect.KClass
 @Serializable data class SignInRoute(val mode: String) {
     constructor(mode: SignInMode) : this(mode.name)
 }
+/** A book by the API path that loads it: /books/12, /books/hardcover/123, or /books/openlibrary/OL1W. */
+@Serializable data class BookRoute(val path: String)
+@Serializable data class SeriesRoute(val hardcoverId: Int, val fromBook: Int? = null)
+@Serializable data class GenreRoute(val slug: String)
+@Serializable data object GenresRoute
 
 private data class Tab(val route: Any, val type: KClass<*>, val label: String, val icon: ImageVector)
 
@@ -78,18 +91,40 @@ fun MainScreen(nav: NavHostController, session: Session, profile: Profile?) {
     val openLegal = { path: String -> openWebsitePage(context, path, paper) }
     val signIn = { mode: SignInMode -> nav.navigate(SignInRoute(mode)) }
     val entry by nav.currentBackStackEntryAsState()
-    val onTab = TABS.any { tab -> entry?.destination?.hasRoute(tab.type) == true }
+    val signingIn = entry?.destination?.hasRoute(SignInRoute::class) == true
+    val openBook = { path: String -> nav.navigate(BookRoute(path)) }
+    val openSeries = { id: Int, fromBook: Int? -> nav.navigate(SeriesRoute(id, fromBook)) }
+    val openGenre = { genre: GenreLink -> nav.navigate(GenreRoute(genre.slug)) }
 
     Scaffold(
         containerColor = paper,
-        bottomBar = { if (onTab) TabBar(nav) },
+        bottomBar = { if (!signingIn) TabBar(nav) },
     ) { padding ->
         NavHost(nav, startDestination = HomeRoute, modifier = Modifier.padding(padding)) {
             composable<HomeRoute> {
-                TabPage { Placeholder("What are you reading?", "Suggestions arrive in the next update.") }
+                TabPage { Placeholder("What are you reading?", "Suggestions arrive in a coming update.") }
             }
             composable<SearchRoute> {
-                TabPage { Placeholder("Search", "Search arrives in the next update.") }
+                SearchScreen(openBook, openSeries, openGenre) { nav.navigate(GenresRoute) }
+            }
+            composable<BookRoute> { backStackEntry ->
+                BookScreen(backStackEntry.toRoute<BookRoute>().path, openBook, openSeries, openGenre) {
+                    if (profile == null) {
+                        ShelfPanelSignedOut({ signIn(SignInMode.SignIn) }, { signIn(SignInMode.SignUp) })
+                    } else {
+                        Text("Shelving this book arrives in the next update.", style = Carrel.type.mono, color = Carrel.colors.inkSoft)
+                    }
+                }
+            }
+            composable<SeriesRoute> { backStackEntry ->
+                val route = backStackEntry.toRoute<SeriesRoute>()
+                SeriesScreen(route.hardcoverId, route.fromBook, openBook)
+            }
+            composable<GenreRoute> { backStackEntry ->
+                GenreScreen(backStackEntry.toRoute<GenreRoute>().slug, openBook)
+            }
+            composable<GenresRoute> {
+                GenresScreen(openGenre)
             }
             composable<LibraryRoute> {
                 TabPage {
@@ -122,13 +157,15 @@ fun MainScreen(nav: NavHostController, session: Session, profile: Profile?) {
 @Composable
 private fun TabBar(nav: NavHostController) {
     val colors = Carrel.colors
-    val entry by nav.currentBackStackEntryAsState()
+    // The tab a page was opened from stays selected while it's showing.
+    val stack by nav.currentBackStack.collectAsState()
+    val current = stack.lastOrNull { e -> TABS.any { e.destination.hasRoute(it.type) } }?.destination
     Column {
         HorizontalDivider(color = colors.rule)
         NavigationBar(containerColor = colors.paper, tonalElevation = 0.dp) {
             TABS.forEach { tab ->
                 NavigationBarItem(
-                    selected = entry?.destination?.hasRoute(tab.type) == true,
+                    selected = current?.hasRoute(tab.type) == true,
                     onClick = {
                         nav.navigate(tab.route) {
                             // One copy of each tab, keeping its place when coming back to it.
