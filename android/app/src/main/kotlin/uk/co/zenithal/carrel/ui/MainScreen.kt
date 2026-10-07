@@ -50,6 +50,7 @@ import uk.co.zenithal.carrel.ui.book.ShelfPanelSignedOut
 import uk.co.zenithal.carrel.ui.browse.GenreScreen
 import uk.co.zenithal.carrel.ui.browse.GenresScreen
 import uk.co.zenithal.carrel.ui.browse.SeriesScreen
+import uk.co.zenithal.carrel.ui.home.HomeScreen
 import uk.co.zenithal.carrel.ui.library.LibraryScreen
 import uk.co.zenithal.carrel.ui.library.ShelfPanel
 import uk.co.zenithal.carrel.ui.library.ShelfScreen
@@ -108,7 +109,7 @@ fun MainScreen(nav: NavHostController, session: Session, profile: Profile?) {
     ) { padding ->
         NavHost(nav, startDestination = HomeRoute, modifier = Modifier.padding(padding)) {
             composable<HomeRoute> {
-                TabPage { Placeholder("What are you reading?", "Suggestions arrive in a coming update.") }
+                HomeScreen(signedIn = profile != null, openBook)
             }
             composable<SearchRoute> {
                 SearchScreen(openBook, openSeries, openGenre) { nav.navigate(GenresRoute) }
@@ -212,14 +213,6 @@ private fun TabPage(content: @Composable ColumnScope.() -> Unit) {
             .padding(horizontal = 16.dp, vertical = 24.dp),
         content = content,
     )
-}
-
-/** Stands in for a tab that later steps fill in. */
-@Composable
-private fun Placeholder(title: String, text: String) {
-    Text(title, style = Carrel.type.displayLarge, color = Carrel.colors.ink)
-    Gap(16)
-    Text(text, style = Carrel.type.body, color = Carrel.colors.inkSoft)
 }
 
 /** The reader, and (for now) the privacy and copyright pages and signing out. Settings join it later. */
