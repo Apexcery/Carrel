@@ -107,6 +107,29 @@ export interface GenrePicks {
   books: BookSuggestion[]
 }
 
+export interface GenreLink {
+  name: string
+  slug: string
+}
+
+/**
+ * The genres listed for browsing, in two groups, and the rest of Hardcover's well-used genres (most used first) for
+ * searching; other is empty while Hardcover can't be reached.
+ */
+export interface GenreIndex {
+  fiction: GenreLink[]
+  nonfiction: GenreLink[]
+  other: GenreLink[]
+}
+
+/** A genre's page: its most read books, its best rated, and its popular new releases. */
+export interface GenreShelves {
+  name: string
+  popular: BookSuggestion[]
+  topRated: BookSuggestion[]
+  newReleases: BookSuggestion[]
+}
+
 /** The Discover shelves on the home page, the same for every reader. */
 export interface DiscoverShelves {
   popular: BookSuggestion[]

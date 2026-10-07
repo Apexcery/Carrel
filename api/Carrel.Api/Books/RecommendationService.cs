@@ -5,8 +5,8 @@ using Microsoft.Extensions.Caching.Memory;
 namespace Carrel.Api.Books;
 
 /// <summary>
-/// Book suggestions from Hardcover: books like a given one, more by its author, what's popular this month, and the
-/// next book in each series a reader is working through. Lists are cached in memory and shared by every reader, so
+/// Book suggestions from Hardcover: books like a given one, more by its author, what's popular this month, the best of
+/// a genre, and the next book in each series a reader is working through. Lists are cached in memory and shared by every reader, so
 /// they hold more books than the website shows; it leaves out books the reader already has.
 /// </summary>
 public class RecommendationService(
@@ -44,6 +44,14 @@ public class RecommendationService(
     // Popular in a genre: books with the genre in their top GenreTopTags, from the GenreFetchSize most read with it at all.
     private const int GenreTopTags = 3;
     private const int GenreFetchSize = 80;
+
+    // A genre's top rated: books with at least this many ratings, fewer than Discover asks for, since it's one genre.
+    private const int GenreTopRatedMinRatings = 200;
+
+    // Genres found by searching: those on at least this many books across Hardcover (about 500 of them, so 6 requests a
+    // day), up to GenrePages pages of 100.
+    private const int MinGenreBooks = 100;
+    private const int GenrePages = 10;
 
     // Umbrella genres that say little about what a reader likes, left out when choosing their top genre.
     private static readonly HashSet<string> BroadGenres = new(StringComparer.OrdinalIgnoreCase)
@@ -149,19 +157,8 @@ public class RecommendationService(
         {
             try
             {
-                // Books whose own genre list has it (any reader's tag would match very popular books in any genre). A dictionary
-                // keeps the "Genre" key's capital, which the request's camelCase naming would lower.
-                var list = (await hardcover.ListBooksAsync(
-                [
-                    CatalogueFilter(new()
-                    {
-                        ["cached_tags"] = new { _contains = new Dictionary<string, object> { ["Genre"] = new[] { new { tag = genre } } } },
-                    }),
-                ], GenreFetchSize, ct))[0];
-                // And only where it's one of the book's main genres, not its eighth.
-                var inGenre = list.Where(b => (b.Genres ?? []).Take(GenreTopTags)
-                    .Any(t => string.Equals(t.Tag, genre, StringComparison.OrdinalIgnoreCase)));
-                books = OnePerSeries(inGenre).Take(ListSize).Select(ToSuggestion).ToArray();
+                var list = (await hardcover.ListBooksAsync([CatalogueFilter(InGenre(genre))], GenreFetchSize, ct))[0];
+                books = OnePerSeries(MainlyIn(list, genre)).Take(ListSize).Select(ToSuggestion).ToArray();
             }
             catch (BookSourceUnavailableException)
             {
@@ -171,6 +168,104 @@ public class RecommendationService(
         }
         return new GenrePicks(genre, await suppression.ApplyAsync(books, ct));
     }
+
+    /// <summary>
+    /// The genres listed for browsing, and the rest of Hardcover's genres on at least MinGenreBooks books for searching,
+    /// fetched once a day. Hardcover's list has junk from badly split or joined tags (" etc", "A|B"), left out by dropping
+    /// names with spaces at either end or a |, and names differing only in capitals, where the most used is kept.
+    /// </summary>
+    public async Task<GenreIndex> GetGenreIndexAsync(CancellationToken ct)
+    {
+        if (!cache.TryGetValue("genre-index", out GenreIndex? index) || index is null)
+        {
+            List<HardcoverTag> tags;
+            try
+            {
+                tags = await hardcover.GetGenreTagsAsync(MinGenreBooks, GenrePages, ct);
+            }
+            catch (BookSourceUnavailableException)
+            {
+                return new GenreIndex(Genres.Fiction, Genres.Nonfiction, []); // Try again next time.
+            }
+            var seen = Genres.Listed.Select(g => g.Slug).ToHashSet();
+            var other = tags
+                .Select(t => t.Tag)
+                .Where(name => name.Length > 0 && name == name.Trim() && !name.Contains('|'))
+                .Select(Genres.ToLink)
+                .Where(g => g.Slug.Length > 0 && seen.Add(g.Slug))
+                .ToArray();
+            index = new GenreIndex(Genres.Fiction, Genres.Nonfiction, other);
+            cache.Set("genre-index", index, new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = DiscoverCacheDuration });
+        }
+        return index;
+    }
+
+    /// <summary>
+    /// The genre's exact name for its address: one listed for browsing or searching, or else one on a stored book. Null for any other,
+    /// so made-up addresses never reach Hardcover.
+    /// </summary>
+    public async Task<string?> FindGenreAsync(string slug, CancellationToken ct)
+    {
+        var index = await GetGenreIndexAsync(ct);
+        var known = Genres.Listed.Concat(index.Other).FirstOrDefault(g => g.Slug == slug);
+        if (known is not null)
+        {
+            return known.Name;
+        }
+        var names = await db.Genres.Select(g => g.Name).ToListAsync(ct);
+        return names.Where(name => Genres.Slug(name) == slug).Order(StringComparer.Ordinal).FirstOrDefault();
+    }
+
+    /// <summary>
+    /// A genre page's shelves, the same for everyone: the genre's most read books, its best rated, and the most read of
+    /// those out in the last few months. Each counts only books with the genre among their main ones.
+    /// </summary>
+    public async Task<GenreShelves> GetGenreShelvesAsync(string genre, CancellationToken ct)
+    {
+        var key = $"genre-shelves:{genre}";
+        if (!cache.TryGetValue(key, out GenreShelves? shelves) || shelves is null)
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            // Popular and new releases are both ordered by readers, so they share a request; top rated is by rating.
+            var byReaders = await hardcover.ListBooksAsync(
+            [
+                CatalogueFilter(InGenre(genre)),
+                CatalogueFilter(InGenre(genre, new() { ["release_date"] = new { _gte = today.AddDays(-NewReleaseDays), _lte = today } })),
+            ], GenreFetchSize, ct);
+            var topRated = (await hardcover.ListBooksAsync(
+                [CatalogueFilter(InGenre(genre, new() { ["ratings_count"] = new { _gte = GenreTopRatedMinRatings } }))],
+                GenreFetchSize, ct, "{rating: desc}"))[0];
+
+            shelves = new GenreShelves(
+                genre,
+                Shelf(MainlyIn(byReaders[0], genre)),
+                Shelf(MainlyIn(topRated, genre), earliestInSeries: false),
+                Shelf(MainlyIn(byReaders[1], genre)));
+            cache.Set(key, shelves, new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = DiscoverCacheDuration });
+        }
+        return shelves with
+        {
+            Popular = await suppression.ApplyAsync(shelves.Popular, ct),
+            TopRated = await suppression.ApplyAsync(shelves.TopRated, ct),
+            NewReleases = await suppression.ApplyAsync(shelves.NewReleases, ct),
+        };
+    }
+
+    /// <summary>
+    /// Conditions for books whose own genre list has the genre (any reader's tag would match very popular books in any
+    /// genre), plus any others given. A dictionary keeps the "Genre" key's capital, which the request's camelCase naming
+    /// would lower.
+    /// </summary>
+    private static Dictionary<string, object> InGenre(string genre, Dictionary<string, object>? conditions = null)
+    {
+        conditions ??= [];
+        conditions["cached_tags"] = new { _contains = new Dictionary<string, object> { ["Genre"] = new[] { new { tag = genre } } } };
+        return conditions;
+    }
+
+    /// <summary>Only the books where the genre is one of their main genres, not their eighth.</summary>
+    private static IEnumerable<HardcoverListedBook> MainlyIn(IEnumerable<HardcoverListedBook> books, string genre) =>
+        books.Where(b => (b.Genres ?? []).Take(GenreTopTags).Any(t => string.Equals(t.Tag, genre, StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>
     /// For each series the reader has read or is reading, the next numbered book, unless it's already in their library.

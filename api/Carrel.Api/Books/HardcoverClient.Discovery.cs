@@ -1,6 +1,6 @@
 namespace Carrel.Api.Books;
 
-// Queries behind book suggestions: a book's tags, lists of books matching filters, and what's trending.
+// Queries behind book suggestions: a book's tags, lists of books matching filters, what's trending, and the genres.
 public partial class HardcoverClient
 {
     private const string BookTagsQuery = """
@@ -22,6 +22,14 @@ public partial class HardcoverClient
         }
         """;
 
+    private const string GenreTagsQuery = """
+        query GenreTags($minBooks: Int!, $offset: Int!) {
+          tags(where: {tag_category: {slug: {_eq: "genre"}}, count: {_gte: $minBooks}}, order_by: [{count: desc}, {id: asc}], limit: 100, offset: $offset) {
+            tag count
+          }
+        }
+        """;
+
     private const string ListedBookFields = """
         id title release_year users_count cached_image genres: cached_tags(path: "Genre")
         contributions { contribution author { id name } }
@@ -34,6 +42,25 @@ public partial class HardcoverClient
     /// <summary>The book's genre and mood tags, with its authors and series; null if not found.</summary>
     public async Task<HardcoverBookTags?> GetBookTagsAsync(int id, CancellationToken ct) =>
         (await QueryAsync<HardcoverBookTagsData>(BookTagsQuery, new { id }, ct)).BooksByPk;
+
+    /// <summary>
+    /// Genre tags on at least <paramref name="minBooks"/> books, most used first, up to <paramref name="maxPages"/> pages
+    /// of 100 (the most Hardcover returns at once), each a request.
+    /// </summary>
+    public async Task<List<HardcoverTag>> GetGenreTagsAsync(int minBooks, int maxPages, CancellationToken ct)
+    {
+        var tags = new List<HardcoverTag>();
+        for (var page = 0; page < maxPages; page++)
+        {
+            var batch = (await QueryAsync<HardcoverGenreTagsData>(GenreTagsQuery, new { minBooks, offset = page * 100 }, ct)).Tags;
+            tags.AddRange(batch);
+            if (batch.Length < 100)
+            {
+                break;
+            }
+        }
+        return tags;
+    }
 
     /// <summary>Ids of the books most read on Hardcover between the two dates, most first.</summary>
     public async Task<int[]> GetTrendingIdsAsync(DateOnly from, DateOnly to, int limit, CancellationToken ct) =>

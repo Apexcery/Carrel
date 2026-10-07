@@ -967,6 +967,66 @@ a.primary-button:hover {
   color: var(--ink-soft);
 }
 
+/* A genre that links to its page is clickable across its whole label. */
+.genres li:has(a) {
+  padding: 0;
+}
+
+.genres a {
+  display: block;
+  padding: 0.3em 0.7em;
+  color: inherit;
+  text-decoration: none;
+}
+
+.genres li:has(a:hover) {
+  border-color: var(--accent);
+}
+
+.genres a:hover {
+  color: var(--accent);
+}
+
+/* A link to more genres after a row of them: plain text set apart, not another genre. */
+.genres li.genres-more {
+  margin-left: 10px;
+  border: 0;
+}
+
+.genres-more a {
+  padding-inline: 0;
+  color: var(--accent);
+}
+
+.genres-more a:hover {
+  text-decoration: underline;
+}
+
+/* The genres page's search, above the lists. */
+.genre-search {
+  display: block;
+  max-width: 360px;
+}
+
+.genre-search input {
+  width: 100%;
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  background: var(--paper-raised);
+  padding: 0.55em 0.85em;
+  font-size: var(--text-body);
+}
+
+.genre-search input::placeholder {
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+.genre-search + .genres,
+.genre-search + p {
+  margin-top: 24px;
+}
+
 .description {
   max-width: 38em;
   font-size: var(--text-body);
