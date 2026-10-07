@@ -24,7 +24,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -37,10 +36,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.toRoute
-import io.github.jan.supabase.auth.auth
-import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
-import uk.co.zenithal.carrel.LocalContainer
 import uk.co.zenithal.carrel.auth.Session
 import uk.co.zenithal.carrel.data.GenreLink
 import uk.co.zenithal.carrel.data.ReadingStatus
@@ -51,6 +47,7 @@ import uk.co.zenithal.carrel.ui.browse.GenreScreen
 import uk.co.zenithal.carrel.ui.browse.GenresScreen
 import uk.co.zenithal.carrel.ui.browse.SeriesScreen
 import uk.co.zenithal.carrel.ui.home.HomeScreen
+import uk.co.zenithal.carrel.ui.you.ProfileSection
 import uk.co.zenithal.carrel.ui.library.LibraryScreen
 import uk.co.zenithal.carrel.ui.library.ShelfPanel
 import uk.co.zenithal.carrel.ui.library.ShelfScreen
@@ -58,7 +55,6 @@ import uk.co.zenithal.carrel.ui.search.SearchScreen
 import uk.co.zenithal.carrel.ui.auth.SignInMode
 import uk.co.zenithal.carrel.ui.auth.SignInScreen
 import uk.co.zenithal.carrel.ui.components.Gap
-import uk.co.zenithal.carrel.ui.components.Kicker
 import uk.co.zenithal.carrel.ui.components.LinkButton
 import uk.co.zenithal.carrel.ui.components.SectionTitle
 import uk.co.zenithal.carrel.ui.components.SignInPrompt
@@ -215,17 +211,12 @@ private fun TabPage(content: @Composable ColumnScope.() -> Unit) {
     )
 }
 
-/** The reader, and (for now) the privacy and copyright pages and signing out. Settings join it later. */
+/** The reader's profile, and the privacy and copyright pages. Settings, with the account and signing out, join it later. */
 @Composable
 private fun YouPage(session: Session, profile: Profile?, signIn: (SignInMode) -> Unit, openLegal: (String) -> Unit) {
-    val supabase = LocalContainer.current.supabase
-    val scope = rememberCoroutineScope()
     val colors = Carrel.colors
     if (profile != null && session is Session.SignedIn) {
-        Kicker("You")
-        Text("@${profile.username}", style = Carrel.type.displayMedium, color = colors.ink, modifier = Modifier.padding(top = 8.dp))
-        session.email?.let { Text(it, style = Carrel.type.mono, color = colors.inkSoft, modifier = Modifier.padding(top = 6.dp)) }
-        LinkButton("Sign out", { scope.launch { supabase.auth.signOut() } }, Modifier.padding(top = 12.dp), color = colors.ink)
+        ProfileSection(profile)
     } else {
         SignInPrompt(
             "Your account",

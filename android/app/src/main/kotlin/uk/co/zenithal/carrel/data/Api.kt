@@ -57,6 +57,10 @@ class ApiClient(
         call(HttpMethod.Delete, path, null)
     }
 
+    /** A DELETE that returns what's left, e.g. the remaining reading goals. */
+    suspend fun <T> delete(path: String, resultSerializer: KSerializer<T>): T =
+        json.decodeFromString(resultSerializer, call(HttpMethod.Delete, path, null).bodyAsText())
+
     private suspend fun call(method: HttpMethod, path: String, body: String?): HttpResponse {
         val response = try {
             http.request("$baseUrl$path") {
