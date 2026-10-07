@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="icon_paper">#f3ede1</color>
+    <!-- The window behind the app as it opens, before Compose draws: the paper colour in each theme. -->
+    <color name="paper">#f3ede1</color>
+</resources>

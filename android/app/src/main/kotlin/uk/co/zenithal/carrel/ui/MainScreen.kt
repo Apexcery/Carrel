@@ -1,0 +1,203 @@
+package uk.co.zenithal.carrel.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.List
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+import androidx.navigation.NavDestination.Companion.hasRoute
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.toRoute
+import io.github.jan.supabase.auth.auth
+import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
+import uk.co.zenithal.carrel.LocalContainer
+import uk.co.zenithal.carrel.auth.Session
+import uk.co.zenithal.carrel.data.Profile
+import uk.co.zenithal.carrel.ui.auth.SignInMode
+import uk.co.zenithal.carrel.ui.auth.SignInScreen
+import uk.co.zenithal.carrel.ui.components.Gap
+import uk.co.zenithal.carrel.ui.components.Kicker
+import uk.co.zenithal.carrel.ui.components.LinkButton
+import uk.co.zenithal.carrel.ui.components.SectionTitle
+import uk.co.zenithal.carrel.ui.components.SignInPrompt
+import uk.co.zenithal.carrel.ui.theme.Carrel
+import kotlin.reflect.KClass
+
+@Serializable data object HomeRoute
+@Serializable data object SearchRoute
+@Serializable data object LibraryRoute
+@Serializable data object YouRoute
+// The mode goes by name: release builds rename classes, and navigation couldn't then find an enum argument's class.
+@Serializable data class SignInRoute(val mode: String) {
+    constructor(mode: SignInMode) : this(mode.name)
+}
+
+private data class Tab(val route: Any, val type: KClass<*>, val label: String, val icon: ImageVector)
+
+private val TABS = listOf(
+    Tab(HomeRoute, HomeRoute::class, "Home", Icons.Outlined.Home),
+    Tab(SearchRoute, SearchRoute::class, "Search", Icons.Outlined.Search),
+    Tab(LibraryRoute, LibraryRoute::class, "Library", Icons.AutoMirrored.Outlined.List),
+    Tab(YouRoute, YouRoute::class, "You", Icons.Outlined.Person),
+)
+
+/** The four tabs, and the pages opened from them. `profile` is null when signed out. */
+@Composable
+fun MainScreen(nav: NavHostController, session: Session, profile: Profile?) {
+    val context = LocalContext.current
+    val paper = Carrel.colors.paper
+    val openLegal = { path: String -> openWebsitePage(context, path, paper) }
+    val signIn = { mode: SignInMode -> nav.navigate(SignInRoute(mode)) }
+    val entry by nav.currentBackStackEntryAsState()
+    val onTab = TABS.any { tab -> entry?.destination?.hasRoute(tab.type) == true }
+
+    Scaffold(
+        containerColor = paper,
+        bottomBar = { if (onTab) TabBar(nav) },
+    ) { padding ->
+        NavHost(nav, startDestination = HomeRoute, modifier = Modifier.padding(padding)) {
+            composable<HomeRoute> {
+                TabPage { Placeholder("What are you reading?", "Suggestions arrive in the next update.") }
+            }
+            composable<SearchRoute> {
+                TabPage { Placeholder("Search", "Search arrives in the next update.") }
+            }
+            composable<LibraryRoute> {
+                TabPage {
+                    if (profile == null) {
+                        SignInPrompt(
+                            "Your library",
+                            "Sign in to keep track of what you’re reading, what you’ve read, and what you want to read next.",
+                            { signIn(SignInMode.SignIn) },
+                            { signIn(SignInMode.SignUp) },
+                        )
+                    } else {
+                        Placeholder("Your library", "Your shelves arrive in a coming update.")
+                    }
+                }
+            }
+            composable<YouRoute> {
+                TabPage { YouPage(session, profile, signIn, openLegal) }
+            }
+            composable<SignInRoute> { backStackEntry ->
+                // Signing in changes the session; then this page has done its job.
+                LaunchedEffect(session) {
+                    if (session is Session.SignedIn) nav.popBackStack()
+                }
+                SignInScreen(SignInMode.valueOf(backStackEntry.toRoute<SignInRoute>().mode), openLegal)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TabBar(nav: NavHostController) {
+    val colors = Carrel.colors
+    val entry by nav.currentBackStackEntryAsState()
+    Column {
+        HorizontalDivider(color = colors.rule)
+        NavigationBar(containerColor = colors.paper, tonalElevation = 0.dp) {
+            TABS.forEach { tab ->
+                NavigationBarItem(
+                    selected = entry?.destination?.hasRoute(tab.type) == true,
+                    onClick = {
+                        nav.navigate(tab.route) {
+                            // One copy of each tab, keeping its place when coming back to it.
+                            popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    icon = { Icon(tab.icon, contentDescription = null) },
+                    label = { Text(tab.label.uppercase(), style = Carrel.type.mono.copy(letterSpacing = 0.1.em)) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = colors.accent,
+                        selectedTextColor = colors.ink,
+                        indicatorColor = colors.paperRaised,
+                        unselectedIconColor = colors.inkSoft,
+                        unselectedTextColor = colors.inkSoft,
+                    ),
+                )
+            }
+        }
+    }
+}
+
+/** A tab's page: paper, the website's 16px gutter, scrolling. */
+@Composable
+private fun TabPage(content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Carrel.colors.paper)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 24.dp),
+        content = content,
+    )
+}
+
+/** Stands in for a tab that later steps fill in. */
+@Composable
+private fun Placeholder(title: String, text: String) {
+    Text(title, style = Carrel.type.displayLarge, color = Carrel.colors.ink)
+    Gap(16)
+    Text(text, style = Carrel.type.body, color = Carrel.colors.inkSoft)
+}
+
+/** The reader, and (for now) the privacy and copyright pages and signing out. Settings join it later. */
+@Composable
+private fun YouPage(session: Session, profile: Profile?, signIn: (SignInMode) -> Unit, openLegal: (String) -> Unit) {
+    val supabase = LocalContainer.current.supabase
+    val scope = rememberCoroutineScope()
+    val colors = Carrel.colors
+    if (profile != null && session is Session.SignedIn) {
+        Kicker("You")
+        Text("@${profile.username}", style = Carrel.type.displayMedium, color = colors.ink, modifier = Modifier.padding(top = 8.dp))
+        session.email?.let { Text(it, style = Carrel.type.mono, color = colors.inkSoft, modifier = Modifier.padding(top = 6.dp)) }
+        LinkButton("Sign out", { scope.launch { supabase.auth.signOut() } }, Modifier.padding(top = 12.dp), color = colors.ink)
+    } else {
+        SignInPrompt(
+            "Your account",
+            "Sign in or create an account to keep a library, set reading goals, and share your profile.",
+            { signIn(SignInMode.SignIn) },
+            { signIn(SignInMode.SignUp) },
+        )
+    }
+    Gap(48)
+    SectionTitle("About Carrel")
+    Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        LinkButton("Privacy", { openLegal("/privacy") })
+        LinkButton("Copyright", { openLegal("/copyright") })
+    }
+    Gap(16)
+    Text("Book data from Hardcover and Open Library.", style = Carrel.type.mono, color = colors.inkSoft)
+}

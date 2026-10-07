@@ -13,8 +13,8 @@ export function PrivacyPage() {
       </header>
 
       <p className="legal-lede">
-        Carrel is a place to keep track of what you read. This notice explains what information it keeps about you,
-        why, who else handles it, and what you can do about it.
+        Carrel is a place to keep track of what you read, on the website and in the Android app. This notice explains
+        what information it keeps about you, why, who else handles it, and what you can do about it.
       </p>
 
       <h2>Who runs Carrel</h2>
@@ -74,15 +74,20 @@ export function PrivacyPage() {
         email address is never shown.
       </p>
 
-      <h2>What stays in your browser</h2>
+      <h2>What stays on your device</h2>
       <p>
-        Carrel doesn’t use cookies, analytics, or advertising trackers. It keeps a few things in your browser’s storage
-        so the site works the way you’ve set it up:
+        Carrel doesn’t use cookies, analytics, crash reporting, or advertising trackers, on the website or in the app.
+        It keeps a few things in your browser’s storage, or on your phone if you use the app, so Carrel works the way
+        you’ve set it up:
       </p>
       <ul>
         <li>your sign-in session, so you stay signed in;</li>
-        <li>your theme and accent colour; and</li>
-        <li>your recent searches, which never leave your browser.</li>
+        <li>your theme and accent colour;</li>
+        <li>your recent searches, which never leave your device; and</li>
+        <li>
+          in the app, a copy of what it last loaded from Carrel, such as your profile, so it opens quickly and still
+          works without a signal. It’s cleared when you sign out.
+        </li>
       </ul>
       <p>These are needed for features you’ve asked for, so Carrel doesn’t ask for consent to store them.</p>
 
