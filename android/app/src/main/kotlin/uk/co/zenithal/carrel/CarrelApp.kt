@@ -11,6 +11,7 @@ import uk.co.zenithal.carrel.auth.SessionWatcher
 import uk.co.zenithal.carrel.data.ApiClient
 import uk.co.zenithal.carrel.data.CarrelDatabase
 import uk.co.zenithal.carrel.data.CarrelJson
+import uk.co.zenithal.carrel.data.LibraryChanges
 import uk.co.zenithal.carrel.data.RecentSearches
 import uk.co.zenithal.carrel.data.Store
 
@@ -34,7 +35,8 @@ class AppContainer(context: Context, scope: CoroutineScope) {
         }
     }
     val api = ApiClient(BuildConfig.API_URL, supabase, CarrelJson)
-    val store = Store(CarrelDatabase.create(context).responses(), api)
+    val store = Store(CarrelDatabase.create(context).responses(), api, scope)
+    val library = LibraryChanges(api, store)
     val recentSearches = RecentSearches(context.getSharedPreferences("recent-searches", Context.MODE_PRIVATE))
     val session = SessionWatcher(supabase, store, context.getSharedPreferences("saved-data", Context.MODE_PRIVATE), scope)
 }

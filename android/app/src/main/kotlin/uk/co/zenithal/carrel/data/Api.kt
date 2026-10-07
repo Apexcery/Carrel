@@ -53,6 +53,10 @@ class ApiClient(
         resultSerializer: KSerializer<T>,
     ): T = json.decodeFromString(resultSerializer, call(method, path, json.encodeToString(bodySerializer, body)).bodyAsText())
 
+    suspend fun delete(path: String) {
+        call(HttpMethod.Delete, path, null)
+    }
+
     private suspend fun call(method: HttpMethod, path: String, body: String?): HttpResponse {
         val response = try {
             http.request("$baseUrl$path") {
