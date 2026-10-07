@@ -238,4 +238,6 @@ static string RateLimitPartitionKey(HttpContext context) =>
     context.User.FindFirstValue("sub") is { } userId ? $"user:{userId}" : $"ip:{context.Connection.RemoteIpAddress}";
 
 static bool IsBookSourceRequest(HttpContext context) =>
-    context.Request.Path.StartsWithSegments("/books") || context.Request.Path.StartsWithSegments("/series");
+    context.Request.Path.StartsWithSegments("/books") || context.Request.Path.StartsWithSegments("/series")
+    // A genre's page, but not the list of genres.
+    || (context.Request.Path.StartsWithSegments("/genres", out var genre) && genre.Value is { Length: > 1 });

@@ -116,6 +116,9 @@ public record HardcoverTagDetail(int Id, string Tag, int Count, HardcoverTagCate
 
 public record HardcoverTagCategory(string Slug);
 
+/// <summary>Genre tags; each Count is how many books the tag is on across Hardcover.</summary>
+public record HardcoverGenreTagsData(HardcoverTag[] Tags);
+
 public record HardcoverTrendingData(HardcoverTrending BooksTrending);
 
 public record HardcoverTrending(int[] Ids);

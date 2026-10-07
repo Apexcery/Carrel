@@ -66,6 +66,18 @@ public static class BookEndpoints
         app.MapGet("/discover", (RecommendationService service, CancellationToken ct) =>
                 FromBookSource(async () => Results.Ok(await service.GetDiscoverAsync(ct))))
             .AllowAnonymous();
+
+        // The list of genres is the same for everyone, cached for a day, so it doesn't count as a book lookup either; a
+        // genre's page does.
+        app.MapGet("/genres", (RecommendationService service, CancellationToken ct) => service.GetGenreIndexAsync(ct))
+            .AllowAnonymous();
+
+        app.MapGet("/genres/{slug:regex(^[a-z0-9-]+$):maxlength(80)}", (string slug, RecommendationService service, CancellationToken ct) =>
+                FromBookSource(async () => await service.FindGenreAsync(slug, ct) is { } genre
+                    ? Results.Ok(await service.GetGenreShelvesAsync(genre, ct))
+                    : Results.NotFound()))
+            .AllowAnonymous()
+            .RequireRateLimiting(BookSourcesRateLimit);
     }
 
     internal static async Task<IResult> FromBookSource(Func<Task<IResult>> action)

@@ -4,17 +4,29 @@ import { Link, useSearchParams } from 'react-router'
 import { apiGet } from '../api'
 import { useSession } from '../auth'
 import { ErrorNotice } from '../components/ErrorNotice'
+import { GenreLinks } from '../components/GenreLinks'
 import { ReadingStrip, ShelfStrip, ShelfTitle } from '../components/LibraryShelves'
 import { SignInPrompt } from '../components/SignInPrompt'
 import { SuggestionShelf, SuggestionShelfSkeleton, useOwnedHardcoverIds } from '../components/SuggestionShelf'
+import { useGenreIndex } from '../genres'
 import { usePageTitle } from '../pageTitle'
 import { useProfile } from '../profile'
 import { shelfItems } from '../shelves'
-import type { BookSuggestion, DiscoverShelves, GenrePicks, LibraryItem, ReadingStatus, RelatedBooks } from '../types'
+import type {
+  BookSuggestion,
+  DiscoverShelves,
+  GenreIndex,
+  GenrePicks,
+  LibraryItem,
+  ReadingStatus,
+  RelatedBooks,
+} from '../types'
 
 const SHELVES: ReadingStatus[] = ['want_to_read', 'read', 'did_not_finish']
 /** Books shown on each home-page shelf; the shelf title links to the full shelf. */
 const SHELF_BOOKS = 9
+/** Genres linked from the Discover tab; the rest are on the genres page. */
+const DISCOVER_GENRES = 10
 /** Books shown in each row of suggestions. */
 const SUGGESTIONS_SHOWN = 12
 /** The lowest rating that counts as liking a book. */
@@ -66,7 +78,7 @@ export function HomePage() {
         ) : home.tab === 'for-you' ? (
           <ForYou next={home.next} moreBy={home.moreBy} because={home.because} genre={home.genre} />
         ) : (
-          home.discover && <Discover shelves={home.discover} />
+          home.discover && <Discover shelves={home.discover} genres={home.genres} />
         )}
       </section>
       {/* Stays in view while the suggestions scroll past, if it fits in the window (else its end would be unreachable). */}
@@ -110,14 +122,26 @@ function ForYou({ next, moreBy, because, genre }: Pick<HomeData, 'next' | 'moreB
   )
 }
 
-function Discover({ shelves }: { shelves: DiscoverShelves }) {
+function Discover({ shelves, genres }: { shelves: DiscoverShelves; genres: GenreIndex | undefined }) {
   return (
-    <div className="home-shelves">
-      <SuggestionShelf title="Top rated" books={shelves.topRated} limit={SUGGESTIONS_SHOWN} />
-      <SuggestionShelf title="New releases" books={shelves.newReleases} limit={SUGGESTIONS_SHOWN} />
-      <SuggestionShelf title="Popular this month" books={shelves.popular} limit={SUGGESTIONS_SHOWN} />
-      <SuggestionShelf title="Coming soon" books={shelves.comingSoon} limit={SUGGESTIONS_SHOWN} markUpcoming={false} />
-    </div>
+    <>
+      {genres && (
+        <section className="book-section">
+          <h2 className="section-title">Browse by genre</h2>
+          <GenreLinks genres={genres.fiction.slice(0, DISCOVER_GENRES)}>
+            <li className="genres-more">
+              <Link to="/genres">All genres →</Link>
+            </li>
+          </GenreLinks>
+        </section>
+      )}
+      <div className="home-shelves">
+        <SuggestionShelf title="Top rated" books={shelves.topRated} limit={SUGGESTIONS_SHOWN} />
+        <SuggestionShelf title="New releases" books={shelves.newReleases} limit={SUGGESTIONS_SHOWN} />
+        <SuggestionShelf title="Popular this month" books={shelves.popular} limit={SUGGESTIONS_SHOWN} />
+        <SuggestionShelf title="Coming soon" books={shelves.comingSoon} limit={SUGGESTIONS_SHOWN} markUpcoming={false} />
+      </div>
+    </>
   )
 }
 
@@ -187,13 +211,15 @@ function useHomeData(signedIn: boolean, requestedTab: string | null) {
     queryFn: () => apiGet<DiscoverShelves>('/discover'),
     enabled: tab === 'discover',
   })
+  const genres = useGenreIndex()
   const authors = [firstAuthor, secondAuthor, thirdAuthor]
 
   return {
     tab,
-    ready: [library, ...(tab === 'for-you' ? [next, related, ...authors.map((a) => a.query), genrePicks] : [discover])].every(
-      settled,
-    ),
+    ready: [
+      library,
+      ...(tab === 'for-you' ? [next, related, ...authors.map((a) => a.query), genrePicks] : [discover, genres]),
+    ].every(settled),
     next: next.data,
     moreBy: authors.find((a) => a.shelf)?.shelf,
     because:
@@ -209,6 +235,7 @@ function useHomeData(signedIn: boolean, requestedTab: string | null) {
         ? { genre: genrePicks.data.genre, books: genrePicks.data.books.filter((b) => !owned.has(b.hardcoverId)) }
         : undefined,
     discover: discover.data,
+    genres: genres.data,
   }
 }
 

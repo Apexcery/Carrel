@@ -5,11 +5,13 @@ import { apiGet } from '../api'
 import { useSession } from '../auth'
 import { Cover } from '../components/Cover'
 import { ErrorNotice } from '../components/ErrorNotice'
+import { GenreLinks } from '../components/GenreLinks'
 import { HardcoverRating } from '../components/HardcoverRating'
 import { LibraryPanel } from '../components/LibraryPanel'
 import { SignInPrompt } from '../components/SignInPrompt'
 import { SuggestionShelf, useOwnedHardcoverIds } from '../components/SuggestionShelf'
 import { displaySubtitle, formatDate, formatDuration, listNames, otherCredits, seriesPosition } from '../format'
+import { genreSlug } from '../genres'
 import { usePageTitle } from '../pageTitle'
 import type { BookDetail, BookSuggestion, Edition, RelatedBooks, SeriesEntry } from '../types'
 
@@ -80,11 +82,7 @@ function BookView({ book }: { book: BookDetail }) {
         )}
 
         {book.genres.length > 0 && (
-          <ul className="genres" aria-label="Genres">
-            {book.genres.map((genre) => (
-              <li key={genre}>{genre}</li>
-            ))}
-          </ul>
+          <GenreLinks genres={book.genres.map((name) => ({ name, slug: genreSlug(name) }))} label="Genres" />
         )}
 
         {book.description && <Description text={book.description} source={book.descriptionSource} />}

@@ -9,6 +9,8 @@ import { BookResolver } from './pages/BookResolver'
 import { ChooseUsernamePage } from './pages/ChooseUsernamePage'
 import { ConfirmEmailPage } from './pages/ConfirmEmailPage'
 import { CopyrightPage } from './pages/CopyrightPage'
+import { GenrePage } from './pages/GenrePage'
+import { GenresPage } from './pages/GenresPage'
 import { HomePage } from './pages/HomePage'
 import { ImportExportSettings } from './pages/ImportExportSettings'
 import { NotFoundPage } from './pages/NotFoundPage'
@@ -63,6 +65,8 @@ function App() {
         <Route path="books/hardcover/:sourceId" element={<BookResolver source="hardcover" />} />
         <Route path="books/openlibrary/:sourceId" element={<BookResolver source="openlibrary" />} />
         <Route path="series/hardcover/:hardcoverId" element={<SeriesPage />} />
+        <Route path="genres" element={<GenresPage />} />
+        <Route path="genres/:slug" element={<GenrePage />} />
         <Route path="privacy" element={<PrivacyPage />} />
         <Route path="copyright" element={<CopyrightPage />} />
         <Route path="settings" element={<SettingsPage />}>

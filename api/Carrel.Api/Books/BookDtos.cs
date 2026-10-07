@@ -80,6 +80,17 @@ public record DiscoverShelves(
 /// <summary>Popular books in the reader's top genre; Genre is null until their books have one.</summary>
 public record GenrePicks(string? Genre, BookSuggestion[] Books);
 
+public record GenreLink(string Name, string Slug);
+
+/// <summary>
+/// The genres listed for browsing, in two groups, and the rest of Hardcover's well-used genres (most used first) for
+/// searching; Other is empty while Hardcover can't be reached.
+/// </summary>
+public record GenreIndex(GenreLink[] Fiction, GenreLink[] Nonfiction, GenreLink[] Other);
+
+/// <summary>A genre's page: its most read books, its best rated, and its popular new releases.</summary>
+public record GenreShelves(string Name, BookSuggestion[] Popular, BookSuggestion[] TopRated, BookSuggestion[] NewReleases);
+
 public record ContributorDto(long Id, string Name, string Role);
 
 public record SeriesEntryDto(long Id, long? HardcoverId, string Name, decimal? Position);
