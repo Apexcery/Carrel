@@ -1,16 +1,18 @@
 # Carrel
 
-A book-tracking website: track what you read and find new books.
+A book-tracking website and Android app: track what you read and find new books.
 
 ## Structure
 
 - `api/` – ASP.NET Core minimal API (.NET 10). Solution: `api/Carrel.slnx`.
 - `web/` – React + TypeScript single-page app (Vite).
+- `android/` – Android app (Kotlin, Jetpack Compose), for Android 8 and later.
 
 ## Prerequisites
 
 - .NET 10 SDK
 - Node.js 20.19+ or 22.12+ (24 LTS recommended)
+- For the app: JDK 21 and the Android SDK (Android Studio's own is fine). The SDK path goes in `android/local.properties` (`sdk.dir=…`), which Studio writes for you.
 
 ## Running locally
 
@@ -39,6 +41,19 @@ npm install
 npm run dev
 ```
 
+## Android app
+
+Two builds install side by side:
+
+- **Carrel Dev** (`./gradlew assembleDebug`, package `uk.co.zenithal.carrel.debug`) uses the dev Supabase project and the local API. A phone or emulator connected over USB reaches the API through `adb reverse tcp:5155 tcp:5155`.
+- **Carrel** (`./gradlew assembleRelease`, package `uk.co.zenithal.carrel`) uses production, signed with the release key.
+
+Run Gradle with JDK 21 (`JAVA_HOME`). `./gradlew testDebugUnitTest` runs the unit tests. Install a build with `adb install -r app/build/outputs/apk/<debug|release>/app-<debug|release>.apk`.
+
+The release key lives outside the repo, and its settings are in `~/.gradle/gradle.properties` (`carrel.release.storeFile`, `storePassword`, `keyAlias`, and `keyPassword`). Keep a backup of both: an app signed with a different key can't update the installed one, so it has to be uninstalled first, losing what it had saved. Without those settings, `assembleRelease` builds an unsigned APK.
+
+Links in Carrel's emails (`/auth/confirm`) open the app when it's installed. Android checks this against `web/public/.well-known/assetlinks.json`, which lists the release key's SHA-256 fingerprint: update it if the key ever changes. Carrel Dev handles the dev project's links (`http://localhost:5173/auth/confirm…`) only when they're sent to it directly, e.g. `adb shell am start -a android.intent.action.VIEW -d "<link>" uk.co.zenithal.carrel.debug`.
+
 ## Database migrations
 
 The API applies any pending migrations when it starts, before it takes requests: locally that's the dev database (the user secret), and in production it happens as each new version deploys. If a migration fails, the new version doesn't start and Cloud Run keeps serving the old one; the failure is in the new revision's logs.
@@ -63,7 +78,7 @@ Supabase sends sign-up, invitation, password reset, and email change emails thro
 {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=<type>
 ```
 
-with `type` `email` (confirm sign-up), `invite`, `recovery` (reset password), or `email_change`. That page confirms the link and signs the reader in. Links last an hour (Email OTP expiration 3600).
+with `type` `email` (confirm sign-up), `invite`, `recovery` (reset password), or `email_change`. That page confirms the link and signs the reader in; with the app installed, the link opens the app, which does the same. Links last an hour (Email OTP expiration 3600).
 
 ## Copyright takedowns
 

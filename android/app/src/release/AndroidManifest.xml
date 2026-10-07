@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!-- Email links on the website's address open the app; verified by web/public/.well-known/assetlinks.json. -->
+        <activity android:name=".MainActivity">
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="carrel.zenithal.co.uk" />
+                <data android:path="/auth/confirm" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

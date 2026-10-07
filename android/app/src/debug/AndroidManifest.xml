@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application android:networkSecurityConfig="@xml/network_security_config">
+        <!-- The dev Supabase project's email links point at the local website. Unverified, so they only open here when
+             sent directly, e.g. `adb shell am start -d "<link>" uk.co.zenithal.carrel.debug`. -->
+        <activity android:name=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" />
+                <data android:host="localhost" />
+                <data android:port="5173" />
+                <data android:path="/auth/confirm" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

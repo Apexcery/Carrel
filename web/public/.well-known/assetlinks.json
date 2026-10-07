@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "uk.co.zenithal.carrel",
+      "sha256_cert_fingerprints": [
+        "87:3A:12:8C:C0:6A:F1:F2:E9:AF:AD:4E:71:B3:91:3B:D2:84:13:47:84:13:6B:F2:BC:F4:34:0B:AC:0E:37:46"
+      ]
+    }
+  }
+]
