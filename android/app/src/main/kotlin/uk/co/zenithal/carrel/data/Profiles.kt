@@ -1,6 +1,8 @@
 package uk.co.zenithal.carrel.data
 
+import io.ktor.http.HttpMethod
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 
 /** The signed-in reader's profile (GET /profile). */
 @Serializable
@@ -24,7 +26,24 @@ data class UsernameAvailability(val available: Boolean, val reason: String?)
 @Serializable
 data class SaveProfileRequest(val username: String, val isPublic: Boolean? = null)
 
+@Serializable
+data class SaveGoalRequest(val books: Int)
+
 const val PROFILE_PATH = "/profile"
 
 /** 3 to 20 letters, numbers, underscores, or hyphens, as the API checks. */
 val VALID_USERNAME = Regex("^[A-Za-z0-9_-]{3,20}$")
+
+private val GOALS = ListSerializer(ReadingGoal.serializer())
+
+/** Sets or removes a year's reading goal, then puts the reader's goals into the saved profile, so they show at once. */
+class GoalChanges(private val api: ApiClient, private val store: Store) {
+
+    suspend fun save(year: Int, books: Int) =
+        saved(api.send(HttpMethod.Put, "/profile/goals/$year", SaveGoalRequest(books), SaveGoalRequest.serializer(), GOALS))
+
+    suspend fun remove(year: Int) = saved(api.delete("/profile/goals/$year", GOALS))
+
+    private suspend fun saved(goals: List<ReadingGoal>) =
+        store.update(PROFILE_PATH, Profile.serializer()) { it.copy(goals = goals) }
+}

@@ -1,6 +1,7 @@
 package uk.co.zenithal.carrel.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -49,6 +50,21 @@ fun PrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifi
             .alpha(if (enabled) 1f else 0.6f)
             .background(colors.accent, RoundedCornerShape(2.dp))
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+    )
+}
+
+/** The website's .secondary-button: accent-outlined mono capitals, for an action that isn't the page's main one. */
+@Composable
+fun SecondaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = Carrel.colors
+    Text(
+        text = text.uppercase(),
+        style = Carrel.type.monoMedium.copy(letterSpacing = 0.08.em),
+        color = colors.accent,
+        modifier = modifier
+            .border(1.dp, colors.accent, RoundedCornerShape(2.dp))
+            .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 10.dp),
     )
 }
