@@ -54,6 +54,9 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.net.toUri
+import coil3.ImageLoader
+import coil3.SingletonImageLoader
+import coil3.compose.LocalPlatformContext
 import coil3.compose.SubcomposeAsyncImage
 import uk.co.zenithal.carrel.data.BookSuggestion
 import uk.co.zenithal.carrel.data.GenreLink
@@ -69,10 +72,11 @@ private val COVER_SHAPE = RoundedCornerShape(topStart = 2.dp, bottomStart = 2.dp
 
 /**
  * A book cover at the given width, or a plain cloth binding with the title when there's no image (or it fails to
- * load). A zoomable cover opens larger when tapped; a binding has nothing more to show, so it doesn't.
+ * load). A zoomable cover opens larger when tapped; a binding has nothing more to show, so it doesn't. An online
+ * library's covers come through its own `imageLoader`, with its login.
  */
 @Composable
-fun Cover(url: String?, title: String, author: String?, width: Dp, modifier: Modifier = Modifier, zoomable: Boolean = false) {
+fun Cover(url: String?, title: String, author: String?, width: Dp, modifier: Modifier = Modifier, zoomable: Boolean = false, imageLoader: ImageLoader? = null) {
     var zoomed by remember { mutableStateOf(false) }
     val frame = modifier
         .width(width)
@@ -87,6 +91,7 @@ fun Cover(url: String?, title: String, author: String?, width: Dp, modifier: Mod
     SubcomposeAsyncImage(
         model = url,
         contentDescription = "Cover of $title",
+        imageLoader = imageLoader ?: SingletonImageLoader.get(LocalPlatformContext.current),
         contentScale = ContentScale.Crop,
         error = { Binding(title, author, width, Modifier.fillMaxSize()) },
         modifier = if (zoomable) frame.clickable(onClickLabel = "View the cover larger", role = Role.Image) { zoomed = true } else frame,

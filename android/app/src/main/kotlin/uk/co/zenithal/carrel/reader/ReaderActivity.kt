@@ -72,7 +72,9 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.fragment.compose.AndroidFragment
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import androidx.lifecycle.lifecycleScope
 import org.json.JSONObject
 import org.readium.r2.navigator.epub.EpubNavigatorFactory
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
@@ -89,7 +91,10 @@ import uk.co.zenithal.carrel.CarrelApp
 import uk.co.zenithal.carrel.LocalContainer
 import uk.co.zenithal.carrel.MainActivity
 import uk.co.zenithal.carrel.data.ApiException
+import uk.co.zenithal.carrel.data.Download
+import uk.co.zenithal.carrel.data.LibraryException
 import uk.co.zenithal.carrel.data.PhoneBook
+import uk.co.zenithal.carrel.data.PhoneBookException
 import uk.co.zenithal.carrel.edgeToEdge
 import uk.co.zenithal.carrel.ui.components.FormMessage
 import uk.co.zenithal.carrel.ui.components.LinkButton
@@ -114,22 +119,64 @@ import uk.co.zenithal.carrel.ui.library.Choices
  * what reading it does to the library (null when it's not linked to a book in Carrel, or no one is signed in).
  * `locator` is where it opens, then where the reader is, so the page comes back when the screen rotates.
  */
-class OpenBook(val book: PhoneBook, val publication: Publication, val progress: ReadingProgress?, var locator: Locator?)
+class OpenBook(val book: PhoneBook, val publication: Publication, val progress: ReadingProgress?, var locator: Locator?) {
+    /** A newer version of the book, downloaded while it's read, to reload into. */
+    val newer = MutableStateFlow<PhoneBook?>(null)
+    /** The copy the newer version replaced, deleted once the book closes (the reader still has it open). */
+    var replaced: PhoneBook? = null
+}
 
 /**
  * Opens a book from the phone in the reader, where it was left. A linked book moves to Reading as it opens, and a copy
- * never opened before starts at the progress in the library, e.g. from reading it in another app.
+ * never opened before starts at the progress in the library, e.g. from reading it in another app. A book from an online
+ * library opens straight away and is checked for a newer version (new chapters of a serial, say) while it's read.
  */
 suspend fun openReader(context: Context, container: AppContainer, book: PhoneBook) {
     val publication = container.phoneBooks.open(book)
     val signedIn = container.session.state.value is Session.SignedIn
     val progress = book.bookId?.takeIf { signedIn }?.let { ReadingProgress(container, it) }
-    val start = book.locator?.let { Locator.fromJSON(JSONObject(it)) }
-        ?: progress?.startingPercent()?.let { publication.locateProgression(it / 100) }
-    container.openBook?.publication?.close()
-    container.openBook = OpenBook(book, publication, progress, start)
+    val saved = book.locator?.let { Locator.fromJSON(JSONObject(it)) }
+    val start = when {
+        saved == null -> progress?.startingPercent()?.let { publication.locateProgression(it / 100) }
+        publication.linkWithHref(saved.href) != null -> saved
+        // A newer version without the part the reader was in: as far through as before.
+        else -> book.progression?.let { publication.locateProgression(it) }
+    }
+    closeOpenBook(container)
+    val open = OpenBook(book, publication, progress, start)
+    container.openBook = open
     progress?.let { container.scope.launch { it.start() } }
     context.startActivity(Intent(context, ReaderActivity::class.java).putExtra(ReaderActivity.BOOK, book.id))
+    if (book.downloadUrl != null) container.scope.launch { checkForNewer(container, open) }
+}
+
+/** Closes the book that's open in the reader, deleting any copy a newer version replaced while it was read. */
+internal fun closeOpenBook(container: AppContainer) {
+    val open = container.openBook ?: return
+    container.openBook = null
+    open.publication.close()
+    open.replaced?.let(container.phoneBooks::deleteCopy)
+}
+
+/**
+ * Downloads a newer version of a book from an online library while it's read, and offers it to reload into (the next
+ * time it opens uses it anyway). Nothing happens if it's unchanged, or the library can't be reached (away from home).
+ */
+private suspend fun checkForNewer(container: AppContainer, open: OpenBook) {
+    val book = open.book
+    val url = book.downloadUrl ?: return
+    if (book.libraryId == null || container.libraries.get(book.libraryId) == null) return
+    try {
+        val download = container.libraries.download(url, container.phoneBooks.newFile(), book.etag, book.lastModified)
+        if (download !is Download.Fetched) return
+        val updated = container.phoneBooks.replace(book, download)
+        if (updated.file == book.file) return
+        open.replaced = book
+        // Closed while it downloaded: the old copy can go now.
+        if (container.openBook !== open) container.phoneBooks.deleteCopy(book) else open.newer.value = updated
+    } catch (_: LibraryException) {
+    } catch (_: PhoneBookException) {
+    }
 }
 
 /**
@@ -184,7 +231,7 @@ class ReaderActivity : FragmentActivity() {
             }
             CompositionLocalProvider(LocalContainer provides container) {
                 CarrelTheme(darkNow, chosenAccent) {
-                    ReaderScreen(open, prefs, columns, ::reopen, { reopening }, ::showSystemBars, ::leave)
+                    ReaderScreen(open, prefs, columns, ::reopen, { reopening }, ::reload, ::showSystemBars, ::leave)
                 }
             }
         }
@@ -208,10 +255,7 @@ class ReaderActivity : FragmentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         val open = open ?: return
-        if (isFinishing && !reopening && container.openBook === open) {
-            container.openBook = null
-            open.publication.close()
-        }
+        if (isFinishing && !reopening && container.openBook === open) closeOpenBook(container)
     }
 
     /**
@@ -223,6 +267,19 @@ class ReaderActivity : FragmentActivity() {
         reopening = true
         startActivity(Intent(intent))
         finish()
+    }
+
+    /** Opens the newer version of the book that arrived while reading, at the same place. */
+    private fun reload(book: PhoneBook) {
+        lifecycleScope.launch {
+            val latest = container.phoneBooks.get(book.id) ?: return@launch
+            try {
+                openReader(this@ReaderActivity, container, latest)
+                finish()
+            } catch (_: PhoneBookException) {
+                // Carries on with the version that's open.
+            }
+        }
     }
 
     /** The status and navigation bars show with the controls, and hide while reading (a swipe brings them back). */
@@ -257,6 +314,8 @@ private fun ReaderScreen(
     reopen: () -> Unit,
     /** Whether it's about to open again, when places it reports aren't the reader's. */
     reopening: () -> Boolean,
+    /** Opens the newer version of the book that's arrived. */
+    reload: (PhoneBook) -> Unit,
     showSystemBars: (Boolean) -> Unit,
     leave: (finished: Boolean) -> Unit,
 ) {
@@ -315,14 +374,30 @@ private fun ReaderScreen(
                 navigator = fragment
             }
         }
-        if (controls) {
-            Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().background(colors.paperRaised).statusBarsPadding()) {
-                Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(::close) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Close the book", tint = colors.ink) }
-                    Text(open.book.title, style = Carrel.type.heading, color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(end = 12.dp))
+        val newer by open.newer.collectAsState()
+        var dismissed by remember { mutableStateOf(false) }
+        Column(Modifier.align(Alignment.TopCenter).fillMaxWidth()) {
+            if (controls) {
+                Column(Modifier.fillMaxWidth().background(colors.paperRaised).statusBarsPadding()) {
+                    Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(::close) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Close the book", tint = colors.ink) }
+                        Text(open.book.title, style = Carrel.type.heading, color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(end = 12.dp))
+                    }
+                    HorizontalDivider(color = colors.rule)
                 }
-                HorizontalDivider(color = colors.rule)
             }
+            newer?.takeUnless { dismissed }?.let { book ->
+                Column(Modifier.fillMaxWidth().background(colors.paperRaised).then(if (controls) Modifier else Modifier.statusBarsPadding())) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                        Text("A newer version of this book is ready.", style = Carrel.type.mono, color = colors.ink, modifier = Modifier.weight(1f))
+                        LinkButton("Reload", { reload(book) }, color = colors.accent)
+                        LinkButton("Later", { dismissed = true })
+                    }
+                    HorizontalDivider(color = colors.rule)
+                }
+            }
+        }
+        if (controls) {
             Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(colors.paperRaised).navigationBarsPadding()) {
                 HorizontalDivider(color = colors.rule)
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

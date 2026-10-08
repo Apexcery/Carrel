@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Online libraries on the home network (Calibre's server, Calibre-Web) are usually plain HTTP, at addresses only the
+     reader knows, so HTTP is allowed everywhere. Carrel's own API and Supabase are HTTPS regardless; test builds' local
+     API is plain HTTP too. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

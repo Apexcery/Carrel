@@ -120,7 +120,7 @@ fun Field(
     modifier: Modifier = Modifier,
     password: Boolean = false,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
-    /** What the keyboard's Done key does, e.g. submitting the form. */
+    /** What the keyboard's Done (or Search, or Go) key does, e.g. submitting the form. */
     onDone: (() -> Unit)? = null,
     enabled: Boolean = true,
 ) {
@@ -138,7 +138,7 @@ fun Field(
             cursorBrush = SolidColor(colors.accent),
             visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
             keyboardOptions = keyboardOptions,
-            keyboardActions = if (onDone != null) KeyboardActions(onDone = { onDone() }) else KeyboardActions.Default,
+            keyboardActions = if (onDone != null) KeyboardActions(onDone = { onDone() }, onSearch = { onDone() }, onGo = { onDone() }) else KeyboardActions.Default,
             interactionSource = interaction,
             modifier = Modifier
                 .fillMaxWidth()

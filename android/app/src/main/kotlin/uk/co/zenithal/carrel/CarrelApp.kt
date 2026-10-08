@@ -17,7 +17,11 @@ import uk.co.zenithal.carrel.data.Connectivity
 import uk.co.zenithal.carrel.data.CarrelJson
 import uk.co.zenithal.carrel.data.GoalChanges
 import uk.co.zenithal.carrel.data.LibraryChanges
+import uk.co.zenithal.carrel.data.OnlineLibraries
 import uk.co.zenithal.carrel.data.Outbox
+import uk.co.zenithal.carrel.data.Secrets
+import coil3.ImageLoader
+import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import uk.co.zenithal.carrel.data.PhoneBooks
 import uk.co.zenithal.carrel.data.PhoneBooksDatabase
 import uk.co.zenithal.carrel.data.RecentSearches
@@ -50,7 +54,11 @@ class AppContainer(context: Context, val scope: CoroutineScope) {
     val outbox = Outbox(context, ChangesDatabase.create(context).changes()) { (session.state.value as? Session.SignedIn)?.userId }
     val library = LibraryChanges(api, store, outbox)
     val goals = GoalChanges(api, store)
-    val phoneBooks = PhoneBooks(context, PhoneBooksDatabase.create(context).books(), context.getSharedPreferences("reading", Context.MODE_PRIVATE))
+    private val phoneBooksDatabase = PhoneBooksDatabase.create(context)
+    val phoneBooks = PhoneBooks(context, phoneBooksDatabase.books(), context.getSharedPreferences("reading", Context.MODE_PRIVATE))
+    val libraries = OnlineLibraries(phoneBooksDatabase.libraries(), Secrets())
+    /** Covers from online libraries, which may need the library's login. */
+    val libraryImages = ImageLoader.Builder(context).logger(coil3.util.DebugLogger()).components { add(OkHttpNetworkFetcherFactory(callFactory = { libraries.http })) }.build()
     /** The book open in the reader (ReaderActivity), if any. */
     var openBook: OpenBook? = null
     val recentSearches = RecentSearches(context.getSharedPreferences("recent-searches", Context.MODE_PRIVATE))
@@ -60,5 +68,6 @@ class AppContainer(context: Context, val scope: CoroutineScope) {
 
     init {
         scope.launch { outbox.scheduleIfWaiting() }
+        scope.launch { libraries.load() }
     }
 }

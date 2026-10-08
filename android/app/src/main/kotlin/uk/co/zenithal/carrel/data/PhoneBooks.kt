@@ -14,6 +14,8 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -61,6 +63,15 @@ data class PhoneBook(
     val progression: Double?,
     val addedAt: Long,
     val openedAt: Long?,
+    /**
+     * For a book downloaded from an online library: the library, the book's id in it, where it downloads from, and
+     * the version the phone has (the server's ETag or Last-Modified), to fetch a newer one as it opens.
+     */
+    val libraryId: Long? = null,
+    val onlineId: String? = null,
+    val downloadUrl: String? = null,
+    val etag: String? = null,
+    val lastModified: String? = null,
 ) {
     val authorList get() = authors.lines().filter { it.isNotBlank() }
     val isbnList get() = isbns.lines().filter { it.isNotBlank() }
@@ -78,6 +89,40 @@ interface PhoneBookDao {
     @Query("SELECT * FROM books WHERE fingerprint = :fingerprint")
     suspend fun withFingerprint(fingerprint: String): PhoneBook?
 
+    /** Copies added from the phone, not downloaded from an online library. */
+    @Query("SELECT * FROM books WHERE libraryId IS NULL")
+    suspend fun addedByHand(): List<PhoneBook>
+
+    @Query("SELECT * FROM books WHERE libraryId = :libraryId AND onlineId = :onlineId")
+    suspend fun fromLibrary(libraryId: Long, onlineId: String): PhoneBook?
+
+    @Query("UPDATE books SET libraryId = :libraryId, onlineId = :onlineId, downloadUrl = :downloadUrl, etag = :etag, lastModified = :lastModified WHERE id = :id")
+    suspend fun setSource(id: Long, libraryId: Long, onlineId: String, downloadUrl: String, etag: String?, lastModified: String?)
+
+    @Query("UPDATE books SET etag = :etag, lastModified = :lastModified WHERE id = :id")
+    suspend fun setVersion(id: Long, etag: String?, lastModified: String?)
+
+    @Query(
+        "UPDATE books SET file = :file, cover = :cover, fingerprint = :fingerprint, title = :title, authors = :authors, series = :series, " +
+            "seriesPosition = :seriesPosition, isbns = :isbns, etag = :etag, lastModified = :lastModified WHERE id = :id",
+    )
+    suspend fun replaceCopy(
+        id: Long,
+        file: String,
+        cover: String?,
+        fingerprint: String,
+        title: String,
+        authors: String,
+        series: String?,
+        seriesPosition: Double?,
+        isbns: String,
+        etag: String?,
+        lastModified: String?,
+    )
+
+    @Query("UPDATE books SET libraryId = NULL WHERE libraryId = :libraryId")
+    suspend fun forgetLibrary(libraryId: Long)
+
     @Insert
     suspend fun add(book: PhoneBook): Long
 
@@ -92,16 +137,32 @@ interface PhoneBookDao {
 }
 
 /**
- * The reader's own books, unlike carrel.db (copies of API responses, started again on any new version), so a new
- * version of this needs a real migration.
+ * The reader's own books and online libraries, unlike carrel.db (copies of API responses, started again on any new
+ * version), so a new version of this needs a real migration.
  */
-@Database(entities = [PhoneBook::class], version = 1, exportSchema = false)
+@Database(entities = [PhoneBook::class, Library::class], version = 2, exportSchema = false)
 abstract class PhoneBooksDatabase : RoomDatabase() {
     abstract fun books(): PhoneBookDao
+    abstract fun libraries(): LibraryDao
 
     companion object {
         fun create(context: Context): PhoneBooksDatabase =
-            Room.databaseBuilder(context, PhoneBooksDatabase::class.java, "phone-books.db").build()
+            Room.databaseBuilder(context, PhoneBooksDatabase::class.java, "phone-books.db").addMigrations(ONLINE_LIBRARIES).build()
+
+        /** Version 2: online libraries, and where a downloaded book came from. */
+        private val ONLINE_LIBRARIES = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `libraries` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, " +
+                        "`url` TEXT NOT NULL, `username` TEXT, `password` TEXT)",
+                )
+                db.execSQL("ALTER TABLE `books` ADD COLUMN `libraryId` INTEGER")
+                db.execSQL("ALTER TABLE `books` ADD COLUMN `onlineId` TEXT")
+                db.execSQL("ALTER TABLE `books` ADD COLUMN `downloadUrl` TEXT")
+                db.execSQL("ALTER TABLE `books` ADD COLUMN `etag` TEXT")
+                db.execSQL("ALTER TABLE `books` ADD COLUMN `lastModified` TEXT")
+            }
+        }
     }
 }
 
@@ -135,8 +196,7 @@ class PhoneBooks(private val context: Context, private val dao: PhoneBookDao, pr
      * here.
      */
     suspend fun add(uri: Uri): PhoneBook = withContext(Dispatchers.IO) {
-        booksDir.mkdirs()
-        val file = File(booksDir, "${UUID.randomUUID()}.epub")
+        val file = newFile()
         val digest = MessageDigest.getInstance("SHA-256")
         try {
             val input = context.contentResolver.openInputStream(uri) ?: throw IOException("No stream for $uri")
@@ -147,41 +207,121 @@ class PhoneBooks(private val context: Context, private val dao: PhoneBookDao, pr
             if (e !is IOException && e !is SecurityException) throw e
             throw PhoneBookException("That file couldn’t be read. Try adding it again.")
         }
-        val fingerprint = digest.digest().joinToString("") { "%02x".format(it) }
+        addCopy(file, digest.digest().joinToString("") { "%02x".format(it) })
+    }
+
+    /** A new, empty file for a copy, e.g. to download a book into. */
+    fun newFile(): File = File(booksDir.apply { mkdirs() }, "${UUID.randomUUID()}.epub")
+
+    /** The copy of a library's book on the phone, if it's been downloaded. */
+    suspend fun fromLibrary(libraryId: Long, onlineId: String) = dao.fromLibrary(libraryId, onlineId)
+
+    /**
+     * Adds a book downloaded from an online library, remembering where it came from to fetch newer versions. A file
+     * the phone already has becomes that library's copy rather than a second one.
+     */
+    suspend fun addDownload(download: Download.Fetched, library: Library, book: OnlineBook, url: String): PhoneBook = withContext(Dispatchers.IO) {
+        val added = sameBookAddedByHand(download)?.let { copy ->
+            // Another version of a book added by hand: it takes that copy's place, keeping the reader's place in it.
+            replace(copy, download).also { if (it.file != copy.file) deleteCopy(copy) }
+        } ?: addCopy(download.file, download.fingerprint)
+        dao.setSource(added.id, library.id, book.id, url, download.etag, download.lastModified)
+        dao.get(added.id)!!
+    }
+
+    /** A copy added by hand that's another version of the downloaded book (see [sameBook]), unless it's the same file. */
+    private suspend fun sameBookAddedByHand(download: Download.Fetched): PhoneBook? {
+        if (dao.withFingerprint(download.fingerprint) != null) return null
+        val downloaded = identityOf(download.file) ?: return null
+        return dao.addedByHand().firstOrNull { copy ->
+            val identifiers = identityOf(File(booksDir, copy.file))?.identifiers.orEmpty()
+            sameBook(downloaded, BookIdentity(identifiers, copy.title, copy.authorList.firstOrNull()))
+        }
+    }
+
+    /**
+     * Puts a newer version of a downloaded book in place of the old, keeping the reader's place and link. It's checked
+     * before anything changes, so a broken download leaves the old copy as it was. The old copy's files stay, since it
+     * may be open: the caller deletes them (see [deleteCopy]).
+     */
+    suspend fun replace(book: PhoneBook, download: Download.Fetched): PhoneBook = withContext(Dispatchers.IO) {
+        if (download.fingerprint == book.fingerprint) {
+            download.file.delete()
+            dao.setVersion(book.id, download.etag, download.lastModified)
+            return@withContext dao.get(book.id)!!
+        }
+        val details = try {
+            readDetails(download.file)
+        } catch (e: PhoneBookException) {
+            download.file.delete()
+            throw e
+        }
+        dao.replaceCopy(
+            book.id, download.file.name, details.cover, download.fingerprint, details.title, details.authors, details.series,
+            details.seriesPosition, details.isbns, download.etag, download.lastModified,
+        )
+        dao.get(book.id)!!
+    }
+
+    /** Deletes an old copy's file and cover, once a newer version has replaced it and it's no longer open. */
+    fun deleteCopy(old: PhoneBook) {
+        File(booksDir, old.file).delete()
+        old.cover?.let { File(coversDir, it).delete() }
+    }
+
+    /** Books from a library being removed stay on the phone, as plain copies. */
+    suspend fun forgetLibrary(libraryId: Long) = dao.forgetLibrary(libraryId)
+
+    /** Adds a copy already in files/books, or gives the copy already here if it's the same file. */
+    private suspend fun addCopy(file: File, fingerprint: String): PhoneBook {
         dao.withFingerprint(fingerprint)?.let {
             file.delete()
-            return@withContext it
+            return it
         }
-        val publication = try {
-            open(file)
+        val details = try {
+            readDetails(file)
         } catch (e: PhoneBookException) {
             file.delete()
             throw e
         }
-        try {
-            val cover = publication.coverFitting(Size(COVER_WIDTH, COVER_WIDTH * 3 / 2))?.let(::saveCover)
+        val book = PhoneBook(
+            file = file.name,
+            cover = details.cover,
+            fingerprint = fingerprint,
+            title = details.title,
+            authors = details.authors,
+            series = details.series,
+            seriesPosition = details.seriesPosition,
+            isbns = details.isbns,
+            bookId = null,
+            bookCover = null,
+            locator = null,
+            progression = null,
+            addedAt = System.currentTimeMillis(),
+            openedAt = null,
+        )
+        return book.copy(id = dao.add(book))
+    }
+
+    /** What a copy says about itself, with its cover saved; it must open as an EPUB. */
+    private suspend fun readDetails(file: File): Details {
+        val publication = open(file)
+        return try {
             val series = publication.metadata.belongsToSeries.firstOrNull()
-            val book = PhoneBook(
-                file = file.name,
-                cover = cover,
-                fingerprint = fingerprint,
+            Details(
+                cover = publication.coverFitting(Size(COVER_WIDTH, COVER_WIDTH * 3 / 2))?.let(::saveCover),
                 title = publication.metadata.title?.takeIf { it.isNotBlank() } ?: "Untitled",
                 authors = publication.metadata.authors.joinToString("\n") { it.name },
                 series = series?.name?.takeIf { it.isNotBlank() },
                 seriesPosition = series?.position,
                 isbns = isbnsIn(file).joinToString("\n"),
-                bookId = null,
-                bookCover = null,
-                locator = null,
-                progression = null,
-                addedAt = System.currentTimeMillis(),
-                openedAt = null,
             )
-            book.copy(id = dao.add(book))
         } finally {
             publication.close()
         }
     }
+
+    private class Details(val cover: String?, val title: String, val authors: String, val series: String?, val seriesPosition: Double?, val isbns: String)
 
     /** Opens the book's copy to read, as the last one opened; the caller closes it. */
     suspend fun open(book: PhoneBook): Publication {
@@ -240,16 +380,45 @@ class PhoneBooks(private val context: Context, private val dao: PhoneBookDao, pr
 }
 
 /** The ISBNs in an EPUB's package document, or none if it can't be read. */
-private fun isbnsIn(file: File): List<String> = try {
+private fun isbnsIn(file: File): List<String> = packageDocument(file)?.let(::isbnsInPackage).orEmpty()
+
+/** An EPUB's package document (its .opf), or null if it can't be read. */
+private fun packageDocument(file: File): String? = try {
     ZipFile(file).use { zip ->
         fun text(path: String) = zip.getEntry(path)?.let { entry -> zip.getInputStream(entry).use { it.reader().readText() } }
         val container = text("META-INF/container.xml")
         val packagePath = container?.let { ROOTFILE.find(it)?.groupValues?.get(1) }
-        packagePath?.let(::text)?.let(::isbnsInPackage).orEmpty()
+        packagePath?.let(::text)
     }
 } catch (_: IOException) {
-    emptyList()
+    null
 }
+
+/** What tells one book from another: its identifiers (Calibre's book id, an ISBN, and so on), title, and first author. */
+data class BookIdentity(val identifiers: Set<String>, val title: String, val firstAuthor: String?)
+
+private fun identityOf(file: File) = packageDocument(file)?.let(::identityIn)
+
+/** A book's identity from its package document. */
+fun identityIn(opf: String) = BookIdentity(
+    identifiers = IDENTIFIER.findAll(opf).map { it.groupValues[1].trim().lowercase() }.filter { it.isNotEmpty() }.toSet(),
+    title = TITLE.find(opf)?.groupValues?.get(1)?.trim().orEmpty(),
+    firstAuthor = CREATOR.find(opf)?.groupValues?.get(1)?.trim(),
+)
+
+/**
+ * Whether two copies are versions of the same book: an identifier in common (Calibre keeps its own in every copy it
+ * exports), or else the same title and first author, ignoring case and punctuation.
+ */
+fun sameBook(a: BookIdentity, b: BookIdentity): Boolean {
+    if (a.identifiers.any { it in b.identifiers }) return true
+    fun plain(text: String?) = text.orEmpty().lowercase().filter(Char::isLetterOrDigit)
+    return plain(a.title).isNotEmpty() && plain(a.title) == plain(b.title) &&
+        plain(a.firstAuthor).isNotEmpty() && plain(a.firstAuthor) == plain(b.firstAuthor)
+}
+
+private val TITLE = Regex("""<dc:title\b[^>]*>([^<]*)</dc:title>""", RegexOption.IGNORE_CASE)
+private val CREATOR = Regex("""<dc:creator\b[^>]*>([^<]*)</dc:creator>""", RegexOption.IGNORE_CASE)
 
 /**
  * The ISBNs among an EPUB package document's identifiers (dc:identifier), in order, e.g. urn:isbn:9780141439518 or
