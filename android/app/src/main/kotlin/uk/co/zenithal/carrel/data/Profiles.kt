@@ -20,6 +20,16 @@ data class Profile(
 @Serializable
 data class ReadingGoal(val year: Int, val books: Int)
 
+/** Any reader's public profile, with their whole library (GET /readers/{username}); a private one is not found. */
+@Serializable
+data class Reader(
+    val username: String,
+    val isPublic: Boolean,
+    val avatarUrl: String?,
+    val goals: List<ReadingGoal>,
+    val library: List<LibraryItem>,
+)
+
 @Serializable
 data class UsernameAvailability(val available: Boolean, val reason: String?)
 

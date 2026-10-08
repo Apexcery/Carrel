@@ -68,7 +68,7 @@ import uk.co.zenithal.carrel.ui.theme.Carrel
 
 /**
  * The Search tab: a search box, then results as the website lists them. Before searching, the reader's recent
- * searches and the genres to browse.
+ * searches and the genres to browse. `searchFor` is a search to run from a link or a share, until `onSearchedFor`.
  */
 @Composable
 fun SearchScreen(
@@ -76,6 +76,8 @@ fun SearchScreen(
     openSeries: (hardcoverId: Int, fromBook: Int?) -> Unit,
     openGenre: (GenreLink) -> Unit,
     openAllGenres: () -> Unit,
+    searchFor: String?,
+    onSearchedFor: () -> Unit,
 ) {
     val container = LocalContainer.current
     val model = viewModel { SearchViewModel(container.api, container.recentSearches) }
@@ -95,6 +97,12 @@ fun SearchScreen(
         model.search(q, userId)
         keyboard?.hide()
         focus.clearFocus()
+    }
+    LaunchedEffect(searchFor) {
+        searchFor?.let {
+            search(it)
+            onSearchedFor()
+        }
     }
 
     // Load the next page as the reader nears the end of what's shown.

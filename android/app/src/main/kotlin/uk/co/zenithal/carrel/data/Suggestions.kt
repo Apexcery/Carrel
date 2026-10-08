@@ -59,3 +59,12 @@ private fun inApiOrder(items: List<LibraryItem>) = items.sortedByDescending { it
 private fun finishedOrChanged(item: LibraryItem) = item.entry.reads.firstOrNull()?.finishedOn ?: item.entry.updatedAt
 
 private fun averageRating(books: List<LibraryItem>) = books.mapNotNull { it.entry.rating }.ifEmpty { listOf(0.0) }.average()
+
+/**
+ * The book after `position` in a series, as the API's "Next in your series" chooses it (RecommendationService), or null
+ * when there isn't one or the reader already has it: if the next book is on a shelf, the reader knows about it, so
+ * this doesn't skip ahead to the one after.
+ */
+fun nextInSeries(series: SeriesDetail, position: Double, owned: Set<Long>): SeriesBook? =
+    series.books.filter { (it.position ?: return@filter false) > position }.minByOrNull { it.position!! }
+        ?.takeIf { it.hardcoverId.toLong() !in owned }

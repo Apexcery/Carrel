@@ -6,12 +6,14 @@
     <application
         android:name=".CarrelApp"
         android:allowBackup="false"
+        android:enableOnBackInvokedCallback="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.Carrel">
 
-        <!-- Links in Carrel's emails (/auth/confirm) open here; each build type adds its own link filter. -->
+        <!-- Links in Carrel's emails (/auth/confirm) and to the website's pages open here; each build type adds its own
+             link filters. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -20,6 +22,12 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Sharing a link or text into Carrel finds the book (see sharedDestination). -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
     </application>

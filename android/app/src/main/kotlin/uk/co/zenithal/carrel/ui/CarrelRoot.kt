@@ -19,6 +19,7 @@ import androidx.navigation.compose.rememberNavController
 import uk.co.zenithal.carrel.LocalContainer
 import uk.co.zenithal.carrel.auth.EmailLink
 import uk.co.zenithal.carrel.auth.Session
+import uk.co.zenithal.carrel.data.Destination
 import uk.co.zenithal.carrel.data.Loaded
 import uk.co.zenithal.carrel.data.PROFILE_PATH
 import uk.co.zenithal.carrel.data.Profile
@@ -31,10 +32,11 @@ import uk.co.zenithal.carrel.ui.theme.Carrel
 
 /**
  * Everything the app shows, as the website's App does: browsing is open to everyone, and a signed-in reader without a
- * username chooses one first. A link from one of Carrel's emails (`link`) takes over until it's dealt with.
+ * username chooses one first. A link from one of Carrel's emails (`link`) takes over until it's dealt with. Any other
+ * link, share, or shortcut (`destination`) waits for the tabs to show, then opens its page.
  */
 @Composable
-fun CarrelRoot(link: EmailLink?, onLinkHandled: () -> Unit) {
+fun CarrelRoot(link: EmailLink?, onLinkHandled: () -> Unit, destination: Destination?, onDestinationReached: () -> Unit) {
     val container = LocalContainer.current
     val session by container.session.state.collectAsStateWithLifecycle()
     val nav = rememberNavController()
@@ -59,8 +61,8 @@ fun CarrelRoot(link: EmailLink?, onLinkHandled: () -> Unit) {
             )
             current is Session.SignedIn && settingPassword ->
                 SetPasswordScreen(current.email) { settingPassword = false }
-            current is Session.SignedIn -> SignedIn(current) { profile -> MainScreen(nav, current, profile) }
-            else -> MainScreen(nav, current, profile = null)
+            current is Session.SignedIn -> SignedIn(current) { profile -> MainScreen(nav, current, profile, destination, onDestinationReached) }
+            else -> MainScreen(nav, current, profile = null, destination, onDestinationReached)
         }
     }
 }
