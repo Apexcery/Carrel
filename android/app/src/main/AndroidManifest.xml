@@ -29,6 +29,24 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
+            <!-- Opening or sharing an EPUB with Carrel adds it to the phone, to read. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="application/epub+zip" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/epub+zip" />
+            </intent-filter>
         </activity>
+
+        <!-- The eReader, opened from the app only. It handles size changes (turning, folding, and unfolding) itself:
+             recreated, Readium would bring back the page with its old columns. -->
+        <activity
+            android:name=".reader.ReaderActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout"
+            android:exported="false" />
     </application>
 </manifest>

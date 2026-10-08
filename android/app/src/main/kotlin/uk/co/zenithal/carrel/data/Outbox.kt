@@ -56,6 +56,9 @@ interface WaitingChangeDao {
     @Query("SELECT bookId FROM changes")
     fun observeBooks(): Flow<List<Long>>
 
+    @Query("SELECT * FROM changes WHERE bookId = :bookId ORDER BY id DESC LIMIT 1")
+    suspend fun lastFor(bookId: Long): WaitingChange?
+
     @Query("SELECT COUNT(*) FROM changes WHERE bookId = :bookId")
     suspend fun countFor(bookId: Long): Int
 
@@ -91,11 +94,23 @@ class Outbox(private val context: Context, private val dao: WaitingChangeDao, pr
 
     suspend fun isWaiting(bookId: Long) = dao.countFor(bookId) > 0
 
-    /** Keeps a change to send: a save, or a removal when `request` is null. */
+    /**
+     * Keeps a change to send: a save, or a removal when `request` is null. A save can take the place of the book's last
+     * waiting one (see [replacing]), so reading offline doesn't queue a save for every few percent.
+     */
     suspend fun add(bookId: Long, request: SaveEntryRequest?) {
         val userId = currentUser() ?: throw ApiException(401, "Your session has expired. Sign in again.")
-        val json = request?.let { CarrelJson.encodeToString(SaveEntryRequest.serializer(), it) }
-        dao.add(WaitingChange(userId = userId, bookId = bookId, request = json, changedAt = request?.changedAt ?: Instant.now().toString()))
+        var toSend = request
+        val last = dao.lastFor(bookId)
+        if (request != null && last?.request != null && last.userId == userId) {
+            replacing(CarrelJson.decodeFromString(SaveEntryRequest.serializer(), last.request), request)?.let {
+                // If it's being sent right now, this one goes after it.
+                dao.delete(last.id)
+                toSend = it
+            }
+        }
+        val json = toSend?.let { CarrelJson.encodeToString(SaveEntryRequest.serializer(), it) }
+        dao.add(WaitingChange(userId = userId, bookId = bookId, request = json, changedAt = toSend?.changedAt ?: Instant.now().toString()))
         schedule()
     }
 
@@ -153,6 +168,14 @@ class Outbox(private val context: Context, private val dao: WaitingChangeDao, pr
         const val SYNC_WORK = "send-library-changes"
     }
 }
+
+/**
+ * The one save to send in place of a book's last waiting save (`earlier`) and a new one (`later`), or null when both
+ * must go. A save replaces the whole entry, so the later one alone ends the same, as long as neither changes the reading
+ * history and they keep the same status; the earlier one's date stays, for any read dates a status change sets.
+ */
+fun replacing(earlier: SaveEntryRequest, later: SaveEntryRequest): SaveEntryRequest? =
+    if (earlier.reads == null && later.reads == null && earlier.status == later.status) later.copy(today = earlier.today) else null
 
 /** Sends the waiting library changes (see Outbox), run by WorkManager once there's a signal. */
 class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {

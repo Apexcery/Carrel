@@ -17,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.core.content.IntentCompat
 import uk.co.zenithal.carrel.auth.EmailLink
 import uk.co.zenithal.carrel.data.Destination
 import uk.co.zenithal.carrel.data.linkDestination
@@ -63,27 +64,23 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun edgeToEdge(dark: Boolean) {
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark },
-            // Android's own scrims, for older phones that can't show dark navigation buttons.
-            navigationBarStyle = SystemBarStyle.auto(Color.argb(0xe6, 0xff, 0xff, 0xff), Color.argb(0x80, 0x1b, 0x1b, 0x1b)) { dark },
-        )
-        // The app's own paper shows behind the system's navigation buttons, rather than a white strip.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) window.isNavigationBarContrastEnforced = false
-    }
-
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         EmailLink.from(intent.data)?.let { link = it } ?: destinationOf(intent)?.let { destination = it }
     }
 
     /**
-     * Where an intent takes the reader: a link to one of the website's pages, something shared from another app, or a
-     * launcher shortcut. Reopening the app from Recents repeats the intent that first opened it, so that's ignored.
+     * Where an intent takes the reader: a link to one of the website's pages, something shared from another app, a
+     * launcher shortcut, an EPUB to add, or a book just finished in the reader. Reopening the app from Recents repeats
+     * the intent that first opened it, so that's ignored.
      */
     private fun destinationOf(intent: Intent?): Destination? {
         if (intent == null || intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return null
+        intent.getLongExtra(FINISHED_BOOK, 0).takeIf { it > 0 }?.let { return Destination.Finished(it) }
+        if (intent.type == EPUB) {
+            val file = if (intent.action == Intent.ACTION_SEND) IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java) else intent.data
+            return file?.let { Destination.AddBook(it.toString()) }
+        }
         return when (intent.action) {
             Intent.ACTION_SEND -> sharedDestination(intent.getStringExtra(Intent.EXTRA_TEXT), intent.getStringExtra(Intent.EXTRA_SUBJECT), WEBSITE_HOSTS)
             Intent.ACTION_VIEW -> shortcutDestination(intent) ?: intent.dataString?.let { linkDestination(it, WEBSITE_HOSTS) }
@@ -91,8 +88,23 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private companion object {
+    companion object {
+        /** A book the reader just marked as read (its id), from ReaderActivity. */
+        const val FINISHED_BOOK = "finishedBook"
+        private const val EPUB = "application/epub+zip"
+
         /** The website's address, and in debug builds the local website, whose links the dev project's emails use. */
-        val WEBSITE_HOSTS = setOfNotNull(Uri.parse(BuildConfig.WEBSITE_URL).host, "localhost:5173".takeIf { BuildConfig.DEBUG })
+        private val WEBSITE_HOSTS = setOfNotNull(Uri.parse(BuildConfig.WEBSITE_URL).host, "localhost:5173".takeIf { BuildConfig.DEBUG })
     }
+}
+
+/** Draws behind the system bars, with their icons following the chosen theme, not the phone's, to show against the paper. */
+internal fun ComponentActivity.edgeToEdge(dark: Boolean) {
+    enableEdgeToEdge(
+        statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark },
+        // Android's own scrims, for older phones that can't show dark navigation buttons.
+        navigationBarStyle = SystemBarStyle.auto(Color.argb(0xe6, 0xff, 0xff, 0xff), Color.argb(0x80, 0x1b, 0x1b, 0x1b)) { dark },
+    )
+    // The app's own paper shows behind the system's navigation buttons, rather than a white strip.
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) window.isNavigationBarContrastEnforced = false
 }

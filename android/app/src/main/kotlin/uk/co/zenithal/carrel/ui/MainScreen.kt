@@ -66,6 +66,11 @@ import uk.co.zenithal.carrel.ui.you.ProfileSection
 import uk.co.zenithal.carrel.ui.you.ReaderScreen
 import uk.co.zenithal.carrel.ui.you.ReaderShelfScreen
 import uk.co.zenithal.carrel.ui.library.LibraryScreen
+import uk.co.zenithal.carrel.ui.reading.AddBookScreen
+import uk.co.zenithal.carrel.ui.reading.LinkBookScreen
+import uk.co.zenithal.carrel.ui.reading.PhoneBooksScreen
+import uk.co.zenithal.carrel.ui.reading.ReadOnPhone
+import uk.co.zenithal.carrel.ui.reading.ReadingScreen
 import uk.co.zenithal.carrel.ui.library.ShelfPanel
 import uk.co.zenithal.carrel.ui.library.ShelfScreen
 import uk.co.zenithal.carrel.ui.search.SearchScreen
@@ -92,8 +97,11 @@ import kotlin.reflect.KClass
 @Serializable data class SignInRoute(val mode: String) {
     constructor(mode: SignInMode) : this(mode.name)
 }
-/** A book by the API path that loads it: /books/12, /books/hardcover/123, or /books/openlibrary/OL1W. */
-@Serializable data class BookRoute(val path: String)
+/**
+ * A book by the API path that loads it: /books/12, /books/hardcover/123, or /books/openlibrary/OL1W. `finished` opens
+ * the finished sheet, for a book just marked as read in the reader.
+ */
+@Serializable data class BookRoute(val path: String, val finished: Boolean = false)
 @Serializable data class SeriesRoute(val hardcoverId: Int, val fromBook: Int? = null)
 @Serializable data class GenreRoute(val slug: String)
 @Serializable data object GenresRoute
@@ -108,6 +116,13 @@ import kotlin.reflect.KClass
 @Serializable data class ReaderShelfRoute(val username: String, val slug: String)
 /** A shared book's ISBN, looked up, then the book opens; or a search for `fallback` when no book has it. */
 @Serializable data class FindBookRoute(val isbn: String, val fallback: String)
+/** Reading in Carrel (the Home button): first carrying on with the last book, with `resume`. */
+@Serializable data class ReadingRoute(val resume: Boolean = false)
+/** Every book on this phone, grouped. */
+@Serializable data object PhoneBooksRoute
+/** An EPUB being copied onto the phone, by its content URI; then linking it (LinkBookRoute, by PhoneBook id). */
+@Serializable data class AddBookRoute(val uri: String)
+@Serializable data class LinkBookRoute(val phoneBookId: Long)
 
 private data class Tab(val route: Any, val type: KClass<*>, val label: String, val icon: ImageVector)
 
@@ -157,6 +172,20 @@ fun MainScreen(nav: NavHostController, session: Session, profile: Profile?, dest
             is Destination.ReaderShelf ->
                 if (own(destination.username)) nav.navigate(ShelfRoute(destination.status.slug)) else nav.navigate(ReaderShelfRoute(destination.username, destination.status.slug))
             is Destination.OwnShelf -> if (profile != null) nav.navigate(ShelfRoute(destination.status.slug)) else openTab(nav, LibraryRoute)
+            // Added from another app, it then shows among the reader's books.
+            is Destination.AddBook -> {
+                nav.navigate(ReadingRoute())
+                nav.navigate(AddBookRoute(destination.uri))
+            }
+            is Destination.Finished -> {
+                val path = "/books/${destination.bookId}"
+                // The book's page the reader was opened from makes way for the one with the sheet.
+                val top = nav.currentBackStackEntry
+                val samePage = top != null && top.destination.hasRoute(BookRoute::class) && top.toRoute<BookRoute>().path == path
+                nav.navigate(BookRoute(path, finished = true)) {
+                    if (samePage) popUpTo(top.destination.id) { inclusive = true }
+                }
+            }
         }
         onDestinationReached()
     }
@@ -168,18 +197,20 @@ fun MainScreen(nav: NavHostController, session: Session, profile: Profile?, dest
     ) { padding ->
         NavHost(nav, startDestination = HomeRoute, modifier = Modifier.padding(padding)) {
             composable<HomeRoute> {
-                HomeScreen(signedIn = profile != null, openBook)
+                HomeScreen(signedIn = profile != null, openBook) { nav.navigate(ReadingRoute(resume = true)) }
             }
             composable<SearchRoute> {
                 SearchScreen(openBook, openSeries, openGenre, { nav.navigate(GenresRoute) }, searchFor) { searchFor = null }
             }
             composable<BookRoute> { backStackEntry ->
-                BookScreen(backStackEntry.toRoute<BookRoute>().path, openBook, openSeries, openGenre) {
+                val route = backStackEntry.toRoute<BookRoute>()
+                BookScreen(route.path, openBook, openSeries, openGenre) {
                     if (profile == null) {
                         ShelfPanelSignedOut({ signIn(SignInMode.SignIn) }, { signIn(SignInMode.SignUp) })
                     } else {
-                        ShelfPanel(it, openBook)
+                        ShelfPanel(it, openBook, route.finished)
                     }
+                    ReadOnPhone(it.id)
                 }
             }
             composable<SeriesRoute> { backStackEntry ->
@@ -230,6 +261,30 @@ fun MainScreen(nav: NavHostController, session: Session, profile: Profile?, dest
                     openTab(nav, SearchRoute)
                     searchFor = text
                 }
+            }
+            composable<ReadingRoute> { backStackEntry ->
+                ReadingScreen(
+                    backStackEntry.toRoute<ReadingRoute>().resume,
+                    addBook = { uri -> nav.navigate(AddBookRoute(uri.toString())) },
+                    openBook = openBook,
+                    linkBook = { id -> nav.navigate(LinkBookRoute(id)) },
+                ) { nav.navigate(PhoneBooksRoute) }
+            }
+            composable<PhoneBooksRoute> {
+                PhoneBooksScreen(openBook) { id -> nav.navigate(LinkBookRoute(id)) }
+            }
+            composable<AddBookRoute> { backStackEntry ->
+                AddBookScreen(backStackEntry.toRoute<AddBookRoute>().uri, { book ->
+                    // A new book is offered a link; either way this page goes, so Back doesn't return to it.
+                    if (book.bookId == null) {
+                        nav.navigate(LinkBookRoute(book.id)) { popUpTo<AddBookRoute> { inclusive = true } }
+                    } else {
+                        nav.popBackStack()
+                    }
+                }) { nav.popBackStack() }
+            }
+            composable<LinkBookRoute> { backStackEntry ->
+                LinkBookScreen(backStackEntry.toRoute<LinkBookRoute>().phoneBookId, { nav.popBackStack() }) { nav.popBackStack() }
             }
             composable<YouRoute> {
                 TabPage { YouPage(session, profile, signIn, openLegal) { nav.navigate(SettingsRoute) } }

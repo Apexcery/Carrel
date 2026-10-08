@@ -22,6 +22,10 @@ sealed interface Destination {
     data class ReaderShelf(val username: String, val status: ReadingStatus) : Destination
     /** The signed-in reader's shelf at its old address, /shelves/read. */
     data class OwnShelf(val status: ReadingStatus) : Destination
+    /** An EPUB opened with, or shared to, Carrel, to add to the phone. */
+    data class AddBook(val uri: String) : Destination
+    /** A book just marked as read in the reader: its page, with the finished sheet. */
+    data class Finished(val bookId: Long) : Destination
 }
 
 private val DIGITS = Regex("""\d{1,10}""")
