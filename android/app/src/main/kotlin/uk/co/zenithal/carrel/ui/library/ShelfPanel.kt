@@ -78,10 +78,11 @@ private val UNITS = listOf(ProgressUnit.Page to "pages", ProgressUnit.Percent to
  * The signed-in reader's shelf entry for a book, as the website's panel. Status and rating save as soon as they change;
  * progress, edition, and reading history are edited together in a sheet behind "Edit" and saved with one button.
  * The entry comes from the saved library, so it shows with no signal; changes need one. Marking the book as read
- * opens the finished sheet, which can open the next in the series (`openBook`).
+ * opens the finished sheet, which can open the next in the series (`openBook`); `finished` opens it straight away, for
+ * a book marked as read in the reader.
  */
 @Composable
-fun ShelfPanel(book: BookDetail, openBook: (path: String) -> Unit) {
+fun ShelfPanel(book: BookDetail, openBook: (path: String) -> Unit, finished: Boolean = false) {
     val container = LocalContainer.current
     val haptics = LocalHapticFeedback.current
     val library = rememberLoaded(LIBRARY_PATH, LibrarySerializer)
@@ -89,7 +90,7 @@ fun ShelfPanel(book: BookDetail, openBook: (path: String) -> Unit) {
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var editing by rememberSaveable { mutableStateOf(false) }
-    var finished by rememberSaveable { mutableStateOf(false) }
+    var showFinished by rememberSaveable { mutableStateOf(finished) }
     val waiting by container.outbox.waitingBooks.collectAsStateWithLifecycle(emptyList())
     val online by container.connectivity.online.collectAsStateWithLifecycle()
 
@@ -123,7 +124,7 @@ fun ShelfPanel(book: BookDetail, openBook: (path: String) -> Unit) {
                 save(entry.toRequest().copy(status = status)) {
                     if (status == ReadingStatus.Read) {
                         haptics.performHapticFeedback(HapticFeedbackType.Confirm)
-                        finished = true
+                        showFinished = true
                     }
                 }
             }
@@ -154,11 +155,11 @@ fun ShelfPanel(book: BookDetail, openBook: (path: String) -> Unit) {
         if (!editing) error?.let { FormMessage(it, Tone.Error) }
     }
 
-    if (finished) {
+    if (showFinished) {
         FinishedSheet(book, { path ->
-            finished = false
+            showFinished = false
             openBook(path)
-        }) { finished = false }
+        }) { showFinished = false }
     }
 
     if (editing && entry != null) {

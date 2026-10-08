@@ -1,14 +1,18 @@
 package uk.co.zenithal.carrel.ui.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -16,6 +20,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -45,6 +50,7 @@ import uk.co.zenithal.carrel.ui.Loadable
 import uk.co.zenithal.carrel.ui.components.ErrorNotice
 import uk.co.zenithal.carrel.ui.components.ShelfSkeleton
 import uk.co.zenithal.carrel.ui.components.SuggestionShelf
+import uk.co.zenithal.carrel.ui.reading.OpenBookIcon
 import uk.co.zenithal.carrel.ui.rememberLoaded
 import uk.co.zenithal.carrel.ui.rememberOwnedHardcoverIds
 import uk.co.zenithal.carrel.ui.theme.Carrel
@@ -56,10 +62,11 @@ private val SUGGESTIONS = ListSerializer(BookSuggestion.serializer())
 
 /**
  * Suggestions, as the website's home page: signed in, in two tabs (For you, from the reader's library, and Discover,
- * the same for everyone); signed out, just Discover. The reader's own shelves are in the Library tab.
+ * the same for everyone); signed out, just Discover. The reader's own shelves are in the Library tab. The open book at
+ * the top opens reading (`openReading`).
  */
 @Composable
-fun HomeScreen(signedIn: Boolean, openBook: (path: String) -> Unit) {
+fun HomeScreen(signedIn: Boolean, openBook: (path: String) -> Unit, openReading: () -> Unit) {
     val colors = Carrel.colors
     var chosen by rememberSaveable { mutableStateOf<HomeTab?>(null) }
     val library = rememberLoaded(if (signedIn) LIBRARY_PATH else null, LibrarySerializer).loaded
@@ -67,7 +74,12 @@ fun HomeScreen(signedIn: Boolean, openBook: (path: String) -> Unit) {
     val open = { book: BookSuggestion -> openBook("/books/hardcover/${book.hardcoverId}") }
 
     Column(Modifier.fillMaxSize().background(colors.paper).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 24.dp)) {
-        Text("What are you reading?", style = Carrel.type.displayLarge, color = colors.ink)
+        Box(Modifier.fillMaxWidth()) {
+            Text("What are you reading?", style = Carrel.type.displayLarge, color = colors.ink, modifier = Modifier.padding(end = 40.dp))
+            IconButton(openReading, Modifier.align(Alignment.TopEnd).offset(x = 12.dp, y = (-12).dp)) {
+                Icon(OpenBookIcon, contentDescription = "Read your books", tint = colors.inkSoft)
+            }
+        }
         Text(
             "Search by title, author, or ISBN to find a book, its editions, and the series it belongs to.",
             style = Carrel.type.body,

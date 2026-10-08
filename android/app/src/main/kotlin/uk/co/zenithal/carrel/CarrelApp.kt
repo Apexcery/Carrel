@@ -18,8 +18,11 @@ import uk.co.zenithal.carrel.data.CarrelJson
 import uk.co.zenithal.carrel.data.GoalChanges
 import uk.co.zenithal.carrel.data.LibraryChanges
 import uk.co.zenithal.carrel.data.Outbox
+import uk.co.zenithal.carrel.data.PhoneBooks
+import uk.co.zenithal.carrel.data.PhoneBooksDatabase
 import uk.co.zenithal.carrel.data.RecentSearches
 import uk.co.zenithal.carrel.data.Store
+import uk.co.zenithal.carrel.reader.OpenBook
 import uk.co.zenithal.carrel.ui.theme.Appearance
 
 class CarrelApp : Application() {
@@ -33,7 +36,7 @@ class CarrelApp : Application() {
 }
 
 /** The app's shared services, created once. Each build type points them at its own Supabase project and API. */
-class AppContainer(context: Context, scope: CoroutineScope) {
+class AppContainer(context: Context, val scope: CoroutineScope) {
     val supabase = createSupabaseClient(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_KEY) {
         install(Auth) {
             // Email links carry a token hash that works on any device. (PKCE would tie a sign-up's confirmation link to
@@ -47,6 +50,9 @@ class AppContainer(context: Context, scope: CoroutineScope) {
     val outbox = Outbox(context, ChangesDatabase.create(context).changes()) { (session.state.value as? Session.SignedIn)?.userId }
     val library = LibraryChanges(api, store, outbox)
     val goals = GoalChanges(api, store)
+    val phoneBooks = PhoneBooks(context, PhoneBooksDatabase.create(context).books(), context.getSharedPreferences("reading", Context.MODE_PRIVATE))
+    /** The book open in the reader (ReaderActivity), if any. */
+    var openBook: OpenBook? = null
     val recentSearches = RecentSearches(context.getSharedPreferences("recent-searches", Context.MODE_PRIVATE))
     val appearance = Appearance(context.getSharedPreferences("appearance", Context.MODE_PRIVATE))
     val session: SessionWatcher = SessionWatcher(supabase, store, outbox, context.getSharedPreferences("saved-data", Context.MODE_PRIVATE), scope)
