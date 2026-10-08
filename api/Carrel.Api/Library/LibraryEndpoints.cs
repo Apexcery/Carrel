@@ -39,8 +39,10 @@ public static class LibraryEndpoints
                 ? Results.Ok(entry)
                 : Results.NotFound()));
 
-        library.MapDelete("/books/{bookId:long}", async (long bookId, ClaimsPrincipal user, LibraryService service, CancellationToken ct) =>
-            await service.DeleteAsync(UserId(user), bookId, ct) ? Results.NoContent() : Results.NotFound());
+        // ?changedAt= for a removal the app made offline (see SaveEntryRequest.ChangedAt).
+        library.MapDelete("/books/{bookId:long}", (long bookId, DateTimeOffset? changedAt, ClaimsPrincipal user, LibraryService service,
+                CancellationToken ct) =>
+            Validated(async () => await service.DeleteAsync(UserId(user), bookId, changedAt, ct) ? Results.NoContent() : Results.NotFound()));
     }
 
     /// <summary>The Supabase user id from the validated token; every library query is scoped to it.</summary>
@@ -55,6 +57,10 @@ public static class LibraryEndpoints
         catch (LibraryValidationException e)
         {
             return Results.ValidationProblem(new Dictionary<string, string[]> { [e.Field] = [e.Message] });
+        }
+        catch (LibraryConflictException e)
+        {
+            return Results.Problem(e.Message, statusCode: StatusCodes.Status409Conflict);
         }
     }
 }

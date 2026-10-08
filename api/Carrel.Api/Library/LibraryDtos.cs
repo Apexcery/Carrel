@@ -38,6 +38,9 @@ public record LibraryBookDto(
 /// The entry's desired state. <paramref name="Today"/> is the reader's local date, used for automatic read dates
 /// (servers run on UTC, which may be a different day). <paramref name="Reads"/>, when given, replaces the reading
 /// history: reads with an id are updated, reads without one are added, and reads left out are deleted.
+/// <paramref name="ChangedAt"/> is when the change was made, for one the app saved while offline and sends later: it's
+/// turned away if the entry has changed or been removed since (the newer change wins), and becomes the entry's last
+/// update.
 /// </summary>
 public record SaveEntryRequest(
     ReadingStatus Status,
@@ -46,7 +49,8 @@ public record SaveEntryRequest(
     ProgressUnit? ProgressUnit,
     decimal? ProgressValue,
     DateOnly? Today,
-    ReadInput[]? Reads = null);
+    ReadInput[]? Reads = null,
+    DateTimeOffset? ChangedAt = null);
 
 /// <param name="FinishedDateUnknown">Finished on a date that isn't known; ignored when <paramref name="FinishedOn"/> is set.</param>
 public record ReadInput(long? Id, DateOnly? StartedOn, DateOnly? FinishedOn, bool FinishedDateUnknown = false);
