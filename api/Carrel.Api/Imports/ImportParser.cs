@@ -100,7 +100,7 @@ public static class ImportParser
             .Where(a => a.Length > 0)
             .ToArray();
         // A rating of 0 means unrated.
-        var rating = int.TryParse(f.GetValueOrDefault("My Rating"), out var stars) && stars is >= 1 and <= 5 ? stars : (decimal?)null;
+        var rating = Stars(f.GetValueOrDefault("My Rating"));
         // Goodreads only exports the latest read's finish date.
         var dated = new List<(DateOnly? Started, DateOnly? Finished)>();
         if (ParseDate(f.GetValueOrDefault("Date Read")) is { } dateRead)
@@ -142,11 +142,7 @@ public static class ImportParser
         var asin = isbn is null && uid.Length == 10 && uid.StartsWith("B0", StringComparison.Ordinal) && uid.All(char.IsAsciiLetterOrDigit)
             ? uid
             : null;
-        // Quarter stars round to the nearest half, quarters going up: 3.75 is 4, 3.25 is 3.5.
-        var rating = decimal.TryParse(f.GetValueOrDefault("Star Rating"), NumberStyles.Number, CultureInfo.InvariantCulture, out var stars)
-                     && stars is >= 0.25m and <= 5
-            ? Math.Max(0.5m, Math.Round(stars * 2, MidpointRounding.AwayFromZero) / 2)
-            : (decimal?)null;
+        var rating = Stars(f.GetValueOrDefault("Star Rating"));
 
         // "Dates Read" lists each read as a date range or a single (finish) date, e.g. "2026/08/24-2026/08/26".
         var dated = new List<(DateOnly? Started, DateOnly? Finished)>();
@@ -225,6 +221,15 @@ public static class ImportParser
 
     private static decimal? Number(string? text) =>
         decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var number) ? number : null;
+
+    /// <summary>
+    /// A Goodreads or StoryGraph rating in Carrel's half stars. Whole stars stay whole, and anything between becomes
+    /// the half star: 3.25, 3.5, and 3.75 are all 3.5.
+    /// </summary>
+    private static decimal? Stars(string? text) =>
+        Number(text) is { } stars && stars is > 0 and <= 5
+            ? stars == decimal.Truncate(stars) ? stars : decimal.Truncate(stars) + 0.5m
+            : null;
 
     /// <summary>
     /// The reads to record. Dated reads come from the export. Exports count more reads than they date, so the rest are
