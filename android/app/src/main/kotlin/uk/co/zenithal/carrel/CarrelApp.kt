@@ -7,12 +7,17 @@ import io.github.jan.supabase.auth.FlowType
 import io.github.jan.supabase.createSupabaseClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.launch
 import uk.co.zenithal.carrel.auth.SessionWatcher
 import uk.co.zenithal.carrel.data.ApiClient
+import uk.co.zenithal.carrel.auth.Session
 import uk.co.zenithal.carrel.data.CarrelDatabase
+import uk.co.zenithal.carrel.data.ChangesDatabase
+import uk.co.zenithal.carrel.data.Connectivity
 import uk.co.zenithal.carrel.data.CarrelJson
 import uk.co.zenithal.carrel.data.GoalChanges
 import uk.co.zenithal.carrel.data.LibraryChanges
+import uk.co.zenithal.carrel.data.Outbox
 import uk.co.zenithal.carrel.data.RecentSearches
 import uk.co.zenithal.carrel.data.Store
 import uk.co.zenithal.carrel.ui.theme.Appearance
@@ -38,10 +43,16 @@ class AppContainer(context: Context, scope: CoroutineScope) {
     }
     val api = ApiClient(BuildConfig.API_URL, supabase, CarrelJson)
     val store = Store(CarrelDatabase.create(context).responses(), api, scope)
-    val library = LibraryChanges(api, store)
+    val connectivity = Connectivity(context)
+    val outbox = Outbox(context, ChangesDatabase.create(context).changes()) { (session.state.value as? Session.SignedIn)?.userId }
+    val library = LibraryChanges(api, store, outbox)
     val goals = GoalChanges(api, store)
     val recentSearches = RecentSearches(context.getSharedPreferences("recent-searches", Context.MODE_PRIVATE))
     val appearance = Appearance(context.getSharedPreferences("appearance", Context.MODE_PRIVATE))
-    val session = SessionWatcher(supabase, store, context.getSharedPreferences("saved-data", Context.MODE_PRIVATE), scope)
+    val session: SessionWatcher = SessionWatcher(supabase, store, outbox, context.getSharedPreferences("saved-data", Context.MODE_PRIVATE), scope)
     val shortcuts = LauncherShortcuts(context, store, scope)
+
+    init {
+        scope.launch { outbox.scheduleIfWaiting() }
+    }
 }

@@ -10,6 +10,7 @@ navigation = "2.10.2"
 room = "2.8.5"
 datastore = "1.2.1"
 browser = "1.10.0"
+work = "2.11.2"
 coil = "3.6.3"
 coroutines = "1.11.0"
 serialization = "1.11.0"
@@ -29,6 +30,7 @@ androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
 androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 androidx-browser = { module = "androidx.browser:browser", version.ref = "browser" }
+androidx-work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose-bom" }
 compose-ui = { module = "androidx.compose.ui:ui" }
 compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }

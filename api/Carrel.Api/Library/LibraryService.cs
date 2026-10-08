@@ -10,6 +10,9 @@ public class LibraryValidationException(string field, string message) : Exceptio
     public string Field { get; } = field;
 }
 
+/// <summary>Thrown when a change made offline is older than the entry's last change, which wins.</summary>
+public class LibraryConflictException() : Exception("This book was changed more recently somewhere else.");
+
 /// <summary>A user's library. Every query is scoped to the signed-in user's id.</summary>
 public class LibraryService(CarrelDbContext db)
 {
@@ -43,6 +46,13 @@ public class LibraryService(CarrelDbContext db)
 
         var entry = await LoadAsync(userId, bookId, ct);
         var now = DateTimeOffset.UtcNow;
+        var changedAt = ChangedAt(request.ChangedAt, now);
+        // The app only changes books already in the library while offline, so if the entry has gone since, it was
+        // removed elsewhere after that change was made, and the removal wins.
+        if ((entry is not null && entry.UpdatedAt > changedAt) || (entry is null && request.ChangedAt is not null))
+        {
+            throw new LibraryConflictException();
+        }
         if (entry is null)
         {
             entry = new LibraryEntry { UserId = userId, BookId = bookId, Book = book, AddedAt = now };
@@ -76,14 +86,33 @@ public class LibraryService(CarrelDbContext db)
                 _ => null,
             };
         }
-        entry.UpdatedAt = now;
+        entry.UpdatedAt = changedAt;
 
         await db.SaveChangesAsync(ct);
         return ToDto(entry);
     }
 
-    public async Task<bool> DeleteAsync(Guid userId, long bookId, CancellationToken ct) =>
-        await db.LibraryEntries.Where(e => e.UserId == userId && e.BookId == bookId).ExecuteDeleteAsync(ct) > 0;
+    /// <summary>
+    /// Removes the book from the library; false if it wasn't there. `changedAt` is when the reader removed it, for a
+    /// removal made offline, which is turned away if the entry has changed since.
+    /// </summary>
+    public async Task<bool> DeleteAsync(Guid userId, long bookId, DateTimeOffset? changedAt, CancellationToken ct)
+    {
+        var entries = db.LibraryEntries.Where(e => e.UserId == userId && e.BookId == bookId);
+        if (changedAt is not null)
+        {
+            var updatedAt = await entries.Select(e => (DateTimeOffset?)e.UpdatedAt).FirstOrDefaultAsync(ct);
+            if (updatedAt > ChangedAt(changedAt, DateTimeOffset.UtcNow))
+            {
+                throw new LibraryConflictException();
+            }
+        }
+        return await entries.ExecuteDeleteAsync(ct) > 0;
+    }
+
+    /// <summary>When a change was made: the app's time for one saved offline, but never later than now.</summary>
+    private static DateTimeOffset ChangedAt(DateTimeOffset? changedAt, DateTimeOffset now) =>
+        changedAt is { } at && at < now ? at : now;
 
     /// <summary>
     /// Deletes every entry in the user's library (their reads go with them) and their imports, keeping the account. False,

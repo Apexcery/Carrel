@@ -39,6 +39,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import uk.co.zenithal.carrel.LocalContainer
 import uk.co.zenithal.carrel.data.ApiException
@@ -89,6 +90,8 @@ fun ShelfPanel(book: BookDetail, openBook: (path: String) -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     var editing by rememberSaveable { mutableStateOf(false) }
     var finished by rememberSaveable { mutableStateOf(false) }
+    val waiting by container.outbox.waitingBooks.collectAsStateWithLifecycle(emptyList())
+    val online by container.connectivity.online.collectAsStateWithLifecycle()
 
     val items = library.loaded.data
     if (items == null) {
@@ -140,6 +143,13 @@ fun ShelfPanel(book: BookDetail, openBook: (path: String) -> Unit) {
                 error = null
                 editing = true
             })
+        }
+        if (book.id in waiting) {
+            Text(
+                if (online) "Syncing with Carrel…" else "Saved on this phone. It’ll sync when you’re back online.",
+                style = Carrel.type.mono,
+                color = Carrel.colors.inkSoft,
+            )
         }
         if (!editing) error?.let { FormMessage(it, Tone.Error) }
     }

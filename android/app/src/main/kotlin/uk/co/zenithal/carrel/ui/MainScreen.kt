@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -42,9 +43,11 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.toRoute
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.Serializable
+import uk.co.zenithal.carrel.LocalContainer
 import uk.co.zenithal.carrel.auth.Session
 import uk.co.zenithal.carrel.data.Destination
 import uk.co.zenithal.carrel.data.GenreLink
@@ -160,6 +163,7 @@ fun MainScreen(nav: NavHostController, session: Session, profile: Profile?, dest
 
     Scaffold(
         containerColor = paper,
+        topBar = { if (profile != null) SyncBar() },
         bottomBar = { if (!signingIn) TabBar(nav) },
     ) { padding ->
         NavHost(nav, startDestination = HomeRoute, modifier = Modifier.padding(padding)) {
@@ -291,6 +295,26 @@ private fun TabBar(nav: NavHostController) {
                 )
             }
         }
+    }
+}
+
+/** While library changes wait to be sent: how many, and whether that's for want of a signal. */
+@Composable
+private fun SyncBar() {
+    val container = LocalContainer.current
+    val colors = Carrel.colors
+    val waiting by container.outbox.waitingBooks.collectAsStateWithLifecycle(emptyList())
+    val online by container.connectivity.online.collectAsStateWithLifecycle()
+    if (waiting.isEmpty()) return
+    val count = "${waiting.size} ${if (waiting.size == 1) "change" else "changes"}"
+    Column(Modifier.fillMaxWidth().background(colors.paperRaised).statusBarsPadding()) {
+        Text(
+            if (online) "Syncing $count…" else "Offline · $count to sync",
+            style = Carrel.type.mono,
+            color = colors.inkSoft,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+        )
+        HorizontalDivider(color = colors.rule)
     }
 }
 

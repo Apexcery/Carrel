@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import uk.co.zenithal.carrel.data.ApiClient
+import uk.co.zenithal.carrel.data.Outbox
 import uk.co.zenithal.carrel.data.Store
 
 sealed interface Session {
@@ -26,10 +27,11 @@ sealed interface Session {
 }
 
 /**
- * The reader's session, kept from Supabase Auth. Saved API data is cleared whenever the reader changes, including
- * signing out. Whose data it is is kept on the device, so opening the app again doesn't count as a change.
+ * The reader's session, kept from Supabase Auth. Saved API data, and library changes still waiting to be sent, are
+ * cleared whenever the reader changes, including signing out. Whose data it is is kept on the device, so opening the
+ * app again doesn't count as a change.
  */
-class SessionWatcher(supabase: SupabaseClient, store: Store, private val prefs: SharedPreferences, scope: CoroutineScope) {
+class SessionWatcher(supabase: SupabaseClient, store: Store, outbox: Outbox, private val prefs: SharedPreferences, scope: CoroutineScope) {
     val state: StateFlow<Session> = supabase.auth.sessionStatus
         .map { status ->
             when (status) {
@@ -49,6 +51,7 @@ class SessionWatcher(supabase: SupabaseClient, store: Store, private val prefs: 
             val next = (session as? Session.SignedIn)?.userId.orEmpty()
             if (prefs.getString(SAVED_DATA_OWNER, null) != next) {
                 store.clear()
+                outbox.clear()
                 prefs.edit { putString(SAVED_DATA_OWNER, next) }
             }
         }
@@ -56,6 +59,18 @@ class SessionWatcher(supabase: SupabaseClient, store: Store, private val prefs: 
 
     private companion object {
         const val SAVED_DATA_OWNER = "savedDataOwner"
+    }
+}
+
+/**
+ * Signs the reader out. Without a signal Supabase can't be told, so the session is only cleared from this phone; the
+ * session itself stays valid on Supabase until it expires or the reader signs out everywhere.
+ */
+suspend fun SupabaseClient.signOutHere() {
+    try {
+        auth.signOut()
+    } catch (_: HttpRequestException) {
+        auth.clearSession()
     }
 }
 

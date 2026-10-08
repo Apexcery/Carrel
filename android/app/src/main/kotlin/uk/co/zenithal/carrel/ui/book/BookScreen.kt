@@ -19,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -37,6 +38,9 @@ import uk.co.zenithal.carrel.data.BookDetail
 import uk.co.zenithal.carrel.data.BookSuggestion
 import uk.co.zenithal.carrel.data.Edition
 import uk.co.zenithal.carrel.data.GenreLink
+import uk.co.zenithal.carrel.data.LIBRARY_PATH
+import uk.co.zenithal.carrel.data.LibraryBook
+import uk.co.zenithal.carrel.data.LibrarySerializer
 import uk.co.zenithal.carrel.data.RelatedBooks
 import uk.co.zenithal.carrel.data.displaySubtitle
 import uk.co.zenithal.carrel.data.formatDate
@@ -45,6 +49,7 @@ import uk.co.zenithal.carrel.data.formatDuration
 import uk.co.zenithal.carrel.data.listNames
 import uk.co.zenithal.carrel.data.otherCredits
 import uk.co.zenithal.carrel.data.seriesPosition
+import uk.co.zenithal.carrel.data.toBookDetail
 import uk.co.zenithal.carrel.ui.components.Cover
 import uk.co.zenithal.carrel.ui.components.ErrorNotice
 import uk.co.zenithal.carrel.ui.components.Gap
@@ -77,11 +82,24 @@ fun BookScreen(
 ) {
     val book = rememberLoaded(path, BookDetail.serializer())
     val data = book.loaded.data
+    // Without a signal, a book in the library whose page was never saved shows what the library knows of it.
+    val offline = data == null && book.loaded.error?.status == 0
+    val inLibrary = rememberLoaded(if (offline) LIBRARY_PATH else null, LibrarySerializer).loaded.data
+        ?.firstOrNull { "/books/${it.book.id}" == path }?.book
+    // Kept once found, so the page stays if the book is then removed from the library.
+    var kept by remember(path) { mutableStateOf<LibraryBook?>(null) }
+    if (inLibrary != null) kept = inLibrary
+    val saved = kept
     Column(
         Modifier.fillMaxSize().background(Carrel.colors.paper).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 24.dp),
     ) {
         when {
             data != null -> BookView(data, openBook, openSeries, openGenre, shelf)
+            saved != null -> {
+                Text("You’re offline, so this page is shorter than usual.", style = Carrel.type.mono, color = Carrel.colors.inkSoft)
+                Gap(20)
+                BookView(saved.toBookDetail(), openBook, openSeries, openGenre, shelf)
+            }
             book.loaded.error != null -> ErrorNotice(book.loaded.error.message.orEmpty(), book.retry)
             else -> BookSkeleton()
         }

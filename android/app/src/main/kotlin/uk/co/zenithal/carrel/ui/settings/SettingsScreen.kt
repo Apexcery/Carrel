@@ -20,13 +20,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -34,9 +38,9 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.launch
 import uk.co.zenithal.carrel.LocalContainer
+import uk.co.zenithal.carrel.auth.signOutHere
 import uk.co.zenithal.carrel.ui.components.Gap
 import uk.co.zenithal.carrel.ui.components.Kicker
 import uk.co.zenithal.carrel.ui.components.LinkButton
@@ -58,9 +62,13 @@ enum class SettingsSection(val label: String, val description: String, val membe
 @Composable
 fun SettingsScreen(email: String?, open: (SettingsSection) -> Unit) {
     val colors = Carrel.colors
-    val supabase = LocalContainer.current.supabase
+    val container = LocalContainer.current
+    val supabase = container.supabase
     val scope = rememberCoroutineScope()
     val signedIn = email != null
+    val waiting by container.outbox.waitingBooks.collectAsStateWithLifecycle(emptyList())
+    var confirmingSignOut by remember { mutableStateOf(false) }
+    val signOut = { scope.launch { supabase.signOutHere() } }
     SettingsPage(title = "Settings") {
         Column {
             HorizontalDivider(color = colors.rule)
@@ -85,8 +93,31 @@ fun SettingsScreen(email: String?, open: (SettingsSection) -> Unit) {
         if (email != null) {
             Gap(40)
             Text("Signed in as $email", style = Carrel.type.mono, color = colors.inkSoft)
-            LinkButton("Sign out", { scope.launch { supabase.auth.signOut() } }, Modifier.padding(top = 4.dp), color = colors.ink)
+            // Signing out drops library changes still waiting to be sent, so it asks first.
+            LinkButton("Sign out", { if (waiting.isEmpty()) signOut() else confirmingSignOut = true }, Modifier.padding(top = 4.dp), color = colors.ink)
         }
+    }
+
+    if (confirmingSignOut) {
+        AlertDialog(
+            onDismissRequest = { confirmingSignOut = false },
+            containerColor = colors.paperRaised,
+            text = {
+                Text(
+                    "${waiting.size} ${if (waiting.size == 1) "change hasn’t" else "changes haven’t"} synced yet. Signing out will lose " +
+                        "${if (waiting.size == 1) "it" else "them"}.",
+                    style = Carrel.type.body,
+                    color = colors.ink,
+                )
+            },
+            confirmButton = {
+                LinkButton("Sign out anyway", {
+                    confirmingSignOut = false
+                    signOut()
+                }, Modifier.padding(horizontal = 8.dp), color = colors.danger)
+            },
+            dismissButton = { LinkButton("Cancel", { confirmingSignOut = false }, Modifier.padding(horizontal = 8.dp)) },
+        )
     }
 }
 
