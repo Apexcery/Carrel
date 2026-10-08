@@ -14,6 +14,22 @@
                 <data android:port="5173" />
                 <data android:path="/auth/confirm" />
             </intent-filter>
+            <!-- Links to the local website's pages, as release builds have for the real one. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" />
+                <data android:host="localhost" />
+                <data android:port="5173" />
+                <data android:pathPrefix="/books/" />
+                <data android:pathPrefix="/series/" />
+                <data android:path="/genres" />
+                <data android:pathPrefix="/genres/" />
+                <data android:path="/search" />
+                <data android:pathPrefix="/shelves/" />
+                <data android:pathPrefix="/@" />
+            </intent-filter>
         </activity>
     </application>
 </manifest>

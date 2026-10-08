@@ -43,4 +43,5 @@ class AppContainer(context: Context, scope: CoroutineScope) {
     val recentSearches = RecentSearches(context.getSharedPreferences("recent-searches", Context.MODE_PRIVATE))
     val appearance = Appearance(context.getSharedPreferences("appearance", Context.MODE_PRIVATE))
     val session = SessionWatcher(supabase, store, context.getSharedPreferences("saved-data", Context.MODE_PRIVATE), scope)
+    val shortcuts = LauncherShortcuts(context, store, scope)
 }

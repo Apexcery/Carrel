@@ -27,6 +27,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -40,18 +43,25 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.toRoute
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.Serializable
 import uk.co.zenithal.carrel.auth.Session
+import uk.co.zenithal.carrel.data.Destination
 import uk.co.zenithal.carrel.data.GenreLink
+import uk.co.zenithal.carrel.data.LIBRARY_PATH
+import uk.co.zenithal.carrel.data.LibrarySerializer
 import uk.co.zenithal.carrel.data.ReadingStatus
 import uk.co.zenithal.carrel.data.Profile
 import uk.co.zenithal.carrel.ui.book.BookScreen
+import uk.co.zenithal.carrel.ui.book.FindBookScreen
 import uk.co.zenithal.carrel.ui.book.ShelfPanelSignedOut
 import uk.co.zenithal.carrel.ui.browse.GenreScreen
 import uk.co.zenithal.carrel.ui.browse.GenresScreen
 import uk.co.zenithal.carrel.ui.browse.SeriesScreen
 import uk.co.zenithal.carrel.ui.home.HomeScreen
 import uk.co.zenithal.carrel.ui.you.ProfileSection
+import uk.co.zenithal.carrel.ui.you.ReaderScreen
+import uk.co.zenithal.carrel.ui.you.ReaderShelfScreen
 import uk.co.zenithal.carrel.ui.library.LibraryScreen
 import uk.co.zenithal.carrel.ui.library.ShelfPanel
 import uk.co.zenithal.carrel.ui.library.ShelfScreen
@@ -90,6 +100,11 @@ import kotlin.reflect.KClass
 @Serializable data object AccountSettingsRoute
 @Serializable data object ImportExportRoute
 @Serializable data object AppearanceRoute
+/** Another reader's profile, and one of their shelves (by slug, as ShelfRoute). */
+@Serializable data class ReaderRoute(val username: String)
+@Serializable data class ReaderShelfRoute(val username: String, val slug: String)
+/** A shared book's ISBN, looked up, then the book opens; or a search for `fallback` when no book has it. */
+@Serializable data class FindBookRoute(val isbn: String, val fallback: String)
 
 private data class Tab(val route: Any, val type: KClass<*>, val label: String, val icon: ImageVector)
 
@@ -100,9 +115,12 @@ private val TABS = listOf(
     Tab(YouRoute, YouRoute::class, "You", Icons.Outlined.Person),
 )
 
-/** The four tabs, and the pages opened from them. `profile` is null when signed out. */
+/**
+ * The four tabs, and the pages opened from them. `profile` is null when signed out. `destination` is where a link, a
+ * share, or a launcher shortcut is taking the reader, until `onDestinationReached`.
+ */
 @Composable
-fun MainScreen(nav: NavHostController, session: Session, profile: Profile?) {
+fun MainScreen(nav: NavHostController, session: Session, profile: Profile?, destination: Destination?, onDestinationReached: () -> Unit) {
     val context = LocalContext.current
     val paper = Carrel.colors.paper
     val openLegal = { path: String -> openWebsitePage(context, path, paper) }
@@ -112,6 +130,33 @@ fun MainScreen(nav: NavHostController, session: Session, profile: Profile?) {
     val openBook = { path: String -> nav.navigate(BookRoute(path)) }
     val openSeries = { id: Int, fromBook: Int? -> nav.navigate(SeriesRoute(id, fromBook)) }
     val openGenre = { genre: GenreLink -> nav.navigate(GenreRoute(genre.slug)) }
+    // A search from a link or share, run once the Search tab shows.
+    var searchFor by rememberSaveable { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(destination) {
+        if (destination == null) return@LaunchedEffect
+        // On a cold start, the NavHost below has no graph until it's first laid out.
+        nav.currentBackStackEntryFlow.first()
+        val own = { username: String -> profile?.username.equals(username, ignoreCase = true) }
+        when (destination) {
+            is Destination.Book -> openBook(destination.path)
+            is Destination.Series -> openSeries(destination.hardcoverId, destination.fromBook)
+            Destination.Genres -> nav.navigate(GenresRoute)
+            is Destination.Genre -> nav.navigate(GenreRoute(destination.slug))
+            is Destination.Search -> {
+                openTab(nav, SearchRoute)
+                searchFor = destination.text
+            }
+            is Destination.Isbn -> nav.navigate(FindBookRoute(destination.isbn, destination.fallback))
+            Destination.Library -> openTab(nav, LibraryRoute)
+            // The reader's own profile is the You tab, and their shelves are in Library.
+            is Destination.Reader -> if (own(destination.username)) openTab(nav, YouRoute) else nav.navigate(ReaderRoute(destination.username))
+            is Destination.ReaderShelf ->
+                if (own(destination.username)) nav.navigate(ShelfRoute(destination.status.slug)) else nav.navigate(ReaderShelfRoute(destination.username, destination.status.slug))
+            is Destination.OwnShelf -> if (profile != null) nav.navigate(ShelfRoute(destination.status.slug)) else openTab(nav, LibraryRoute)
+        }
+        onDestinationReached()
+    }
 
     Scaffold(
         containerColor = paper,
@@ -122,14 +167,14 @@ fun MainScreen(nav: NavHostController, session: Session, profile: Profile?) {
                 HomeScreen(signedIn = profile != null, openBook)
             }
             composable<SearchRoute> {
-                SearchScreen(openBook, openSeries, openGenre) { nav.navigate(GenresRoute) }
+                SearchScreen(openBook, openSeries, openGenre, { nav.navigate(GenresRoute) }, searchFor) { searchFor = null }
             }
             composable<BookRoute> { backStackEntry ->
                 BookScreen(backStackEntry.toRoute<BookRoute>().path, openBook, openSeries, openGenre) {
                     if (profile == null) {
                         ShelfPanelSignedOut({ signIn(SignInMode.SignIn) }, { signIn(SignInMode.SignUp) })
                     } else {
-                        ShelfPanel(it)
+                        ShelfPanel(it, openBook)
                     }
                 }
             }
@@ -159,7 +204,28 @@ fun MainScreen(nav: NavHostController, session: Session, profile: Profile?) {
             }
             composable<ShelfRoute> { backStackEntry ->
                 val status = ReadingStatus.fromSlug(backStackEntry.toRoute<ShelfRoute>().slug)
-                if (profile != null && status != null) ShelfScreen(status, openBook)
+                if (profile != null && status != null) ShelfScreen(status, "Your library", rememberLoaded(LIBRARY_PATH, LibrarySerializer), openBook)
+            }
+            composable<ReaderRoute> { backStackEntry ->
+                val username = backStackEntry.toRoute<ReaderRoute>().username
+                ReaderScreen(username, openBook) { status -> nav.navigate(ReaderShelfRoute(username, status.slug)) }
+            }
+            composable<ReaderShelfRoute> { backStackEntry ->
+                val route = backStackEntry.toRoute<ReaderShelfRoute>()
+                ReadingStatus.fromSlug(route.slug)?.let { ReaderShelfScreen(route.username, it, openBook) }
+            }
+            composable<FindBookRoute> { backStackEntry ->
+                val route = backStackEntry.toRoute<FindBookRoute>()
+                FindBookScreen(
+                    route.isbn,
+                    route.fallback,
+                    // Either way, this page goes, so Back doesn't return to it.
+                    { path -> nav.navigate(BookRoute(path)) { popUpTo<FindBookRoute> { inclusive = true } } },
+                ) { text ->
+                    nav.popBackStack()
+                    openTab(nav, SearchRoute)
+                    searchFor = text
+                }
             }
             composable<YouRoute> {
                 TabPage { YouPage(session, profile, signIn, openLegal) { nav.navigate(SettingsRoute) } }
@@ -212,16 +278,7 @@ private fun TabBar(nav: NavHostController) {
             TABS.forEach { tab ->
                 NavigationBarItem(
                     selected = current?.hasRoute(tab.type) == true,
-                    onClick = {
-                        nav.navigate(tab.route) {
-                            // One copy of each tab, keeping its own page as it was (a search, a scroll position).
-                            popUpTo(nav.graph.findStartDestination().id) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                        // Always the tab's own page, not a book or shelf that was open on top of it.
-                        nav.popBackStack(tab.route, inclusive = false)
-                    },
+                    onClick = { openTab(nav, tab.route) },
                     icon = { Icon(tab.icon, contentDescription = null) },
                     label = { Text(tab.label.uppercase(), style = Carrel.type.mono.copy(letterSpacing = 0.1.em)) },
                     colors = NavigationBarItemDefaults.colors(
@@ -235,6 +292,18 @@ private fun TabBar(nav: NavHostController) {
             }
         }
     }
+}
+
+/** Opens a tab, as tapping it in the tab bar does. */
+private fun openTab(nav: NavHostController, route: Any) {
+    nav.navigate(route) {
+        // One copy of each tab, keeping its own page as it was (a search, a scroll position).
+        popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
+    }
+    // Always the tab's own page, not a book or shelf that was open on top of it.
+    nav.popBackStack(route, inclusive = false)
 }
 
 /** A tab's page: paper, the website's 16px gutter, scrolling. */

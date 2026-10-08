@@ -101,4 +101,20 @@ class SuggestionsTest {
         assertEquals(listOf("Newer", "Older"), favouriteAuthorBooks(listOf(older, newer)).map { it.book.title })
         assertEquals("Newer", suggestionBasis(listOf(older, newer))!!.item.book.title)
     }
+
+    private fun seriesBook(id: Int, position: Double?) = SeriesBook(id, position, "Book $id", emptyList(), null, null, null, null)
+
+    @Test
+    fun nextInSeriesIsTheLowestPositionAfter() {
+        val series = SeriesDetail(1, "Stormlight", null, null, listOf(seriesBook(1, 1.0), seriesBook(3, 3.0), seriesBook(25, 2.5), seriesBook(2, 2.0), seriesBook(9, null)), emptyList())
+        assertEquals(2, nextInSeries(series, 1.0, emptySet())?.hardcoverId)
+        assertEquals(25, nextInSeries(series, 2.0, emptySet())?.hardcoverId)
+        assertNull(nextInSeries(series, 3.0, emptySet()))
+    }
+
+    @Test
+    fun nextInSeriesDoesNotSkipAnOwnedBook() {
+        val series = SeriesDetail(1, "Stormlight", null, null, listOf(seriesBook(1, 1.0), seriesBook(2, 2.0), seriesBook(3, 3.0)), emptyList())
+        assertNull(nextInSeries(series, 1.0, setOf(2L)))
+    }
 }

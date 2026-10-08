@@ -52,9 +52,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.core.content.edit
-import uk.co.zenithal.carrel.data.LIBRARY_PATH
 import uk.co.zenithal.carrel.data.LibraryItem
-import uk.co.zenithal.carrel.data.LibrarySerializer
 import uk.co.zenithal.carrel.data.ReadingStatus
 import uk.co.zenithal.carrel.data.SortDirection
 import uk.co.zenithal.carrel.data.SortKey
@@ -72,7 +70,7 @@ import uk.co.zenithal.carrel.ui.components.ErrorNotice
 import uk.co.zenithal.carrel.ui.components.Field
 import uk.co.zenithal.carrel.ui.components.Kicker
 import uk.co.zenithal.carrel.ui.components.ShelfSkeleton
-import uk.co.zenithal.carrel.ui.rememberLoaded
+import uk.co.zenithal.carrel.ui.Loadable
 import uk.co.zenithal.carrel.ui.theme.Carrel
 import kotlin.math.roundToInt
 
@@ -85,13 +83,13 @@ private const val VIEW_PREFS = "library"
 private const val VIEW_KEY = "shelfView"
 
 /**
- * Every book on one of the reader's shelves, with a filter and sort, as covers or as a list. The view is remembered on
- * the device for every shelf; the filter and sort only while the shelf is open.
+ * Every book on one of a reader's shelves, with a filter and sort, as covers or as a list. The view is remembered on
+ * the device for every shelf; the filter and sort only while the shelf is open. `kicker` says whose shelf it is, and
+ * `library` is that reader's library.
  */
 @Composable
-fun ShelfScreen(status: ReadingStatus, openBook: (path: String) -> Unit) {
+fun ShelfScreen(status: ReadingStatus, kicker: String, library: Loadable<List<LibraryItem>>, openBook: (path: String) -> Unit) {
     val colors = Carrel.colors
-    val library = rememberLoaded(LIBRARY_PATH, LibrarySerializer)
     val prefs = LocalContext.current.getSharedPreferences(VIEW_PREFS, Context.MODE_PRIVATE)
     var view by remember { mutableStateOf(prefs.getString(VIEW_KEY, null)?.let { runCatching { ShelfView.valueOf(it) }.getOrNull() } ?: ShelfView.Grid) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -111,7 +109,7 @@ fun ShelfScreen(status: ReadingStatus, openBook: (path: String) -> Unit) {
     ) {
         whole {
             Column {
-                Kicker("Your library")
+                Kicker(kicker)
                 Text(status.label, style = Carrel.type.displayLarge, color = colors.ink, modifier = Modifier.padding(top = 8.dp))
                 all?.let {
                     val count = if (query.isNotBlank()) "${items!!.size} of ${it.size}" else "${it.size}"

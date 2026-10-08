@@ -85,7 +85,7 @@ fun LibraryScreen(openBook: (path: String) -> Unit, openShelf: (ReadingStatus) -
 
 /** A shelf's title and count, opening the whole shelf. */
 @Composable
-private fun ShelfHeading(status: ReadingStatus, count: Int, onOpen: () -> Unit) {
+internal fun ShelfHeading(status: ReadingStatus, count: Int, onOpen: () -> Unit) {
     val colors = Carrel.colors
     Row(
         Modifier
@@ -107,7 +107,7 @@ private fun ShelfHeading(status: ReadingStatus, count: Int, onOpen: () -> Unit) 
 
 /** Books being read, as cards with their progress, swiped sideways. */
 @Composable
-private fun ReadingShelf(items: List<LibraryItem>, openBook: (String) -> Unit, openShelf: () -> Unit) {
+internal fun ReadingShelf(items: List<LibraryItem>, openBook: (String) -> Unit, openShelf: () -> Unit) {
     val colors = Carrel.colors
     Column(Modifier.padding(top = 40.dp)) {
         ShelfHeading(ReadingStatus.Reading, items.size, openShelf)
@@ -150,7 +150,7 @@ private fun ReadingShelf(items: List<LibraryItem>, openBook: (String) -> Unit, o
 
 /** A shelf's first books as a row of covers with the reader's ratings. */
 @Composable
-private fun CoverShelf(status: ReadingStatus, items: List<LibraryItem>, openBook: (String) -> Unit, openShelf: () -> Unit) {
+internal fun CoverShelf(status: ReadingStatus, items: List<LibraryItem>, openBook: (String) -> Unit, openShelf: () -> Unit) {
     val colors = Carrel.colors
     Column(Modifier.padding(top = 40.dp)) {
         ShelfHeading(status, items.size, openShelf)

@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.serialization.KSerializer
 import java.util.concurrent.ConcurrentHashMap
@@ -94,6 +95,10 @@ class Store(private val dao: SavedResponseDao, private val api: ApiClient, priva
             )
         }.collectLatest { send(it) }
     }
+
+    /** The saved copy and its later changes, without fetching: null while there's none. */
+    fun <T> saved(path: String, serializer: KSerializer<T>): Flow<T?> =
+        dao.observe(path).map { saved -> saved?.let { runCatching { api.json.decodeFromString(serializer, it.json) }.getOrNull() } }
 
     /** Replaces the saved copy, e.g. with what the API returned after a change, as the website's setQueryData does. */
     suspend fun <T> save(path: String, value: T, serializer: KSerializer<T>) {

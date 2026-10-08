@@ -24,6 +24,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -41,6 +43,7 @@ import kotlin.math.sin
  */
 @Composable
 fun StarRating(value: Double?, onChange: (Double?) -> Unit, enabled: Boolean) {
+    val haptics = LocalHapticFeedback.current
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.alpha(if (enabled) 1f else 0.6f)) {
         (1..5).forEach { star ->
             Box(Modifier.size(38.dp)) {
@@ -52,6 +55,7 @@ fun StarRating(value: Double?, onChange: (Double?) -> Unit, enabled: Boolean) {
                                 .weight(1f)
                                 .fillMaxHeight()
                                 .selectable(selected = value == rating, enabled = enabled, role = Role.RadioButton) {
+                                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
                                     onChange(if (value == rating) null else rating)
                                 }
                                 .semantics { contentDescription = "${plainNumber(rating)} ${if (rating == 1.0) "star" else "stars"}" },

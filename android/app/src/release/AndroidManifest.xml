@@ -2,7 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application>
-        <!-- Email links on the website's address open the app; verified by web/public/.well-known/assetlinks.json. -->
+        <!-- Email links and page links on the website's address open the app; verified by
+             web/public/.well-known/assetlinks.json. -->
         <activity android:name=".MainActivity">
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
@@ -11,6 +12,22 @@
                 <data android:scheme="https" />
                 <data android:host="carrel.zenithal.co.uk" />
                 <data android:path="/auth/confirm" />
+            </intent-filter>
+            <!-- Links to the pages the app has (see linkDestination). Not the legal pages, which open in a Custom Tab
+                 and would bounce straight back here. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="carrel.zenithal.co.uk" />
+                <data android:pathPrefix="/books/" />
+                <data android:pathPrefix="/series/" />
+                <data android:path="/genres" />
+                <data android:pathPrefix="/genres/" />
+                <data android:path="/search" />
+                <data android:pathPrefix="/shelves/" />
+                <data android:pathPrefix="/@" />
             </intent-filter>
         </activity>
     </application>

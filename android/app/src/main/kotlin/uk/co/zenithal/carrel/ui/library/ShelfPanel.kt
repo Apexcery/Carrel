@@ -34,6 +34,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -74,16 +76,19 @@ private val UNITS = listOf(ProgressUnit.Page to "pages", ProgressUnit.Percent to
 /**
  * The signed-in reader's shelf entry for a book, as the website's panel. Status and rating save as soon as they change;
  * progress, edition, and reading history are edited together in a sheet behind "Edit" and saved with one button.
- * The entry comes from the saved library, so it shows with no signal; changes need one.
+ * The entry comes from the saved library, so it shows with no signal; changes need one. Marking the book as read
+ * opens the finished sheet, which can open the next in the series (`openBook`).
  */
 @Composable
-fun ShelfPanel(book: BookDetail) {
+fun ShelfPanel(book: BookDetail, openBook: (path: String) -> Unit) {
     val container = LocalContainer.current
+    val haptics = LocalHapticFeedback.current
     val library = rememberLoaded(LIBRARY_PATH, LibrarySerializer)
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var editing by rememberSaveable { mutableStateOf(false) }
+    var finished by rememberSaveable { mutableStateOf(false) }
 
     val items = library.loaded.data
     if (items == null) {
@@ -109,7 +114,17 @@ fun ShelfPanel(book: BookDetail) {
 
     PanelFrame {
         Kicker(if (entry != null) "On your shelf" else "Add to your library")
-        Choices(STATUSES, entry?.status, { status -> if (status != entry?.status) save(entry.toRequest().copy(status = status)) {} }, enabled = !busy)
+        Choices(STATUSES, entry?.status, { status ->
+            if (status != entry?.status) {
+                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                save(entry.toRequest().copy(status = status)) {
+                    if (status == ReadingStatus.Read) {
+                        haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                        finished = true
+                    }
+                }
+            }
+        }, enabled = !busy)
         if (entry != null) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 FieldLabel("Your rating")
@@ -127,6 +142,13 @@ fun ShelfPanel(book: BookDetail) {
             })
         }
         if (!editing) error?.let { FormMessage(it, Tone.Error) }
+    }
+
+    if (finished) {
+        FinishedSheet(book, { path ->
+            finished = false
+            openBook(path)
+        }) { finished = false }
     }
 
     if (editing && entry != null) {

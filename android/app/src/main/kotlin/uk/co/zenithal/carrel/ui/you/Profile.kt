@@ -54,6 +54,7 @@ import uk.co.zenithal.carrel.data.LibraryItem
 import uk.co.zenithal.carrel.data.LibrarySerializer
 import uk.co.zenithal.carrel.data.MAX_GOAL_BOOKS
 import uk.co.zenithal.carrel.data.Profile
+import uk.co.zenithal.carrel.data.ReadingGoal
 import uk.co.zenithal.carrel.data.formatCount
 import uk.co.zenithal.carrel.data.goalPace
 import uk.co.zenithal.carrel.data.readsFinishedIn
@@ -91,7 +92,7 @@ fun ProfileSection(profile: Profile, openSettings: () -> Unit) {
     Header(profile, items?.size, openSettings)
     when {
         items != null -> {
-            ReadingGoal(items, profile, year)
+            ReadingGoal(items, profile.goals, year)
             YearInBooks(items, year)
         }
         library.loaded.error != null -> ErrorNotice(library.loaded.error.message.orEmpty(), library.retry, Modifier.padding(top = 32.dp))
@@ -164,17 +165,19 @@ fun Avatar(url: String?, username: String) {
 
 /**
  * This year's reading goal: books finished (rereads count again) against the goal, and whether that's ahead of or
- * behind the pace the goal needs. Set, changed, and removed here.
+ * behind the pace the goal needs. The reader's own is set, changed, and removed here; another reader's (`owner`) only
+ * shows, and not at all when they haven't set one.
  */
 @Composable
-private fun ReadingGoal(items: List<LibraryItem>, profile: Profile, year: Int) {
+internal fun ReadingGoal(items: List<LibraryItem>, goals: List<ReadingGoal>, year: Int, owner: String? = null) {
     val colors = Carrel.colors
     var editing by rememberSaveable { mutableStateOf(false) }
-    val goal = profile.goals.firstOrNull { it.year == year }
+    val goal = goals.firstOrNull { it.year == year }
     val finished = remember(items, year) { readsFinishedIn(items, year).size }
+    if (goal == null && owner != null) return
 
     Column(Modifier.padding(top = 48.dp)) {
-        SectionTitle("$year reading goal")
+        SectionTitle(if (owner == null) "$year reading goal" else "@$owner’s $year goal")
         Column(Modifier.padding(top = 14.dp)) {
             when {
                 editing -> GoalForm(year, goal?.books) { editing = false }
@@ -190,7 +193,7 @@ private fun ReadingGoal(items: List<LibraryItem>, profile: Profile, year: Int) {
                     ProgressBar(minOf(100.0, finished * 100.0 / goal.books), Modifier.padding(top = 10.dp))
                     Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(goalPace(finished, goal.books, LocalDateTime.now()), style = Carrel.type.mono, color = colors.inkSoft, modifier = Modifier.weight(1f))
-                        LinkButton("Change", { editing = true })
+                        if (owner == null) LinkButton("Change", { editing = true })
                     }
                 }
                 else -> SecondaryButton("Set a reading goal", { editing = true })
@@ -243,20 +246,20 @@ private fun GoalForm(year: Int, current: Int?, onDone: () -> Unit) {
 }
 
 /**
- * The reader's year so far: books finished (rereads count again), pages read, average rating, and books finished each
- * month. Tapping a month lists its books, as hovering does on the website.
+ * A reader's year so far: books finished (rereads count again), pages read, average rating, and books finished each
+ * month. Tapping a month lists its books, as hovering does on the website. `owner` is another reader's username.
  */
 @Composable
-private fun YearInBooks(items: List<LibraryItem>, year: Int) {
+internal fun YearInBooks(items: List<LibraryItem>, year: Int, owner: String? = null) {
     val colors = Carrel.colors
     val stats = remember(items, year) { yearInBooks(items, year) }
     var month by rememberSaveable { mutableStateOf<Int?>(null) }
 
     Column(Modifier.padding(top = 48.dp)) {
-        SectionTitle("Your $year")
+        SectionTitle(if (owner == null) "Your $year" else "@$owner’s $year")
         if (stats.finished == 0) {
             Text(
-                "Nothing finished yet this year. Books you mark as read will add up here.",
+                if (owner == null) "Nothing finished yet this year. Books you mark as read will add up here." else "Nothing finished yet this year.",
                 style = Carrel.type.body,
                 color = colors.inkSoft,
                 modifier = Modifier.padding(top = 14.dp),
