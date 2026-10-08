@@ -8,6 +8,7 @@ import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.request
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsBytes
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpMethod
@@ -53,6 +54,27 @@ class ApiClient(
         resultSerializer: KSerializer<T>,
     ): T = json.decodeFromString(resultSerializer, call(method, path, json.encodeToString(bodySerializer, body)).bodyAsText())
 
+    /** Sends a JSON body to an endpoint that answers with no content. */
+    suspend fun <B> send(method: HttpMethod, path: String, body: B, bodySerializer: KSerializer<B>) {
+        call(method, path, json.encodeToString(bodySerializer, body))
+    }
+
+    /** POSTs without a body, e.g. to resume an import, and returns the parsed response. */
+    suspend fun <T> post(path: String, resultSerializer: KSerializer<T>): T =
+        json.decodeFromString(resultSerializer, call(HttpMethod.Post, path, null).bodyAsText())
+
+    /** POSTs without a body to an endpoint that answers with no content. */
+    suspend fun post(path: String) {
+        call(HttpMethod.Post, path, null)
+    }
+
+    /** POSTs a file as the request body (an export to import, a profile picture) and returns the parsed response. */
+    suspend fun <T> upload(path: String, file: ByteArray, type: ContentType, resultSerializer: KSerializer<T>): T =
+        json.decodeFromString(resultSerializer, call(HttpMethod.Post, path, file, type).bodyAsText())
+
+    /** A GET's response as bytes, e.g. a library export to save. */
+    suspend fun download(path: String): ByteArray = call(HttpMethod.Get, path, null).bodyAsBytes()
+
     suspend fun delete(path: String) {
         call(HttpMethod.Delete, path, null)
     }
@@ -61,13 +83,17 @@ class ApiClient(
     suspend fun <T> delete(path: String, resultSerializer: KSerializer<T>): T =
         json.decodeFromString(resultSerializer, call(HttpMethod.Delete, path, null).bodyAsText())
 
-    private suspend fun call(method: HttpMethod, path: String, body: String?): HttpResponse {
+    private suspend fun call(method: HttpMethod, path: String, body: String?): HttpResponse =
+        call(method, path, body, ContentType.Application.Json)
+
+    // The body is sent whole (not streamed), since the API turns away uploads without a Content-Length.
+    private suspend fun call(method: HttpMethod, path: String, body: Any?, type: ContentType): HttpResponse {
         val response = try {
             http.request("$baseUrl$path") {
                 this.method = method
                 supabase.auth.currentAccessTokenOrNull()?.let { bearerAuth(it) }
                 if (body != null) {
-                    contentType(ContentType.Application.Json)
+                    contentType(type)
                     setBody(body)
                 }
             }

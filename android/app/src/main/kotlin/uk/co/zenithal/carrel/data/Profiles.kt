@@ -29,6 +29,10 @@ data class SaveProfileRequest(val username: String, val isPublic: Boolean? = nul
 @Serializable
 data class SaveGoalRequest(val books: Int)
 
+/** The reader's password, which the API checks before deleting their library or account. */
+@Serializable
+data class PasswordConfirmation(val password: String)
+
 const val PROFILE_PATH = "/profile"
 
 /** 3 to 20 letters, numbers, underscores, or hyphens, as the API checks. */
