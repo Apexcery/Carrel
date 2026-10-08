@@ -28,13 +28,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
-import io.github.jan.supabase.auth.auth
 import io.ktor.http.HttpMethod
 import io.ktor.http.encodeURLParameter
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import uk.co.zenithal.carrel.BuildConfig
 import uk.co.zenithal.carrel.LocalContainer
+import uk.co.zenithal.carrel.auth.signOutHere
 import uk.co.zenithal.carrel.data.ApiException
 import uk.co.zenithal.carrel.data.PROFILE_PATH
 import uk.co.zenithal.carrel.data.Profile
@@ -119,7 +119,7 @@ fun ChooseUsernameScreen() {
         Gap(16)
         FlowRow(itemVerticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Muted("Not you?")
-            LinkButton("Sign out", { scope.launch { container.supabase.auth.signOut() } }, color = Carrel.colors.ink)
+            LinkButton("Sign out", { scope.launch { container.supabase.signOutHere() } }, color = Carrel.colors.ink)
         }
     }
 }
