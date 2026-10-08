@@ -38,9 +38,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import uk.co.zenithal.carrel.ui.theme.Carrel
 
-/** The website's .primary-button: accent-filled, mono capitals. Faded while disabled or busy. */
+/** The website's .primary-button: accent-filled (or `color`, e.g. for deleting), mono capitals. Faded while disabled or busy. */
 @Composable
-fun PrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
+fun PrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, color: Color = Carrel.colors.accent) {
     val colors = Carrel.colors
     Text(
         text = text.uppercase(),
@@ -48,7 +48,7 @@ fun PrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifi
         color = colors.onAccent,
         modifier = modifier
             .alpha(if (enabled) 1f else 0.6f)
-            .background(colors.accent, RoundedCornerShape(2.dp))
+            .background(color, RoundedCornerShape(2.dp))
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 10.dp),
     )
@@ -95,12 +95,12 @@ fun Kicker(text: String, modifier: Modifier = Modifier) {
 
 /** A mono section label with a rule under it, like the website's .section-title. */
 @Composable
-fun SectionTitle(text: String, modifier: Modifier = Modifier) {
+fun SectionTitle(text: String, modifier: Modifier = Modifier, color: Color = Carrel.colors.inkSoft) {
     val rule = Carrel.colors.rule
     Text(
         text = text.uppercase(),
         style = Carrel.type.monoMedium.copy(letterSpacing = 0.14.em),
-        color = Carrel.colors.inkSoft,
+        color = color,
         modifier = modifier
             .fillMaxWidth()
             .drawBehind { drawLine(rule, Offset(0f, size.height), Offset(size.width, size.height), 1.dp.toPx()) }

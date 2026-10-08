@@ -2,9 +2,12 @@ package uk.co.zenithal.carrel.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -24,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -52,6 +56,12 @@ import uk.co.zenithal.carrel.ui.library.LibraryScreen
 import uk.co.zenithal.carrel.ui.library.ShelfPanel
 import uk.co.zenithal.carrel.ui.library.ShelfScreen
 import uk.co.zenithal.carrel.ui.search.SearchScreen
+import uk.co.zenithal.carrel.ui.settings.AccountSettings
+import uk.co.zenithal.carrel.ui.settings.AppearanceSettings
+import uk.co.zenithal.carrel.ui.settings.ImportExportSettings
+import uk.co.zenithal.carrel.ui.settings.SettingsButton
+import uk.co.zenithal.carrel.ui.settings.SettingsScreen
+import uk.co.zenithal.carrel.ui.settings.SettingsSection
 import uk.co.zenithal.carrel.ui.auth.SignInMode
 import uk.co.zenithal.carrel.ui.auth.SignInScreen
 import uk.co.zenithal.carrel.ui.components.Gap
@@ -76,6 +86,10 @@ import kotlin.reflect.KClass
 @Serializable data object GenresRoute
 /** One of the reader's shelves, by its slug (want-to-read), not the enum, for the same reason as SignInRoute. */
 @Serializable data class ShelfRoute(val slug: String)
+@Serializable data object SettingsRoute
+@Serializable data object AccountSettingsRoute
+@Serializable data object ImportExportRoute
+@Serializable data object AppearanceRoute
 
 private data class Tab(val route: Any, val type: KClass<*>, val label: String, val icon: ImageVector)
 
@@ -148,7 +162,32 @@ fun MainScreen(nav: NavHostController, session: Session, profile: Profile?) {
                 if (profile != null && status != null) ShelfScreen(status, openBook)
             }
             composable<YouRoute> {
-                TabPage { YouPage(session, profile, signIn, openLegal) }
+                TabPage { YouPage(session, profile, signIn, openLegal) { nav.navigate(SettingsRoute) } }
+            }
+            composable<SettingsRoute> {
+                SettingsScreen((session as? Session.SignedIn)?.email.takeIf { profile != null }) { section ->
+                    nav.navigate(
+                        when (section) {
+                            SettingsSection.Account -> AccountSettingsRoute
+                            SettingsSection.ImportExport -> ImportExportRoute
+                            SettingsSection.Appearance -> AppearanceRoute
+                        },
+                    )
+                }
+            }
+            composable<AccountSettingsRoute> {
+                if (profile != null && session is Session.SignedIn) {
+                    AccountSettings(profile, session.userId, session.email) {
+                        // Back to an empty Home, as after signing out.
+                        nav.navigate(HomeRoute) { popUpTo(nav.graph.id) { inclusive = true } }
+                    }
+                }
+            }
+            composable<ImportExportRoute> {
+                if (profile != null) ImportExportSettings(openBook)
+            }
+            composable<AppearanceRoute> {
+                AppearanceSettings()
             }
             composable<SignInRoute> { backStackEntry ->
                 // Signing in changes the session; then this page has done its job.
@@ -211,19 +250,24 @@ private fun TabPage(content: @Composable ColumnScope.() -> Unit) {
     )
 }
 
-/** The reader's profile, and the privacy and copyright pages. Settings, with the account and signing out, join it later. */
+/** The reader's profile, the way into Settings, and the privacy and copyright pages. */
 @Composable
-private fun YouPage(session: Session, profile: Profile?, signIn: (SignInMode) -> Unit, openLegal: (String) -> Unit) {
+private fun YouPage(session: Session, profile: Profile?, signIn: (SignInMode) -> Unit, openLegal: (String) -> Unit, openSettings: () -> Unit) {
     val colors = Carrel.colors
     if (profile != null && session is Session.SignedIn) {
-        ProfileSection(profile)
+        ProfileSection(profile, openSettings)
     } else {
-        SignInPrompt(
-            "Your account",
-            "Sign in or create an account to keep a library, set reading goals, and share your profile.",
-            { signIn(SignInMode.SignIn) },
-            { signIn(SignInMode.SignUp) },
-        )
+        // Appearance is in Settings, and needs no account.
+        Box(Modifier.fillMaxWidth()) {
+            SignInPrompt(
+                "Your account",
+                "Sign in or create an account to keep a library, set reading goals, and share your profile.",
+                { signIn(SignInMode.SignIn) },
+                { signIn(SignInMode.SignUp) },
+                Modifier.padding(end = 40.dp),
+            )
+            SettingsButton(openSettings, Modifier.align(Alignment.TopEnd).offset(x = 12.dp, y = (-12).dp))
+        }
     }
     Gap(48)
     SectionTitle("About Carrel")

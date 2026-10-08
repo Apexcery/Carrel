@@ -15,6 +15,7 @@ import uk.co.zenithal.carrel.data.GoalChanges
 import uk.co.zenithal.carrel.data.LibraryChanges
 import uk.co.zenithal.carrel.data.RecentSearches
 import uk.co.zenithal.carrel.data.Store
+import uk.co.zenithal.carrel.ui.theme.Appearance
 
 class CarrelApp : Application() {
     lateinit var container: AppContainer
@@ -40,5 +41,6 @@ class AppContainer(context: Context, scope: CoroutineScope) {
     val library = LibraryChanges(api, store)
     val goals = GoalChanges(api, store)
     val recentSearches = RecentSearches(context.getSharedPreferences("recent-searches", Context.MODE_PRIVATE))
+    val appearance = Appearance(context.getSharedPreferences("appearance", Context.MODE_PRIVATE))
     val session = SessionWatcher(supabase, store, context.getSharedPreferences("saved-data", Context.MODE_PRIVATE), scope)
 }

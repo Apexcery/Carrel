@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -69,6 +70,7 @@ import uk.co.zenithal.carrel.ui.components.SkeletonLine
 import uk.co.zenithal.carrel.ui.components.Tone
 import uk.co.zenithal.carrel.ui.library.ProgressBar
 import uk.co.zenithal.carrel.ui.rememberLoaded
+import uk.co.zenithal.carrel.ui.settings.SettingsButton
 import uk.co.zenithal.carrel.ui.theme.Carrel
 import java.time.LocalDateTime
 import java.time.Month
@@ -81,12 +83,12 @@ import kotlin.math.roundToInt
  * username, and book count, sharing it while it's public, this year's reading goal, and their year so far.
  */
 @Composable
-fun ProfileSection(profile: Profile) {
+fun ProfileSection(profile: Profile, openSettings: () -> Unit) {
     val library = rememberLoaded(LIBRARY_PATH, LibrarySerializer)
     val items = library.loaded.data
     val year = LocalDateTime.now().year
 
-    Header(profile, items?.size)
+    Header(profile, items?.size, openSettings)
     when {
         items != null -> {
             ReadingGoal(items, profile, year)
@@ -102,17 +104,19 @@ fun ProfileSection(profile: Profile) {
 }
 
 @Composable
-private fun Header(profile: Profile, books: Int?) {
+private fun Header(profile: Profile, books: Int?, openSettings: () -> Unit) {
     val colors = Carrel.colors
     val context = LocalContext.current
     val username = profile.username.orEmpty()
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
         Avatar(profile.avatarUrl, username)
-        Column {
+        Column(Modifier.weight(1f)) {
             Text("@$username", style = Carrel.type.displayMedium, color = colors.ink)
             val details = listOfNotNull(books?.let { "${formatCount(it)} ${if (it == 1) "book" else "books"}" }, if (profile.isPublic) "Public" else "Private")
             Text(details.joinToString(" · "), style = Carrel.type.mono, color = colors.inkSoft, modifier = Modifier.padding(top = 6.dp))
         }
+        // Its touch area reaches into the margins, so the gear itself lines up with the page's edge.
+        SettingsButton(openSettings, Modifier.align(Alignment.Top).offset(x = 12.dp, y = (-12).dp))
     }
     // A private profile's address shows others nothing, so there's nothing to share.
     if (profile.isPublic) {
@@ -127,7 +131,7 @@ private fun Header(profile: Profile, books: Int?) {
 
 /** The reader's round picture, which opens larger when tapped, or a silhouette without one. */
 @Composable
-private fun Avatar(url: String?, username: String) {
+fun Avatar(url: String?, username: String) {
     val colors = Carrel.colors
     var zoomed by remember { mutableStateOf(false) }
     val frame = Modifier.size(72.dp).clip(CircleShape).background(colors.paperRaised)

@@ -38,6 +38,9 @@ interface SavedResponseDao {
 
     @Query("DELETE FROM responses")
     suspend fun clear()
+
+    @Query("UPDATE responses SET savedAt = 0")
+    suspend fun markStale()
 }
 
 @Database(entities = [SavedResponse::class], version = 1, exportSchema = false)
@@ -110,6 +113,12 @@ class Store(private val dao: SavedResponseDao, private val api: ApiClient, priva
         fetches.values.forEach { it.cancel() }
         dao.clear()
     }
+
+    /**
+     * Keeps every saved copy but has each fetched again when next shown, e.g. after an import or emptying the library,
+     * which change much of what's saved. (Clearing them would leave the screens showing them, such as the profile, empty.)
+     */
+    suspend fun markStale() = dao.markStale()
 
     /**
      * Fetches a fresh copy and saves it. Screens opened together (a book's panel and its suggestions both use the
