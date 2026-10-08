@@ -1,7 +1,9 @@
 package uk.co.zenithal.carrel.data
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import uk.co.zenithal.carrel.reader.readPercent
 
@@ -31,6 +33,31 @@ class PhoneBooksTest {
             <identifier>1234567890123</identifier>
         """
         assertEquals(emptyList<String>(), isbnsInPackage(opf))
+    }
+
+    @Test
+    fun recognisesAnotherVersionOfTheSameBook() {
+        // As Calibre writes a book's package document: its own id, and the book's details.
+        val calibre = identityIn(
+            """
+            <metadata>
+              <dc:identifier opf:scheme="calibre" id="calibre_id">258</dc:identifier>
+              <dc:identifier opf:scheme="uuid" id="uuid_id">7a1d9a43-5c2e-4f53-9a54-4d3a1c1f6e2b</dc:identifier>
+              <dc:title>He Who Fights With Monsters</dc:title>
+              <dc:creator opf:role="aut">Shirtaloon</dc:creator>
+            </metadata>
+            """,
+        )
+        assertEquals("He Who Fights With Monsters", calibre.title)
+        assertEquals("Shirtaloon", calibre.firstAuthor)
+        // An updated export keeps Calibre's uuid, whatever else changes.
+        assertTrue(sameBook(calibre, BookIdentity(setOf("7a1d9a43-5c2e-4f53-9a54-4d3a1c1f6e2b"), "He Who Fights With Monsters 2", null)))
+        // A copy from elsewhere: the same title and first author, ignoring case and punctuation.
+        assertTrue(sameBook(calibre, BookIdentity(emptySet(), "He Who Fights with Monsters!", "shirtaloon")))
+        assertFalse(sameBook(calibre, BookIdentity(emptySet(), "He Who Fights With Monsters", "Travis Deverell")))
+        assertFalse(sameBook(calibre, BookIdentity(emptySet(), "Monsters", "Shirtaloon")))
+        // Nothing to go on isn't a match.
+        assertFalse(sameBook(BookIdentity(emptySet(), "", null), BookIdentity(emptySet(), "", null)))
     }
 
     @Test

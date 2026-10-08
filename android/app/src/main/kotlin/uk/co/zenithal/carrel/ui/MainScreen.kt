@@ -67,6 +67,8 @@ import uk.co.zenithal.carrel.ui.you.ReaderScreen
 import uk.co.zenithal.carrel.ui.you.ReaderShelfScreen
 import uk.co.zenithal.carrel.ui.library.LibraryScreen
 import uk.co.zenithal.carrel.ui.reading.AddBookScreen
+import uk.co.zenithal.carrel.ui.reading.CatalogueScreen
+import uk.co.zenithal.carrel.ui.reading.LibraryFormScreen
 import uk.co.zenithal.carrel.ui.reading.LinkBookScreen
 import uk.co.zenithal.carrel.ui.reading.PhoneBooksScreen
 import uk.co.zenithal.carrel.ui.reading.ReadOnPhone
@@ -122,7 +124,12 @@ import kotlin.reflect.KClass
 @Serializable data object PhoneBooksRoute
 /** An EPUB being copied onto the phone, by its content URI; then linking it (LinkBookRoute, by PhoneBook id). */
 @Serializable data class AddBookRoute(val uri: String)
-@Serializable data class LinkBookRoute(val phoneBookId: Long)
+/** `readAfter`: a book just downloaded, read once it's linked (or not). */
+@Serializable data class LinkBookRoute(val phoneBookId: Long, val readAfter: Boolean = false)
+/** An online library's catalogue, at its start (no `url`) or a page of it. */
+@Serializable data class CatalogueRoute(val libraryId: Long, val url: String? = null)
+/** Adding an online library (no id) or changing one. */
+@Serializable data class LibraryFormRoute(val libraryId: Long? = null)
 
 private data class Tab(val route: Any, val type: KClass<*>, val label: String, val icon: ImageVector)
 
@@ -268,7 +275,26 @@ fun MainScreen(nav: NavHostController, session: Session, profile: Profile?, dest
                     addBook = { uri -> nav.navigate(AddBookRoute(uri.toString())) },
                     openBook = openBook,
                     linkBook = { id -> nav.navigate(LinkBookRoute(id)) },
-                ) { nav.navigate(PhoneBooksRoute) }
+                    seeAll = { nav.navigate(PhoneBooksRoute) },
+                    openCatalogue = { id, url -> nav.navigate(CatalogueRoute(id, url)) },
+                    editLibrary = { id -> nav.navigate(LibraryFormRoute(id)) },
+                    linkThenRead = { id -> nav.navigate(LinkBookRoute(id, readAfter = true)) },
+                )
+            }
+            composable<CatalogueRoute> { backStackEntry ->
+                val route = backStackEntry.toRoute<CatalogueRoute>()
+                CatalogueScreen(
+                    route.libraryId,
+                    route.url,
+                    openPage = { url -> nav.navigate(CatalogueRoute(route.libraryId, url)) },
+                    editLibrary = { nav.navigate(LibraryFormRoute(route.libraryId)) },
+                ) { id -> nav.navigate(LinkBookRoute(id, readAfter = true)) }
+            }
+            composable<LibraryFormRoute> { backStackEntry ->
+                LibraryFormScreen(backStackEntry.toRoute<LibraryFormRoute>().libraryId, onSaved = { nav.popBackStack() }) {
+                    // Its catalogue pages go too.
+                    nav.popBackStack<ReadingRoute>(inclusive = false)
+                }
             }
             composable<PhoneBooksRoute> {
                 PhoneBooksScreen(openBook) { id -> nav.navigate(LinkBookRoute(id)) }
@@ -284,7 +310,8 @@ fun MainScreen(nav: NavHostController, session: Session, profile: Profile?, dest
                 }) { nav.popBackStack() }
             }
             composable<LinkBookRoute> { backStackEntry ->
-                LinkBookScreen(backStackEntry.toRoute<LinkBookRoute>().phoneBookId, { nav.popBackStack() }) { nav.popBackStack() }
+                val route = backStackEntry.toRoute<LinkBookRoute>()
+                LinkBookScreen(route.phoneBookId, route.readAfter, { nav.popBackStack() }) { nav.popBackStack() }
             }
             composable<YouRoute> {
                 TabPage { YouPage(session, profile, signIn, openLegal) { nav.navigate(SettingsRoute) } }

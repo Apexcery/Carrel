@@ -20,6 +20,8 @@ serialization = "1.11.0"
 supabase = "3.8.0"
 # The version supabase-kt is built against.
 ktor = "3.5.1"
+# The version Ktor and Coil already bring in.
+okhttp = "5.3.2"
 junit = "4.13.2"
 
 [libraries]
@@ -53,6 +55,8 @@ coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version
 readium-shared = { module = "org.readium.kotlin-toolkit:readium-shared", version.ref = "readium" }
 readium-streamer = { module = "org.readium.kotlin-toolkit:readium-streamer", version.ref = "readium" }
 readium-navigator = { module = "org.readium.kotlin-toolkit:readium-navigator", version.ref = "readium" }
+readium-opds = { module = "org.readium.kotlin-toolkit:readium-opds", version.ref = "readium" }
+okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugar" }
 junit = { module = "junit:junit", version.ref = "junit" }
 

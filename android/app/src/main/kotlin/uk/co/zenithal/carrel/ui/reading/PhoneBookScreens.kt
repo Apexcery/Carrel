@@ -48,7 +48,9 @@ import uk.co.zenithal.carrel.ui.components.LinkButton
 import uk.co.zenithal.carrel.ui.components.PrimaryButton
 import uk.co.zenithal.carrel.ui.components.SectionTitle
 import uk.co.zenithal.carrel.ui.components.Tone
+import uk.co.zenithal.carrel.reader.openReader
 import uk.co.zenithal.carrel.ui.theme.Carrel
+import androidx.compose.ui.platform.LocalContext
 
 /** Search results offered for linking a book. */
 private const val LINK_RESULTS = 10
@@ -83,11 +85,27 @@ fun AddBookScreen(uri: String, onAdded: (PhoneBook) -> Unit, onBack: () -> Unit)
  * file's ISBNs, if Carrel has one, to confirm; otherwise (or if that's not it) a search by its title and author.
  */
 @Composable
-fun LinkBookScreen(phoneBookId: Long, onLinked: (bookId: Long) -> Unit, onSkip: () -> Unit) {
+fun LinkBookScreen(phoneBookId: Long, readAfter: Boolean, onLinked: (bookId: Long) -> Unit, onSkip: () -> Unit) {
     val container = LocalContainer.current
     val colors = Carrel.colors
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val book = produceState<PhoneBook?>(null, phoneBookId) { value = container.phoneBooks.get(phoneBookId) }.value
+
+    // A book just downloaded opens to read, once it's linked or not.
+    fun thenRead(done: () -> Unit) {
+        if (!readAfter) return done()
+        scope.launch {
+            container.phoneBooks.get(phoneBookId)?.let {
+                try {
+                    openReader(context, container, it)
+                } catch (_: PhoneBookException) {
+                    // Opened from the dashboard instead, which says what's wrong.
+                }
+            }
+            done()
+        }
+    }
     var searching by rememberSaveable { mutableStateOf(false) }
     var linking by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -99,7 +117,7 @@ fun LinkBookScreen(phoneBookId: Long, onLinked: (bookId: Long) -> Unit, onSkip: 
             // Opening the book stores it on the server, which a library entry needs.
             val detail = container.api.get(path, BookDetail.serializer())
             container.phoneBooks.link(phoneBookId, detail)
-            onLinked(detail.id)
+            thenRead { onLinked(detail.id) }
         } catch (e: ApiException) {
             error = e.message
         } finally {
@@ -123,7 +141,7 @@ fun LinkBookScreen(phoneBookId: Long, onLinked: (bookId: Long) -> Unit, onSkip: 
                 modifier = Modifier.padding(top = 12.dp),
             )
             // Above the search results, so skipping doesn't mean scrolling past them.
-            LinkButton("Skip for now", onSkip, Modifier.padding(top = 12.dp))
+            LinkButton(if (readAfter) "Skip and read" else "Skip for now", { thenRead(onSkip) }, Modifier.padding(top = 12.dp))
         }
         if (!searching && book.isbnList.isNotEmpty()) {
             IsbnMatch(book, linking, { link(it) }) { searching = true }

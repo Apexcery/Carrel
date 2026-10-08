@@ -105,10 +105,13 @@ dependencies {
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
 
-    // The eReader: opening EPUBs (shared, streamer) and showing them (navigator).
+    // The eReader: opening EPUBs (shared, streamer) and showing them (navigator), and online libraries (opds).
     implementation(libs.readium.shared)
     implementation(libs.readium.streamer)
     implementation(libs.readium.navigator)
+    implementation(libs.readium.opds)
+    // Online libraries' own client, with their logins, kept apart from the Carrel API's.
+    implementation(libs.okhttp)
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 
     testImplementation(libs.junit)

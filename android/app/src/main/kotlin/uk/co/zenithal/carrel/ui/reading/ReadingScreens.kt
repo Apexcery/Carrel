@@ -77,11 +77,24 @@ private const val SHELF_BOOKS = 12
 
 /**
  * Reading in Carrel, from the Home button: the books on this phone (Last read), to read, add to, and browse in full
- * (`seeAll`). With `resume`, it first opens the book the reader was last reading, if they haven't finished it, so
- * closing that book comes back here. `addBook` copies in a picked EPUB; `linkBook` links one to a book in Carrel.
+ * (`seeAll`), then each online library's newest books. With `resume`, it first opens the book the reader was last
+ * reading, if they haven't finished it, so closing that book comes back here. `addBook` copies in a picked EPUB;
+ * `linkBook` links one to a book in Carrel.
  */
 @Composable
-fun ReadingScreen(resume: Boolean, addBook: (Uri) -> Unit, openBook: (path: String) -> Unit, linkBook: (phoneBookId: Long) -> Unit, seeAll: () -> Unit) {
+fun ReadingScreen(
+    resume: Boolean,
+    addBook: (Uri) -> Unit,
+    openBook: (path: String) -> Unit,
+    linkBook: (phoneBookId: Long) -> Unit,
+    seeAll: () -> Unit,
+    /** An online library's catalogue, at its start or `url`. */
+    openCatalogue: (libraryId: Long, url: String?) -> Unit,
+    /** The form to add an online library (null) or change one. */
+    editLibrary: (libraryId: Long?) -> Unit,
+    /** Linking a book just downloaded, then reading it. */
+    linkThenRead: (phoneBookId: Long) -> Unit,
+) {
     val container = LocalContainer.current
     val colors = Carrel.colors
     val books = container.phoneBooks.all.collectAsStateWithLifecycle(null).value
@@ -134,8 +147,9 @@ fun ReadingScreen(resume: Boolean, addBook: (Uri) -> Unit, openBook: (path: Stri
                 }
             }
             LinkButton("Add a book from your phone", { pick.launch(arrayOf(EPUB)) }, Modifier.padding(top = 18.dp), color = colors.accent)
-            read.error?.let { FormMessage(it, Tone.Error, Modifier.padding(top = 12.dp)) }
+            OpenReaderStatus(read, Modifier.padding(top = 12.dp))
         }
+        OnlineShelves(read, openCatalogue, editLibrary, linkThenRead)
     }
 
     choosing?.let { book -> BookSheet(book, read, openBook, linkBook) { choosing = null } }
@@ -163,7 +177,7 @@ fun PhoneBooksScreen(openBook: (path: String) -> Unit, linkBook: (phoneBookId: L
             grouping = choice
             prefs.edit { putString(GROUPING, choice.name) }
         }, Modifier.padding(top = 24.dp))
-        read.error?.let { FormMessage(it, Tone.Error, Modifier.padding(top = 12.dp)) }
+        OpenReaderStatus(read, Modifier.padding(top = 12.dp))
         grouped(books, grouping).forEach { (heading, group) ->
             if (heading != null) {
                 Text(
@@ -329,15 +343,15 @@ fun ReadOnPhone(bookId: Long) {
                 color = Carrel.colors.inkSoft,
             )
         }
-        read.error?.let { FormMessage(it, Tone.Error) }
+        OpenReaderStatus(read)
     }
 }
 
 /** Opens books in the reader, with any problem opening one to show. */
-private class OpenReader(val open: (PhoneBook) -> Unit, val error: String?)
+internal class OpenReader(val open: (PhoneBook) -> Unit, val error: String?)
 
 @Composable
-private fun rememberOpenReader(): OpenReader {
+internal fun rememberOpenReader(): OpenReader {
     val container = LocalContainer.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -358,6 +372,12 @@ private fun rememberOpenReader(): OpenReader {
             }
         }
     }, error)
+}
+
+/** A problem opening a book. */
+@Composable
+internal fun OpenReaderStatus(read: OpenReader, modifier: Modifier = Modifier) {
+    read.error?.let { FormMessage(it, Tone.Error, modifier) }
 }
 
 private const val READING_PREFS = "reading"
