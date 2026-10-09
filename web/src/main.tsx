@@ -10,11 +10,13 @@ import './styles.css'
 import { ApiError } from './api'
 import { AuthProvider } from './auth'
 import App from './App.tsx'
+import { SAVED_FOR } from './savedQueries'
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 5 * 60 * 1000,
+      gcTime: SAVED_FOR,
       refetchOnWindowFocus: false,
       // Don't retry answers that won't change (not found, rate limited, bad request).
       retry: (failureCount, error) =>
