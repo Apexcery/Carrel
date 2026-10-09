@@ -52,5 +52,14 @@ public record SaveEntryRequest(
     ReadInput[]? Reads = null,
     DateTimeOffset? ChangedAt = null);
 
+/// <summary>Where the reader is in a book they're reading in the app: a Readium Locator (JSON) and how far through, 0 to 1.</summary>
+public record ReadingPositionDto(string Locator, decimal Progression, DateTimeOffset UpdatedAt);
+
+/// <summary>
+/// Saves where the reader is. <paramref name="ChangedAt"/> is when they were there, by the device's clock; a save older
+/// than the position already saved is turned away (another device was read more recently).
+/// </summary>
+public record SavePositionRequest(string Locator, decimal Progression, DateTimeOffset ChangedAt);
+
 /// <param name="FinishedDateUnknown">Finished on a date that isn't known; ignored when <paramref name="FinishedOn"/> is set.</param>
 public record ReadInput(long? Id, DateOnly? StartedOn, DateOnly? FinishedOn, bool FinishedDateUnknown = false);

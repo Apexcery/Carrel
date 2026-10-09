@@ -110,6 +110,63 @@ public class LibraryService(CarrelDbContext db)
         return await entries.ExecuteDeleteAsync(ct) > 0;
     }
 
+    /// <summary>Where the reader is in a book in their library, as saved by the app; null if it's not saved, or not in the library.</summary>
+    public async Task<ReadingPositionDto?> GetPositionAsync(Guid userId, long bookId, CancellationToken ct) =>
+        await db.ReadingPositions
+            .Where(p => p.LibraryEntry.UserId == userId && p.LibraryEntry.BookId == bookId)
+            .Select(p => new ReadingPositionDto(p.Locator, p.Progression, p.UpdatedAt))
+            .FirstOrDefaultAsync(ct);
+
+    /// <summary>
+    /// Saves where the reader is in a book in their library; null if it isn't in it. An older place than the one saved
+    /// (from a device read less recently) is turned away.
+    /// </summary>
+    public async Task<ReadingPositionDto?> SavePositionAsync(Guid userId, long bookId, SavePositionRequest request, CancellationToken ct)
+    {
+        if (request.Locator.Length > ReadingPosition.MaxLocatorLength || !IsJsonObject(request.Locator))
+        {
+            throw new LibraryValidationException("locator", "That isn't a place in a book.");
+        }
+        if (request.Progression is < 0 or > 1)
+        {
+            throw new LibraryValidationException("progression", "Progression must be from 0 to 1.");
+        }
+        var entryId = await db.LibraryEntries.Where(e => e.UserId == userId && e.BookId == bookId).Select(e => (long?)e.Id).FirstOrDefaultAsync(ct);
+        if (entryId is null)
+        {
+            return null;
+        }
+        var changedAt = ChangedAt(request.ChangedAt, DateTimeOffset.UtcNow);
+        var position = await db.ReadingPositions.FirstOrDefaultAsync(p => p.LibraryEntryId == entryId, ct);
+        if (position is null)
+        {
+            position = new ReadingPosition { LibraryEntryId = entryId.Value };
+            db.ReadingPositions.Add(position);
+        }
+        else if (position.UpdatedAt > changedAt)
+        {
+            throw new LibraryConflictException();
+        }
+        position.Locator = request.Locator;
+        position.Progression = Math.Round(request.Progression, 6);
+        position.UpdatedAt = changedAt;
+        await db.SaveChangesAsync(ct);
+        return new ReadingPositionDto(position.Locator, position.Progression, position.UpdatedAt);
+    }
+
+    private static bool IsJsonObject(string text)
+    {
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(text);
+            return document.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>When a change was made: the app's time for one saved offline, but never later than now.</summary>
     private static DateTimeOffset ChangedAt(DateTimeOffset? changedAt, DateTimeOffset now) =>
         changedAt is { } at && at < now ? at : now;

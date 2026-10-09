@@ -16,6 +16,7 @@ public class CarrelDbContext(DbContextOptions<CarrelDbContext> options) : DbCont
     public DbSet<Read> Reads => Set<Read>();
     public DbSet<Profile> Profiles => Set<Profile>();
     public DbSet<ReadingGoal> ReadingGoals => Set<ReadingGoal>();
+    public DbSet<ReadingPosition> ReadingPositions => Set<ReadingPosition>();
     public DbSet<LibraryImport> LibraryImports => Set<LibraryImport>();
     public DbSet<ImportItem> ImportItems => Set<ImportItem>();
 
@@ -123,6 +124,18 @@ public class CarrelDbContext(DbContextOptions<CarrelDbContext> options) : DbCont
             goal.ToTable(t => t.HasCheckConstraint("ck_reading_goals_books", $"books between 1 and {ReadingGoal.MaxBooks}"));
             goal.Property(g => g.CreatedAt).HasDefaultValueSql("now()");
             goal.Property(g => g.UpdatedAt).HasDefaultValueSql("now()");
+        });
+
+        modelBuilder.Entity<ReadingPosition>(position =>
+        {
+            position.HasKey(p => p.LibraryEntryId);
+            position.ToTable(t =>
+            {
+                t.HasCheckConstraint("ck_reading_positions_progression", "progression between 0 and 1");
+                t.HasCheckConstraint("ck_reading_positions_locator", $"char_length(locator) <= {ReadingPosition.MaxLocatorLength}");
+            });
+            position.Property(p => p.Progression).HasPrecision(7, 6);
+            position.HasOne(p => p.LibraryEntry).WithOne().HasForeignKey<ReadingPosition>(p => p.LibraryEntryId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<Read>(read =>

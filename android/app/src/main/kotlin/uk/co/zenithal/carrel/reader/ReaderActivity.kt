@@ -72,7 +72,12 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.fragment.compose.AndroidFragment
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import java.time.Instant
+import java.time.OffsetDateTime
+import kotlin.math.abs
 import kotlinx.coroutines.launch
 import androidx.lifecycle.lifecycleScope
 import org.json.JSONObject
@@ -124,6 +129,15 @@ class OpenBook(val book: PhoneBook, val publication: Publication, val progress: 
     val newer = MutableStateFlow<PhoneBook?>(null)
     /** The copy the newer version replaced, deleted once the book closes (the reader still has it open). */
     var replaced: PhoneBook? = null
+    /** A more recent place saved from another device, to go to. */
+    val elsewhere = MutableStateFlow<ReadingPosition?>(null)
+    /**
+     * Whether the reader has moved from where the book opened. Only then is the place sent to Carrel, so opening a book
+     * can't overwrite a more recent place from another device before it's been offered.
+     */
+    var moved = false
+    /** The place waiting to be sent, a moment after a page turn. */
+    var sending: Job? = null
 }
 
 /**
@@ -148,6 +162,24 @@ suspend fun openReader(context: Context, container: AppContainer, book: PhoneBoo
     progress?.let { container.scope.launch { it.start() } }
     context.startActivity(Intent(context, ReaderActivity::class.java).putExtra(ReaderActivity.BOOK, book.id))
     if (book.downloadUrl != null) container.scope.launch { checkForNewer(container, open) }
+    progress?.let { container.scope.launch { syncPosition(open, it) } }
+}
+
+/**
+ * Compares the place in the book saved in Carrel (from any device) with this phone's: a more recent one elsewhere is
+ * offered to go to, and a more recent one here is sent, e.g. after reading without a signal.
+ */
+private suspend fun syncPosition(open: OpenBook, progress: ReadingProgress) {
+    val book = open.book
+    val localAt = book.openedAt?.let(Instant::ofEpochMilli)
+    val remote = progress.savedPosition()
+    val remoteAt = remote?.let { runCatching { OffsetDateTime.parse(it.updatedAt).toInstant() }.getOrNull() }
+    when {
+        remote != null && remoteAt != null && isNewerElsewhere(remote, remoteAt, if (book.locator == null) null else localAt, book.progression) ->
+            open.elsewhere.value = remote
+        book.locator != null && localAt != null && (remoteAt == null || localAt.isAfter(remoteAt)) ->
+            progress.savePosition(book.locator, book.progression ?: 0.0, localAt)
+    }
 }
 
 /** Closes the book that's open in the reader, deleting any copy a newer version replaced while it was read. */
@@ -249,7 +281,15 @@ class ReaderActivity : FragmentActivity() {
 
     override fun onStop() {
         super.onStop()
-        open?.progress?.let { container.scope.launch { it.save() } }
+        val open = open ?: return
+        val progress = open.progress ?: return
+        val locator = open.locator
+        container.scope.launch {
+            progress.save()
+            if (locator != null && !reopening && open.moved) {
+                progress.savePosition(locator.toJSON().toString(), locator.locations.totalProgression ?: 0.0, Instant.now())
+            }
+        }
     }
 
     override fun onDestroy() {
@@ -329,6 +369,11 @@ private fun ReaderScreen(
     var fontSize by remember { mutableDoubleStateOf(prefs.fontSize) }
     var pages by remember { mutableStateOf(prefs.pages) }
     var locator by remember { mutableStateOf(open.locator) }
+    // Where the book opened, to tell whether the reader has started reading yet.
+    val openedProgression = remember { open.locator?.locations?.totalProgression }
+    var startedAt by remember { mutableStateOf(openedProgression) }
+    /** Whether the book has shown its first page, after which it can be moved. */
+    var laidOut by remember { mutableStateOf(false) }
     /** Where the seek bar is being dragged to (0 to 1), until the book gets there. */
     var seeking by remember { mutableStateOf<Double?>(null) }
     LaunchedEffect(locator) { seeking = null }
@@ -343,10 +388,27 @@ private fun ReaderScreen(
         reader.currentLocator.collect { current ->
             if (reopening()) return@collect
             locator = current
+            laidOut = true
             open.locator = current
             val progression = current.locations.totalProgression
             container.phoneBooks.savePosition(open.book.id, current.toJSON().toString(), progression)
             if (open.progress?.moved(progression) == true) container.scope.launch { open.progress.save() }
+            // A copy never read here starts from its first page shown.
+            if (startedAt == null) startedAt = progression
+            val started = startedAt
+            if (progression != null && started != null && abs(progression - started) >= SAME_PLACE) open.moved = true
+            // Sent shortly after each page turn, so quitting (or the phone dying) loses nothing; flicking through
+            // pages, or dragging the seek bar, sends just the last.
+            val progress = open.progress
+            if (open.moved && progress != null && progression != null) {
+                val at = Instant.now()
+                val json = current.toJSON().toString()
+                open.sending?.cancel()
+                open.sending = container.scope.launch {
+                    delay(SEND_AFTER_MS)
+                    progress.savePosition(json, progression, at)
+                }
+            }
         }
     }
 
@@ -376,12 +438,46 @@ private fun ReaderScreen(
         }
         val newer by open.newer.collectAsState()
         var dismissed by remember { mutableStateOf(false) }
+        val elsewhere by open.elsewhere.collectAsState()
+        var offerElsewhere by remember { mutableStateOf<ReadingPosition?>(null) }
+        fun goTo(position: ReadingPosition) {
+            scope.launch {
+                val saved = runCatching { Locator.fromJSON(JSONObject(position.locator)) }.getOrNull()
+                val target = saved?.takeIf { open.publication.linkWithHref(it.href) != null }
+                    ?: open.publication.locateProgression(position.progression)
+                    ?: return@launch
+                // Once the first page has settled: a move while it's still loading is lost.
+                delay(GO_SETTLE_MS)
+                navigator?.go(target)
+            }
+        }
+        LaunchedEffect(navigator, elsewhere, laidOut) {
+            val position = elsewhere ?: return@LaunchedEffect
+            if (navigator == null || !laidOut) return@LaunchedEffect
+            open.elsewhere.value = null
+            val now = locator?.locations?.totalProgression
+            // Not read from here yet: straight there. Otherwise, the reader chooses.
+            if (now == null || openedProgression == null || abs(now - openedProgression) < SAME_PLACE) goTo(position) else offerElsewhere = position
+        }
         Column(Modifier.align(Alignment.TopCenter).fillMaxWidth()) {
             if (controls) {
                 Column(Modifier.fillMaxWidth().background(colors.paperRaised).statusBarsPadding()) {
                     Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         IconButton(::close) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Close the book", tint = colors.ink) }
                         Text(open.book.title, style = Carrel.type.heading, color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(end = 12.dp))
+                    }
+                    HorizontalDivider(color = colors.rule)
+                }
+            }
+            offerElsewhere?.let { position ->
+                Column(Modifier.fillMaxWidth().background(colors.paperRaised).then(if (controls) Modifier else Modifier.statusBarsPadding())) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                        Text("You were at ${readPercent(position.progression)}% on another device.", style = Carrel.type.mono, color = colors.ink, modifier = Modifier.weight(1f))
+                        LinkButton("Go there", {
+                            offerElsewhere = null
+                            goTo(position)
+                        }, color = colors.accent)
+                        LinkButton("Stay", { offerElsewhere = null })
                     }
                     HorizontalDivider(color = colors.rule)
                 }
@@ -565,6 +661,11 @@ private val SharedPreferences.pages get() = Pages.entries.firstOrNull { it.name 
 /** Wide enough for two pages side by side, in dp: an unfolded foldable, a tablet, or a phone on its side. */
 private const val TWO_PAGES_WIDTH = 600
 private const val PAGES = "pages"
+
+/** How long the first page is given to settle before going to a place saved on another device. */
+private const val GO_SETTLE_MS = 500L
+/** How long after a page turn the place is sent to Carrel. */
+private const val SEND_AFTER_MS = 2_000L
 
 private const val FONT_SIZE = "fontSize"
 private const val FONT_STEP = 0.1

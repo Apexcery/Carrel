@@ -1,6 +1,9 @@
 package uk.co.zenithal.carrel.reader
 
+import io.ktor.http.HttpMethod
 import kotlinx.coroutines.flow.first
+import kotlinx.serialization.Serializable
+import java.time.Instant
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import uk.co.zenithal.carrel.AppContainer
@@ -94,6 +97,30 @@ class ReadingProgress(private val container: AppContainer, private val bookId: L
         tracking = false
     }
 
+    /** Where the reader is in this book as Carrel has it, saved from any device; null if it isn't, or there's no signal. */
+    suspend fun savedPosition(): ReadingPosition? = try {
+        container.api.getOrNull("/library/books/$bookId/position", ReadingPosition.serializer())
+    } catch (_: ApiException) {
+        null
+    }
+
+    /**
+     * Saves where the reader is to Carrel, for another device to carry on from; `at` is when they were there. It's
+     * turned away if another device was read more recently, and not sent without a signal (the next open sends it).
+     */
+    suspend fun savePosition(locator: String, progression: Double, at: Instant) {
+        try {
+            container.api.send(
+                HttpMethod.Put,
+                "/library/books/$bookId/position",
+                SavePositionRequest(locator, progression.coerceIn(0.0, 1.0), at.toString()),
+                SavePositionRequest.serializer(),
+                ReadingPosition.serializer(),
+            )
+        } catch (_: ApiException) {
+        }
+    }
+
     private suspend fun savedItem() =
         container.store.saved(LIBRARY_PATH, LibrarySerializer).first()?.firstOrNull { it.book.id == bookId }
 
@@ -105,6 +132,25 @@ class ReadingProgress(private val container: AppContainer, private val bookId: L
 
 /** How far through (Readium's totalProgression) counts as the end, since the last page rarely reaches 1. */
 const val FINISHED_AT = 0.98
+
+/** Where the reader is in a book, as Carrel saves it (GET /library/books/{id}/position): a Readium Locator (JSON). */
+@Serializable
+data class ReadingPosition(val locator: String, val progression: Double, val updatedAt: String)
+
+@Serializable
+data class SavePositionRequest(val locator: String, val progression: Double, val changedAt: String)
+
+/**
+ * Whether a place saved in Carrel is worth going to from where this copy is (`localAt`, null if it's never been read
+ * here): it's more recent, by more than a moment, and somewhere else in the book.
+ */
+fun isNewerElsewhere(remote: ReadingPosition, remoteAt: Instant, localAt: Instant?, localProgression: Double?): Boolean {
+    if (localAt != null && !remoteAt.isAfter(localAt.plusSeconds(1))) return false
+    return localProgression == null || abs(remote.progression - localProgression) >= SAME_PLACE
+}
+
+/** Progressions closer than this (about a page in a long book) are the same place. */
+const val SAME_PLACE = 0.002
 
 /** A whole percentage read, from Readium's totalProgression (0 to 1). */
 fun readPercent(totalProgression: Double) = (totalProgression * 100).roundToInt().coerceIn(0, 100)

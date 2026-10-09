@@ -57,6 +57,20 @@ class ResumeTest {
     }
 
     @Test
+    fun goesToAMoreRecentPlaceFromAnotherDevice() {
+        val remote = ReadingPosition("{}", 0.45, "2026-10-08T12:00:00Z")
+        val remoteAt = Instant.parse("2026-10-08T12:00:00Z")
+        // Never read on this phone, or read here less recently and somewhere else.
+        assertEquals(true, isNewerElsewhere(remote, remoteAt, null, null))
+        assertEquals(true, isNewerElsewhere(remote, remoteAt, Instant.parse("2026-10-08T11:00:00Z"), 0.2))
+        // Read here more recently, or this phone's own save coming back.
+        assertEquals(false, isNewerElsewhere(remote, remoteAt, Instant.parse("2026-10-08T13:00:00Z"), 0.2))
+        assertEquals(false, isNewerElsewhere(remote, remoteAt, Instant.parse("2026-10-08T12:00:00.500Z"), 0.2))
+        // The same place, near enough.
+        assertEquals(false, isNewerElsewhere(remote, remoteAt, Instant.parse("2026-10-08T11:00:00Z"), 0.4505))
+    }
+
+    @Test
     fun groupsByAuthorAndSeries() {
         val books = listOf(
             book(1, title = "Mistborn", authors = "Brandon Sanderson", series = "Mistborn", position = 1.0),
