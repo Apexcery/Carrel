@@ -89,8 +89,8 @@ export function PrivacyPage() {
         <li>your theme and accent colour;</li>
         <li>your recent searches, which never leave your device; and</li>
         <li>
-          in the app, a copy of what it last loaded from Carrel, such as your profile, so it opens quickly and still
-          works without a signal. It’s cleared when you sign out.
+          a copy of what it last loaded from Carrel, such as your library and profile, so it opens quickly (and in the
+          app, still works without a signal). It’s cleared when you sign out.
         </li>
       </ul>
       <p>These are needed for features you’ve asked for, so Carrel doesn’t ask for consent to store them.</p>
