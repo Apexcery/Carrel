@@ -52,6 +52,21 @@ Run Gradle with JDK 21 (`JAVA_HOME`). `./gradlew testDebugUnitTest` runs the uni
 
 The release key lives outside the repo, and its settings are in `~/.gradle/gradle.properties` (`carrel.release.storeFile`, `storePassword`, `keyAlias`, and `keyPassword`). Keep a backup of both: an app signed with a different key can't update the installed one, so it has to be uninstalled first, losing what it had saved. Without those settings, `assembleRelease` builds an unsigned APK.
 
+Each merge into `main` that changes `android/` publishes the release APK as a GitHub release, `android-v<versionCode>`, with the file as `carrel.apk` (`.github/workflows/android.yml`). It runs the unit tests first, and fails if the APK isn't signed with the key in `assetlinks.json`. Bump `versionCode` and `versionName` in `android/app/build.gradle.kts` in the PR from `dev` into `main`: that PR's check fails if `versionCode` isn't above the latest release's. The workflow signs with the release key from four Actions secrets, set once with:
+
+```bash
+base64 -w0 ~/.carrel/carrel-release.jks | gh secret set CARREL_RELEASE_KEYSTORE
+gh secret set CARREL_RELEASE_STORE_PASSWORD
+gh secret set CARREL_RELEASE_KEY_ALIAS
+gh secret set CARREL_RELEASE_KEY_PASSWORD
+```
+
+Each password command asks for its value (from `~/.gradle/gradle.properties`). In PowerShell, which has no `base64`, set the key with:
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("$env:USERPROFILE\.carrel\carrel-release.jks")) | gh secret set CARREL_RELEASE_KEYSTORE
+```
+
 Links in Carrel's emails (`/auth/confirm`) open the app when it's installed. Android checks this against `web/public/.well-known/assetlinks.json`, which lists the release key's SHA-256 fingerprint: update it if the key ever changes. Carrel Dev handles the dev project's links (`http://localhost:5173/auth/confirm…`) only when they're sent to it directly, e.g. `adb shell am start -a android.intent.action.VIEW -d "<link>" uk.co.zenithal.carrel.debug`.
 
 ## Database migrations
