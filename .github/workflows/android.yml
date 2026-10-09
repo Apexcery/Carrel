@@ -1,14 +1,15 @@
 # Builds the Android app's release APK and publishes it as a GitHub release (android-v<versionCode>).
 # PRs into main build it too, without releasing, and check that versionCode has gone up.
+# Changes to this file alone don't run it (they'd need a version bump); they apply from the next Android release.
 name: Android
 
 on:
   push:
     branches: [main]
-    paths: ["android/**", ".github/workflows/android.yml"]
+    paths: ["android/**"]
   pull_request:
     branches: [main]
-    paths: ["android/**", ".github/workflows/android.yml"]
+    paths: ["android/**"]
   workflow_dispatch:
 
 concurrency:
@@ -91,6 +92,6 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk carrel.apk
           gh release create "android-v${{ steps.apk.outputs.code }}" carrel.apk \
             --target "$GITHUB_SHA" \
-            --title "Carrel ${{ steps.apk.outputs.name }} (build ${{ steps.apk.outputs.code }})" \
+            --title "Carrel ${{ steps.apk.outputs.name }}" \
             --generate-notes \
             --latest
