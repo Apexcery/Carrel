@@ -43,6 +43,7 @@ class MainActivity : ComponentActivity() {
             if (link == null) destination = destinationOf(intent)
         }
         val container = (application as CarrelApp).container
+        container.updates.checkOnLaunch()
         setContent {
             val theme by container.appearance.theme.collectAsState()
             val accent by container.appearance.accent.collectAsState()

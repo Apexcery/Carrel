@@ -10,6 +10,7 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 import uk.co.zenithal.carrel.auth.SessionWatcher
 import uk.co.zenithal.carrel.data.ApiClient
+import uk.co.zenithal.carrel.data.AppUpdates
 import uk.co.zenithal.carrel.auth.Session
 import uk.co.zenithal.carrel.data.CarrelDatabase
 import uk.co.zenithal.carrel.data.ChangesDatabase
@@ -65,6 +66,7 @@ class AppContainer(context: Context, val scope: CoroutineScope) {
     val appearance = Appearance(context.getSharedPreferences("appearance", Context.MODE_PRIVATE))
     val session: SessionWatcher = SessionWatcher(supabase, store, outbox, context.getSharedPreferences("saved-data", Context.MODE_PRIVATE), scope)
     val shortcuts = LauncherShortcuts(context, store, scope)
+    val updates = AppUpdates(context, scope)
 
     init {
         scope.launch { outbox.scheduleIfWaiting() }

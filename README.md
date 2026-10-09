@@ -67,6 +67,10 @@ Each password command asks for its value (from `~/.gradle/gradle.properties`). I
 [Convert]::ToBase64String([IO.File]::ReadAllBytes("$env:USERPROFILE\.carrel\carrel-release.jks")) | gh secret set CARREL_RELEASE_KEYSTORE
 ```
 
+The release's notes list the pull requests since the last release that changed `android/`, by their squash commits' titles. The app updates itself from these releases: each launch checks GitHub for a higher `android-v<versionCode>`, and offers it with those notes, to update now, at the next launch, or skip that version (Settings can check again at any time). It downloads `carrel.apk` and installs it, and Android reopens Carrel afterwards. Android asks to confirm the first update the app installs; after that, only Play Protect may ask to scan it. Versions before 0.2.0 have no updater, so install that one by hand.
+
+To try the updater, Carrel Dev reads a test list of releases from `http://localhost:8765/releases.json` instead. Build a second Carrel Dev with a higher `versionCode`, serve it and a `releases.json` (in GitHub's format, tagged `android-v<versionCode>`, with the APK as `carrel.apk`) from a folder with `npx http-server -p 8765`, and run `adb reverse tcp:8765 tcp:8765`.
+
 Links in Carrel's emails (`/auth/confirm`) open the app when it's installed. Android checks this against `web/public/.well-known/assetlinks.json`, which lists the release key's SHA-256 fingerprint: update it if the key ever changes. Carrel Dev handles the dev project's links (`http://localhost:5173/auth/confirm…`) only when they're sent to it directly, e.g. `adb shell am start -a android.intent.action.VIEW -d "<link>" uk.co.zenithal.carrel.debug`.
 
 ## Database migrations

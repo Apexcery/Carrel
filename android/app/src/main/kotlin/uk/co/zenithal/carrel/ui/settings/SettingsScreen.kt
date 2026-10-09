@@ -39,8 +39,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
+import uk.co.zenithal.carrel.BuildConfig
 import uk.co.zenithal.carrel.LocalContainer
 import uk.co.zenithal.carrel.auth.signOutHere
+import uk.co.zenithal.carrel.ui.components.FormMessage
 import uk.co.zenithal.carrel.ui.components.Gap
 import uk.co.zenithal.carrel.ui.components.Kicker
 import uk.co.zenithal.carrel.ui.components.LinkButton
@@ -50,6 +52,7 @@ import uk.co.zenithal.carrel.ui.theme.Carrel
 import uk.co.zenithal.carrel.ui.theme.ThemeChoice
 import uk.co.zenithal.carrel.ui.theme.darkColors
 import uk.co.zenithal.carrel.ui.theme.lightColors
+import java.io.IOException
 
 /** The sections of Settings, as the website's. Signed out, only Appearance applies. */
 enum class SettingsSection(val label: String, val description: String, val membersOnly: Boolean) {
@@ -96,6 +99,8 @@ fun SettingsScreen(email: String?, open: (SettingsSection) -> Unit) {
             // Signing out drops library changes still waiting to be sent, so it asks first.
             LinkButton("Sign out", { if (waiting.isEmpty()) signOut() else confirmingSignOut = true }, Modifier.padding(top = 4.dp), color = colors.ink)
         }
+        Gap(40)
+        AppVersion()
     }
 
     if (confirmingSignOut) {
@@ -119,6 +124,33 @@ fun SettingsScreen(email: String?, open: (SettingsSection) -> Unit) {
             dismissButton = { LinkButton("Cancel", { confirmingSignOut = false }, Modifier.padding(horizontal = 8.dp)) },
         )
     }
+}
+
+/** The app's version, and a check for a newer one, which offers it even if it was skipped. */
+@Composable
+private fun AppVersion() {
+    val updates = LocalContainer.current.updates
+    val scope = rememberCoroutineScope()
+    var checking by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    Text("Carrel ${BuildConfig.VERSION_NAME}", style = Carrel.type.mono, color = Carrel.colors.inkSoft)
+    if (checking) {
+        Text("Checking…", style = Carrel.type.mono, color = Carrel.colors.inkSoft, modifier = Modifier.padding(vertical = 10.dp))
+    } else {
+        LinkButton("Check for updates", {
+            checking = true
+            message = null
+            scope.launch {
+                message = try {
+                    if (updates.check()) null else "You have the latest version."
+                } catch (_: IOException) {
+                    "Couldn’t check for updates. Try again later."
+                }
+                checking = false
+            }
+        }, Modifier.padding(top = 4.dp), color = Carrel.colors.ink)
+    }
+    message?.let { FormMessage(it) }
 }
 
 /** The gear at the top of the You tab that opens Settings. */
