@@ -1,0 +1,96 @@
+# Builds the Android app's release APK and publishes it as a GitHub release (android-v<versionCode>).
+# PRs into main build it too, without releasing, and check that versionCode has gone up.
+name: Android
+
+on:
+  push:
+    branches: [main]
+    paths: ["android/**", ".github/workflows/android.yml"]
+  pull_request:
+    branches: [main]
+    paths: ["android/**", ".github/workflows/android.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check versionCode is above the latest release's
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          code=$(sed -nE 's/^\s*versionCode = ([0-9]+).*/\1/p' android/app/build.gradle.kts)
+          latest=$(gh release list --limit 100 --json tagName \
+            --jq '[.[].tagName | select(startswith("android-v")) | ltrimstr("android-v") | tonumber] | max // 0')
+          echo "versionCode $code, latest release $latest"
+          if [ "$code" -le "$latest" ]; then
+            echo "::error file=android/app/build.gradle.kts::Bump versionCode above $latest (and versionName) for this release."
+            exit 1
+          fi
+
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Restore the release key
+        env:
+          KEYSTORE: ${{ secrets.CARREL_RELEASE_KEYSTORE }}
+        run: echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/carrel-release.jks"
+
+      - name: Test and build
+        env:
+          STORE_PASSWORD: ${{ secrets.CARREL_RELEASE_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.CARREL_RELEASE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.CARREL_RELEASE_KEY_PASSWORD }}
+        run: >
+          ./gradlew testDebugUnitTest assembleRelease
+          -Pcarrel.release.storeFile="$RUNNER_TEMP/carrel-release.jks"
+          -Pcarrel.release.storePassword="$STORE_PASSWORD"
+          -Pcarrel.release.keyAlias="$KEY_ALIAS"
+          -Pcarrel.release.keyPassword="$KEY_PASSWORD"
+
+      # Without the key settings Gradle still builds, unsigned, and an APK signed with any other key
+      # can't update the installed app. So the signature must match the one App Links trust.
+      - name: Check the signature
+        id: apk
+        run: |
+          tools="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          apk=app/build/outputs/apk/release/app-release.apk
+          expected=$(jq -r '.[0].target.sha256_cert_fingerprints[0]' ../web/public/.well-known/assetlinks.json | tr -d : | tr A-F a-f)
+          actual=$("$tools/apksigner" verify --print-certs "$apk" | sed -nE 's/.*certificate SHA-256 digest: //p' | head -1)
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::The APK isn't signed with the release key (got '$actual')."
+            exit 1
+          fi
+          badging=$("$tools/aapt2" dump badging "$apk" | head -1)
+          echo "code=$(echo "$badging" | sed -nE "s/.*versionCode='([0-9]+)'.*/\1/p")" >> "$GITHUB_OUTPUT"
+          echo "name=$(echo "$badging" | sed -nE "s/.*versionName='([^']+)'.*/\1/p")" >> "$GITHUB_OUTPUT"
+
+      - name: Publish the release
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk carrel.apk
+          gh release create "android-v${{ steps.apk.outputs.code }}" carrel.apk \
+            --target "$GITHUB_SHA" \
+            --title "Carrel ${{ steps.apk.outputs.name }} (build ${{ steps.apk.outputs.code }})" \
+            --generate-notes \
+            --latest
