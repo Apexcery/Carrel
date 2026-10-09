@@ -32,17 +32,20 @@ import uk.co.zenithal.carrel.ui.theme.Carrel
 
 /**
  * Everything the app shows, as the website's App does: browsing is open to everyone, and a signed-in reader without a
- * username chooses one first. A link from one of Carrel's emails (`link`) takes over until it's dealt with. Any other
+ * username chooses one first. A link from one of Carrel's emails (`link`) takes over until it's dealt with, then a newer
+ * version of the app, if there is one, until the reader chooses whether to update. Any other
  * link, share, or shortcut (`destination`) waits for the tabs to show, then opens its page.
  */
 @Composable
 fun CarrelRoot(link: EmailLink?, onLinkHandled: () -> Unit, destination: Destination?, onDestinationReached: () -> Unit) {
     val container = LocalContainer.current
     val session by container.session.state.collectAsStateWithLifecycle()
+    val offered by container.updates.offered.collectAsStateWithLifecycle()
     val nav = rememberNavController()
     // After a reset or invitation link signs the reader in, they choose a password before anything else.
     var settingPassword by rememberSaveable { mutableStateOf(false) }
 
+    val update = offered
     when (val current = session) {
         Session.Loading -> Blank()
         else -> when {
@@ -59,6 +62,7 @@ fun CarrelRoot(link: EmailLink?, onLinkHandled: () -> Unit, destination: Destina
                 },
                 onDone = onLinkHandled,
             )
+            update != null -> UpdateScreen(update)
             current is Session.SignedIn && settingPassword ->
                 SetPasswordScreen(current.email) { settingPassword = false }
             current is Session.SignedIn -> SignedIn(current) { profile -> MainScreen(nav, current, profile, destination, onDestinationReached) }

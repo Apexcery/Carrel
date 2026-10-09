@@ -44,6 +44,9 @@ jobs:
         working-directory: android
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The history and tags, for the release notes.
+          fetch-depth: 0
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -84,14 +87,18 @@ jobs:
           echo "code=$(echo "$badging" | sed -nE "s/.*versionCode='([0-9]+)'.*/\1/p")" >> "$GITHUB_OUTPUT"
           echo "name=$(echo "$badging" | sed -nE "s/.*versionName='([^']+)'.*/\1/p")" >> "$GITHUB_OUTPUT"
 
+      # The notes list the pull requests since the last release that changed the app (squash commits ending "(#n)"),
+      # which the app shows when it offers the update.
       - name: Publish the release
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp app/build/outputs/apk/release/app-release.apk carrel.apk
+          previous=$(git tag --list 'android-v*' --sort=-v:refname | head -1)
+          git log ${previous:+$previous..}HEAD --no-merges --format='- %s' -- . | grep -E '\(#[0-9]+\)$' > notes.md || true
           gh release create "android-v${{ steps.apk.outputs.code }}" carrel.apk \
             --target "$GITHUB_SHA" \
             --title "Carrel ${{ steps.apk.outputs.name }}" \
-            --generate-notes \
+            --notes-file notes.md \
             --latest

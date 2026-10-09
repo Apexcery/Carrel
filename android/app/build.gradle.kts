@@ -14,8 +14,8 @@ android {
         // supabase-kt needs Android 8.
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "WEBSITE_URL", "\"https://carrel.zenithal.co.uk\"")
     }
@@ -42,12 +42,15 @@ android {
             buildConfigField("String", "SUPABASE_URL", "\"https://stbhesoohtliyltjxvsd.supabase.co\"")
             buildConfigField("String", "SUPABASE_KEY", "\"sb_publishable_krJi6cM_WB0J-UiuxqkGWA_ZdFFDfWy\"")
             buildConfigField("String", "API_URL", "\"http://localhost:5155\"")
+            // A test list of releases, served from the computer over `adb reverse tcp:8765 tcp:8765` (see the README).
+            buildConfigField("String", "RELEASES_URL", "\"http://localhost:8765/releases.json\"")
         }
         release {
             resValue("string", "app_name", "Carrel")
             buildConfigField("String", "SUPABASE_URL", "\"https://iirzotkuqblvyfvjwuta.supabase.co\"")
             buildConfigField("String", "SUPABASE_KEY", "\"sb_publishable_9P6mzBQSRUKMQYNEdjUoJA_GHK1DU-D\"")
             buildConfigField("String", "API_URL", "\"https://carrel-api-37cc53k4jq-ew.a.run.app\"")
+            buildConfigField("String", "RELEASES_URL", "\"https://api.github.com/repos/Apexcery/Carrel/releases?per_page=30\"")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
