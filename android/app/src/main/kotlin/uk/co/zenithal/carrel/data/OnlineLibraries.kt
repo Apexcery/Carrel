@@ -317,6 +317,18 @@ internal fun resolve(href: String, base: String): String? =
         null
     }
 
+/**
+ * A book's download address after its library moved from `oldUrl` to `newUrl` (another host, port, or scheme); null if
+ * it isn't on the old library's server, or the server hasn't changed.
+ */
+internal fun movedDownload(downloadUrl: String, oldUrl: String, newUrl: String): String? {
+    val download = downloadUrl.toHttpUrlOrNull() ?: return null
+    val old = oldUrl.toHttpUrlOrNull() ?: return null
+    val new = newUrl.toHttpUrlOrNull() ?: return null
+    if (OnlineLibraries.origin(download) != OnlineLibraries.origin(old) || OnlineLibraries.origin(old) == OnlineLibraries.origin(new)) return null
+    return download.newBuilder().scheme(new.scheme).host(new.host).port(new.port).build().toString()
+}
+
 /** A search template made absolute, keeping {searchTerms} for the words and dropping optional parameters. */
 internal fun resolveTemplate(template: String, base: String): String? {
     val placeholder = "CARRELSEARCHTERMS"
