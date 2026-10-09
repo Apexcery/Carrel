@@ -4,6 +4,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Online libraries on the home network, such as Calibre's server (Android 17's local network protection). -->
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
+    <!-- Installing its own updates, from GitHub releases; without asking each time once Carrel installed itself. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
 
     <application
         android:name=".CarrelApp"
@@ -50,6 +53,11 @@
         <activity
             android:name=".reader.ReaderActivity"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout"
+            android:exported="false" />
+
+        <!-- Hears how an update's install went (see AppUpdates). -->
+        <receiver
+            android:name=".data.InstallStatusReceiver"
             android:exported="false" />
     </application>
 </manifest>
