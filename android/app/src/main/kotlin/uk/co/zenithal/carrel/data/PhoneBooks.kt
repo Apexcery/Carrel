@@ -123,6 +123,12 @@ interface PhoneBookDao {
     @Query("UPDATE books SET libraryId = NULL WHERE libraryId = :libraryId")
     suspend fun forgetLibrary(libraryId: Long)
 
+    @Query("SELECT * FROM books WHERE libraryId = :libraryId")
+    suspend fun inLibrary(libraryId: Long): List<PhoneBook>
+
+    @Query("UPDATE books SET downloadUrl = :downloadUrl WHERE id = :id")
+    suspend fun setDownloadUrl(id: Long, downloadUrl: String)
+
     @Insert
     suspend fun add(book: PhoneBook): Long
 
@@ -271,6 +277,12 @@ class PhoneBooks(private val context: Context, private val dao: PhoneBookDao, pr
 
     /** Books from a library being removed stay on the phone, as plain copies. */
     suspend fun forgetLibrary(libraryId: Long) = dao.forgetLibrary(libraryId)
+
+    /** Points a library's books at its new address (see [movedDownload]), so they still get newer versions. */
+    suspend fun moveLibrary(libraryId: Long, oldUrl: String, newUrl: String) =
+        dao.inLibrary(libraryId).forEach { book ->
+            book.downloadUrl?.let { movedDownload(it, oldUrl, newUrl) }?.let { dao.setDownloadUrl(book.id, it) }
+        }
 
     /** Adds a copy already in files/books, or gives the copy already here if it's the same file. */
     private suspend fun addCopy(file: File, fingerprint: String): PhoneBook {

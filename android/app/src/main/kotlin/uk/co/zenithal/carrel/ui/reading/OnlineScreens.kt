@@ -406,7 +406,9 @@ fun LibraryFormScreen(libraryId: Long?, onSaved: () -> Unit, onRemoved: () -> Un
             saving = true
             error = null
             try {
-                container.libraries.save(libraryId, name, address, username, password)
+                val old = libraryId?.let { container.libraries.get(it) }
+                val saved = container.libraries.save(libraryId, name, address, username, password)
+                old?.let { container.phoneBooks.moveLibrary(it.id, it.url, saved.url) }
                 onSaved()
             } catch (e: LibraryException) {
                 error = e.message

@@ -86,4 +86,20 @@ class OnlineLibrariesTest {
         """
         assertEquals("/opds/search/{searchTerms}?a=1&b=2", openSearchTemplate(description))
     }
+
+    @Test
+    fun movesDownloadsToTheLibrarysNewAddress() {
+        val download = "http://192.168.1.20:8080/get/epub/12/calibre"
+        assertEquals("http://192.168.1.30:8080/get/epub/12/calibre", movedDownload(download, "http://192.168.1.20:8080/opds", "http://192.168.1.30:8080/opds"))
+        assertEquals("http://192.168.1.20:8083/get/epub/12/calibre", movedDownload(download, "http://192.168.1.20:8080/opds", "http://192.168.1.20:8083/opds"))
+        assertEquals("https://books.example.com/get/epub/12/calibre", movedDownload(download, "http://192.168.1.20:8080/opds", "https://books.example.com/opds"))
+        // A default port written out in one address and not the other is the same server.
+        assertEquals("http://nas.lan:8080/get/1", movedDownload("http://calibre.lan/get/1", "http://calibre.lan:80/opds", "http://nas.lan:8080/opds"))
+    }
+
+    @Test
+    fun leavesDownloadsElsewhereAlone() {
+        assertNull(movedDownload("http://cdn.example.com/get/1", "http://192.168.1.20:8080/opds", "http://192.168.1.30:8080/opds"))
+        assertNull(movedDownload("http://192.168.1.20:8080/get/1", "http://192.168.1.20:8080/opds", "http://192.168.1.20:8080/catalogue"))
+    }
 }
