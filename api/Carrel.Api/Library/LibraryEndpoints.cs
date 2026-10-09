@@ -39,6 +39,16 @@ public static class LibraryEndpoints
                 ? Results.Ok(entry)
                 : Results.NotFound()));
 
+        // Where the reader is in a book they're reading in the app, to carry on from on another device.
+        library.MapGet("/books/{bookId:long}/position", async (long bookId, ClaimsPrincipal user, LibraryService service, CancellationToken ct) =>
+            await service.GetPositionAsync(UserId(user), bookId, ct) is { } position ? Results.Ok(position) : Results.NotFound());
+
+        library.MapPut("/books/{bookId:long}/position", (long bookId, SavePositionRequest request, ClaimsPrincipal user, LibraryService service,
+                CancellationToken ct) =>
+            Validated(async () => await service.SavePositionAsync(UserId(user), bookId, request, ct) is { } position
+                ? Results.Ok(position)
+                : Results.NotFound()));
+
         // ?changedAt= for a removal the app made offline (see SaveEntryRequest.ChangedAt).
         library.MapDelete("/books/{bookId:long}", (long bookId, DateTimeOffset? changedAt, ClaimsPrincipal user, LibraryService service,
                 CancellationToken ct) =>

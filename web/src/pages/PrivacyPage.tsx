@@ -43,6 +43,10 @@ export function PrivacyPage() {
           below).
         </li>
         <li>
+          <strong>Your place in books you read in the Android app</strong>, so another phone or tablet can carry on
+          from there. It isn’t shown on your profile, and it’s deleted when you remove the book from your library.
+        </li>
+        <li>
           <strong>Your reading goals:</strong> how many books you mean to read each year, if you set a goal.
         </li>
         <li>
