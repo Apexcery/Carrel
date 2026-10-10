@@ -455,7 +455,8 @@ a.primary-button:hover {
 }
 
 /* The larger view: the picture on a card over a dimmed page, at most most of the window. */
-.image-viewer {
+.image-viewer,
+.release-notes {
   position: relative;
   z-index: 50;
 }
@@ -2767,6 +2768,179 @@ a.primary-button:hover {
   color: var(--ink-soft);
 }
 
+/* ---------- Android app ---------- */
+
+.android-intro {
+  max-width: 40em;
+}
+
+.android-title {
+  font-family: var(--font-display);
+  font-size: var(--text-display-lg);
+  line-height: 1.05;
+  margin: 8px 0 14px;
+}
+
+.android-lede {
+  color: var(--ink-soft);
+}
+
+.android-download {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  margin-top: 24px;
+}
+
+.android-section {
+  margin-top: 56px;
+}
+
+/* After .legal h2, which the install section also matches. */
+.android-section h2 {
+  margin: 0 0 12px;
+  font-family: var(--font-display);
+  font-size: var(--text-heading);
+  line-height: 1.2;
+}
+
+.android-section-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+}
+
+.android-section-header h2 {
+  margin: 0;
+}
+
+.android-gallery-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.android-gallery-controls button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* One row that scrolls sideways (also with the arrows), every screenshot the same height. */
+.android-shots {
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0 0 12px;
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+}
+
+.android-shots li {
+  flex: none;
+  scroll-snap-align: start;
+}
+
+/* As wide as its screenshot, so the caption wraps under it. */
+.android-shots figure {
+  width: min-content;
+  margin: 0;
+}
+
+.android-shots img {
+  display: block;
+  width: auto;
+  height: 480px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  box-shadow: var(--card-shadow);
+}
+
+.android-shots figcaption {
+  margin-top: 10px;
+}
+
+.android-features {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0 32px;
+}
+
+.android-features li {
+  padding: 16px 0;
+  border-top: 1px solid var(--rule);
+}
+
+.android-features h3 {
+  margin-bottom: 4px;
+  font-family: var(--font-display);
+  font-size: var(--text-body);
+  font-weight: 500;
+}
+
+.android-features p {
+  color: var(--ink-soft);
+}
+
+/* The release notes dialog, over the page like the image viewer (whose backdrop and frame it uses). */
+.release-notes-panel {
+  display: grid;
+  gap: 16px;
+  width: min(36em, 100%);
+  max-height: calc(100svh - 32px);
+  overflow-y: auto;
+  padding: 18px 22px 22px;
+  background: var(--paper-raised);
+  box-shadow: var(--card-shadow);
+}
+
+.release-notes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+}
+
+.release-notes-title {
+  font-family: var(--font-display);
+  font-size: var(--text-heading);
+  line-height: 1.2;
+}
+
+.release-notes-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.release-notes-list > li + li {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+}
+
+.release-notes-list h3 {
+  font-family: var(--font-display);
+  font-size: var(--text-body);
+  font-weight: 500;
+}
+
+.release-notes-list ul {
+  list-style: disc;
+  margin: 8px 0 0;
+  padding-left: 1.3em;
+}
+
+.release-notes-list ul li + li {
+  margin-top: 6px;
+}
+
 /* ---------- Sign in ---------- */
 
 .sign-in-prompt > * + * {
@@ -3085,17 +3259,25 @@ a.primary-button:hover {
     gap: 28px;
   }
 
+  .android-shots img {
+    height: 420px;
+  }
+
+  /* One row that scrolls sideways when the sections don't fit (signed in, on a phone). The rule under it is a shadow,
+     drawn under the tabs' own borders, since the scrolling would clip a border they overlap. */
   .settings-nav {
     flex-direction: row;
     gap: 0;
-    border-bottom: 1px solid var(--rule);
+    overflow-x: auto;
+    scrollbar-width: none;
+    box-shadow: inset 0 -1px var(--rule);
   }
 
   .settings-nav a {
+    flex: none;
     padding: 0.6em 14px;
     border-left: 0;
     border-bottom: 2px solid transparent;
-    margin-bottom: -1px;
   }
 
   .settings-nav a[aria-current='page'] {

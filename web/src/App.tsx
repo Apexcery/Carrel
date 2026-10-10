@@ -3,6 +3,7 @@ import { useSession } from './auth'
 import { ErrorNotice } from './components/ErrorNotice'
 import { Layout } from './components/Layout'
 import { AccountSettings } from './pages/AccountSettings'
+import { AndroidPage } from './pages/AndroidPage'
 import { AppearanceSettings } from './pages/AppearanceSettings'
 import { BookPage } from './pages/BookPage'
 import { BookResolver } from './pages/BookResolver'
@@ -69,6 +70,7 @@ function App() {
         <Route path="genres/:slug" element={<GenrePage />} />
         <Route path="privacy" element={<PrivacyPage />} />
         <Route path="copyright" element={<CopyrightPage />} />
+        <Route path="android" element={<AndroidPage />} />
         <Route path="settings" element={<SettingsPage />}>
           <Route index element={<Navigate to={session ? 'account' : 'appearance'} replace />} />
           <Route path="appearance" element={<AppearanceSettings />} />
