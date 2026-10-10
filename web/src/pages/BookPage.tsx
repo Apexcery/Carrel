@@ -85,7 +85,9 @@ function BookView({ book }: { book: BookDetail }) {
           <GenreLinks genres={book.genres.map((name) => ({ name, slug: genreSlug(name) }))} label="Genres" />
         )}
 
-        {book.description && <Description text={book.description} source={book.descriptionSource} />}
+        {book.description && (
+          <Description text={book.description} source={book.descriptionSource} url={book.descriptionUrl} />
+        )}
 
         {book.series.length > 0 && (
           <section className="book-section">
@@ -138,7 +140,7 @@ function RelatedSections({ bookId }: { bookId: number }) {
   )
 }
 
-function Description({ text, source }: { text: string; source: BookDetail['descriptionSource'] }) {
+function Description({ text, source, url }: { text: string; source: BookDetail['descriptionSource']; url: string | null }) {
   const paragraphs = text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean)
   const sourceName = { hardcover: 'Hardcover', open_library: 'Open Library', google_books: 'Google Books' }
 
@@ -147,7 +149,19 @@ function Description({ text, source }: { text: string; source: BookDetail['descr
       {paragraphs.map((p, i) => (
         <p key={i}>{p}</p>
       ))}
-      {source && <p className="source-note mono">Description from {sourceName[source]}</p>}
+      {source && (
+        <p className="source-note mono">
+          {/* Carrel trims the marketing from descriptions; Google Books asks for a link to the book. */}
+          Description adapted from{' '}
+          {url ? (
+            <a href={url} target="_blank" rel="noreferrer">
+              {sourceName[source]}
+            </a>
+          ) : (
+            sourceName[source]
+          )}
+        </p>
+      )}
     </section>
   )
 }

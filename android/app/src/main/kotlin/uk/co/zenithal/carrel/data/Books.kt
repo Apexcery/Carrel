@@ -36,6 +36,8 @@ data class BookDetail(
     val description: String?,
     /** hardcover, open_library, or google_books. */
     val descriptionSource: String?,
+    /** The description's source page, for sources that ask to be linked to (Google Books). */
+    val descriptionUrl: String? = null,
     val coverUrl: String?,
     val firstPublishedYear: Int?,
     val hardcoverRating: Double?,

@@ -69,22 +69,21 @@ public partial class BookService
 
     /// <summary>
     /// Stores Hardcover books fetched in a batch (library imports), one at a time inside the import lock so readers
-    /// opening book pages never wait long. Books stored recently are left as they are. Returns stored ids by Hardcover id.
+    /// opening book pages never wait long, and takes their descriptions from Google Books. Books stored recently are
+    /// left as they are. Returns stored ids by Hardcover id.
     /// </summary>
     public async Task<Dictionary<int, long>> StoreHardcoverBooksAsync(IEnumerable<HardcoverBook> sources, CancellationToken ct)
     {
         var stored = new Dictionary<int, long>();
         foreach (var source in sources.DistinctBy(s => s.Id))
         {
-            stored[source.Id] = await WithImportLockAsync(async () =>
+            var book = await WithImportLockAsync(async () =>
             {
-                var book = await LoadAsync(b => b.HardcoverId == source.Id, ct);
-                if (book is null || !IsFresh(book))
-                {
-                    book = await StoreHardcoverAsync(source, book, null, ct);
-                }
-                return book.Id;
+                var existing = await LoadAsync(b => b.HardcoverId == source.Id, ct);
+                return existing is null || !IsFresh(existing) ? await StoreHardcoverAsync(source, existing, null, ct) : existing;
             }, ct);
+            stored[source.Id] = book.Id;
+            await AddGoogleBooksDescriptionAsync(book, ct);
             // Each book is saved; letting the tracked entities pile up would slow every later save.
             db.ChangeTracker.Clear();
         }
@@ -123,7 +122,8 @@ public partial class BookService
     {
         book.Title = string.IsNullOrWhiteSpace(source.Title) ? "Untitled" : source.Title;
         book.Subtitle = source.Subtitle;
-        if (!string.IsNullOrWhiteSpace(source.Description))
+        // A Google Books description, the publisher's own, is kept over Hardcover's.
+        if (!string.IsNullOrWhiteSpace(source.Description) && book.DescriptionSource != DescriptionSource.GoogleBooks)
         {
             book.Description = source.Description;
             book.DescriptionSource = DescriptionSource.Hardcover;

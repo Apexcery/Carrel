@@ -27,6 +27,7 @@ export interface BookDetail {
   subtitle: string | null
   description: string | null
   descriptionSource: 'hardcover' | 'open_library' | 'google_books' | null
+  descriptionUrl: string | null
   coverUrl: string | null
   firstPublishedYear: number | null
   hardcoverRating: number | null

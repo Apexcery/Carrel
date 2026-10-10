@@ -14,6 +14,12 @@ public class Book
     public long? HardcoverId { get; set; }
     public string? OpenLibraryWorkKey { get; set; }
 
+    /// <summary>The Google Books volume the description came from, linked to wherever it's shown.</summary>
+    public string? GoogleBooksId { get; set; }
+
+    /// <summary>When Google Books was last asked for this book's description; null if it hasn't been yet.</summary>
+    public DateTimeOffset? GoogleBooksCheckedAt { get; set; }
+
     /// <summary>Hardcover's aggregate rating; must be credited to Hardcover when shown.</summary>
     public decimal? HardcoverRating { get; set; }
     public int? HardcoverRatingsCount { get; set; }
