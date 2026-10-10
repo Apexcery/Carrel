@@ -1,8 +1,9 @@
 # Security headers for every page and file Cloudflare serves (https://developers.cloudflare.com/workers/static-assets/headers/).
 # The Content Security Policy only allows Carrel's own scripts and styles, images from the book sources' cover servers,
-# and connections to Carrel's API and Supabase. Checked against the live site in report-only mode before enforcing.
+# and connections to Carrel's API, Supabase, and GitHub's API (the Android app's release notes). Checked against the
+# live site in report-only mode before enforcing.
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https://iirzotkuqblvyfvjwuta.supabase.co https://assets.hardcover.app https://covers.openlibrary.org https://archive.org https://*.archive.org; font-src 'self'; connect-src 'self' https://carrel-api-3344660708.europe-west1.run.app https://iirzotkuqblvyfvjwuta.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https://iirzotkuqblvyfvjwuta.supabase.co https://assets.hardcover.app https://covers.openlibrary.org https://archive.org https://*.archive.org; font-src 'self'; connect-src 'self' https://carrel-api-3344660708.europe-west1.run.app https://iirzotkuqblvyfvjwuta.supabase.co https://api.github.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin

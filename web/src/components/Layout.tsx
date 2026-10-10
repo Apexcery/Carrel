@@ -36,6 +36,7 @@ function Footer() {
     <footer className="colophon">
       <span>Book data from Hardcover and Open Library.</span>
       <nav className="colophon-links" aria-label="About Carrel">
+        <Link to="/android">Android app</Link>
         <Link to="/privacy">Privacy</Link>
         <Link to="/copyright">Copyright</Link>
       </nav>
