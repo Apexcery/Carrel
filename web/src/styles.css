@@ -1878,8 +1878,11 @@ a.primary-button:hover {
   min-width: 100%;
 }
 
+/* A width as well as the flex basis: Firefox sizes the strip (max-content) from its items' own widths, and without
+   one counts each book's unwrapped title and full-size cover, leaving empty shelf past the last book. */
 .shelf-strip > li {
   flex: 0 0 92px;
+  width: 92px;
 }
 
 /* Reading cards as a shelf, on the profile: two to a view, sized from the shelf's width (the gap is .shelf-strip's),
@@ -1894,6 +1897,11 @@ a.primary-button:hover {
   grid-auto-flow: column;
   grid-auto-columns: calc((100cqw - 14px) / 2);
   align-content: center;
+}
+
+/* Grid items, sized by the columns above rather than .shelf-strip's book width. */
+.reading-strip > li {
+  width: auto;
 }
 
 @container (max-width: 520px) {
