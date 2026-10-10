@@ -133,6 +133,10 @@ export function PrivacyPage() {
           that identifies you. Book covers load straight from
           their image servers, so they see your IP address when your browser fetches a cover.
         </li>
+        <li>
+          <strong>GitHub</strong> hosts the Android app. When you download it or open its release notes, your browser
+          fetches them from GitHub, which sees your IP address.
+        </li>
       </ul>
       <p>
         Some of these companies are based in the United States. Where they handle information outside the UK, they use
