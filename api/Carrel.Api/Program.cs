@@ -153,6 +153,12 @@ builder.Services.AddHttpClient<OpenLibraryClient>(client =>
     client.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
     client.Timeout = TimeSpan.FromSeconds(15);
 });
+builder.Services.AddHttpClient<GoogleBooksClient>(client =>
+{
+    client.BaseAddress = new Uri("https://www.googleapis.com/books/v1/");
+    client.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
 builder.Services.AddHttpClient<SupabaseAuthClient>(client =>
 {
     client.BaseAddress = new Uri($"{supabaseUrl}/auth/v1/");

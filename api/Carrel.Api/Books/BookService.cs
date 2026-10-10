@@ -6,13 +6,15 @@ using Microsoft.Extensions.Caching.Memory;
 namespace Carrel.Api.Books;
 
 /// <summary>
-/// Book search and details. Hardcover is the primary source, Open Library the fallback. Books are stored when
-/// someone opens them, then refreshed when stale. Source-specific import code is in the other partial files.
+/// Book search and details. Hardcover is the primary source, Open Library the fallback, and Google Books supplies
+/// descriptions. Books are stored when someone opens them, then refreshed when stale. Source-specific import code is in
+/// the other partial files.
 /// </summary>
 public partial class BookService(
     CarrelDbContext db,
     HardcoverClient hardcover,
     OpenLibraryClient openLibrary,
+    GoogleBooksClient googleBooks,
     IMemoryCache cache,
     CoverSuppression suppression,
     ILogger<BookService> logger)
@@ -45,21 +47,21 @@ public partial class BookService(
         {
             book = await RefreshIfStaleAsync(book, () => RefreshStoredAsync(book, ct));
         }
-        return book is null ? null : ToDetail(book);
+        return await DetailAsync(book, ct);
     }
 
     public async Task<BookDetail?> GetByHardcoverIdAsync(int hardcoverId, CancellationToken ct)
     {
         var book = await LoadAsync(b => b.HardcoverId == hardcoverId, ct);
         book = await RefreshIfStaleAsync(book, () => WithImportLockAsync(() => ImportFromHardcoverAsync(hardcoverId, null, ct), ct));
-        return book is null ? null : ToDetail(book);
+        return await DetailAsync(book, ct);
     }
 
     public async Task<BookDetail?> GetByOpenLibraryIdAsync(string workId, CancellationToken ct)
     {
         var book = await LoadAsync(b => b.OpenLibraryWorkKey == workId, ct);
         book = await RefreshIfStaleAsync(book, () => WithImportLockAsync(() => ImportFromOpenLibraryAsync(workId, ct), ct));
-        return book is null ? null : ToDetail(book);
+        return await DetailAsync(book, ct);
     }
 
     /// <summary>Looks a book up by ISBN-10 or ISBN-13: stored books first, then Hardcover, then Open Library.</summary>
@@ -68,7 +70,7 @@ public partial class BookService(
         var book = await LoadAsync(b => b.Editions.Any(e => e.Isbn13 == isbn || e.Isbn10 == isbn), ct);
         if (book is not null)
         {
-            return ToDetail(await RefreshIfStaleAsync(book, () => RefreshStoredAsync(book, ct)) ?? book);
+            return await DetailAsync(await RefreshIfStaleAsync(book, () => RefreshStoredAsync(book, ct)) ?? book, ct);
         }
 
         if (await TryFindHardcoverIdByIsbnAsync([isbn], ct) is { } hardcoverId)
@@ -152,14 +154,27 @@ public partial class BookService(
         return bookId is { } id ? await LoadAsync(b => b.Id == id, ct) : null;
     }
 
+    private async Task<BookDetail?> DetailAsync(Book? book, CancellationToken ct)
+    {
+        if (book is null)
+        {
+            return null;
+        }
+        await AddGoogleBooksDescriptionAsync(book, ct);
+        return ToDetail(book);
+    }
+
     private static BookDetail ToDetail(Book book) => new(
         book.Id,
         book.HardcoverId,
         book.Title,
         book.Subtitle,
         // Takedowns hide the description or cover; see Book.CoverSuppressed.
-        book.DescriptionSuppressed ? null : book.Description,
+        book.DescriptionSuppressed ? null : DescriptionCleaner.Clean(book.Description),
         book.DescriptionSuppressed ? null : book.DescriptionSource,
+        book is { DescriptionSuppressed: false, DescriptionSource: DescriptionSource.GoogleBooks, GoogleBooksId: { } volumeId }
+            ? GoogleBooksClient.VolumeUrl(volumeId)
+            : null,
         book.CoverSuppressed ? null : book.CoverUrl,
         book.FirstPublishedYear,
         book.HardcoverRating,

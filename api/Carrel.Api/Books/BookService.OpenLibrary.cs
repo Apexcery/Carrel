@@ -96,7 +96,8 @@ public partial class BookService
     {
         book.Title = string.IsNullOrWhiteSpace(work.Title) ? "Untitled" : work.Title;
         book.Subtitle = work.Subtitle;
-        if (DescriptionText(work.Description) is { } description)
+        // A Google Books description, the publisher's own, is kept over Open Library's.
+        if (DescriptionText(work.Description) is { } description && book.DescriptionSource != DescriptionSource.GoogleBooks)
         {
             book.Description = description;
             book.DescriptionSource = DescriptionSource.OpenLibrary;

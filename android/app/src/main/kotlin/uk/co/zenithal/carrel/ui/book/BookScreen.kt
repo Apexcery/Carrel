@@ -1,5 +1,6 @@
 package uk.co.zenithal.carrel.ui.book
 
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -29,11 +30,17 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+import androidx.core.net.toUri
 import uk.co.zenithal.carrel.data.BookDetail
 import uk.co.zenithal.carrel.data.BookSuggestion
 import uk.co.zenithal.carrel.data.Edition
@@ -155,7 +162,7 @@ private fun ColumnScope.BookView(
         GenreLinks(book.genres.map(::genreLink), openGenre, Modifier.padding(top = 24.dp, bottom = 30.dp))
     }
 
-    book.description?.let { Description(it, book.descriptionSource) }
+    book.description?.let { Description(it, book.descriptionSource, book.descriptionUrl) }
 
     if (book.series.isNotEmpty()) {
         Column(Modifier.padding(top = 48.dp)) {
@@ -200,11 +207,26 @@ private fun Related(bookId: Long, openBook: (String) -> Unit) {
 private val SOURCE_NAMES = mapOf("hardcover" to "Hardcover", "open_library" to "Open Library", "google_books" to "Google Books")
 
 @Composable
-private fun Description(text: String, source: String?) {
+private fun Description(text: String, source: String?, url: String?) {
     val paragraphs = text.split(Regex("\n\\s*\n")).map { it.trim() }.filter { it.isNotEmpty() }
+    val context = LocalContext.current
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         paragraphs.forEach { Text(it, style = Carrel.type.body.copy(lineHeight = 1.65.em), color = Carrel.colors.ink) }
-        SOURCE_NAMES[source]?.let { Text("Description from $it", style = Carrel.type.mono, color = Carrel.colors.inkFaint) }
+        SOURCE_NAMES[source]?.let { name ->
+            // The API trims the marketing from descriptions; Google Books asks for a link to the book.
+            val credit = buildAnnotatedString {
+                append("Description adapted from ")
+                withStyle(SpanStyle(textDecoration = if (url != null) TextDecoration.Underline else null)) { append(name) }
+            }
+            Text(
+                credit,
+                style = Carrel.type.mono,
+                color = Carrel.colors.inkFaint,
+                modifier = if (url != null) {
+                    Modifier.clickable(onClickLabel = "Open on $name") { context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) }
+                } else Modifier,
+            )
+        }
     }
 }
 
