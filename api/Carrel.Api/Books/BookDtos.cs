@@ -48,6 +48,8 @@ public record BookDetail(
     string? Subtitle,
     string? Description,
     DescriptionSource? DescriptionSource,
+    // Where the description came from, for sources that ask to be linked to (Google Books).
+    string? DescriptionUrl,
     string? CoverUrl,
     int? FirstPublishedYear,
     decimal? HardcoverRating,

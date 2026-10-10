@@ -21,6 +21,7 @@ The API reads secrets from .NET user secrets (`dotnet user-secrets set <key> <va
 - `ConnectionStrings:Carrel` – Supabase session pooler connection string, in Npgsql format
 - `Hardcover:ApiToken` – Hardcover API token with the `read:catalog` scope, without the `Bearer ` prefix
 - `BookSources:ContactEmail` – contact address sent in the User-Agent to book data sources
+- `GoogleBooks:ApiKey` – Google Books API key, restricted to the Books API; without it, descriptions come from Hardcover and Open Library only
 - `Supabase:SecretKey` – Supabase secret key (`carrel_api`), used to check passwords and delete accounts; only account deletion fails without it
 
 Local development uses a separate Supabase project, `carrel-dev`: its address is in `appsettings.Development.json` and `web/.env.development`, and the user secrets above should point at it. Production's settings live only in Cloud Run (secrets and `appsettings.json`) and in Cloudflare's build variables.
