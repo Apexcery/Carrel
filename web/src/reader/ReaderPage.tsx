@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from '@headlessui/react'
-import { EpubNavigator, EpubPreferences, type EpubNavigatorListeners } from '@readium/navigator'
+import { EpubNavigator, EpubPreferences, FrameManager, type EpubNavigatorListeners } from '@readium/navigator'
 import { Locator, LocatorLocations, type Publication } from '@readium/shared'
 import { browserBook, browserBookFile, BrowserBookError, saveBrowserBookPlace, type BrowserBook } from '../browserBooks'
+import { Select } from '../components/Select'
 import { EpubError } from '../epub'
 import { supabase } from '../supabase'
 import { getAccent, getTheme, setAccent, setTheme } from '../theme'
+import { chapterPlace, firstWordsShown, measureFile, pagesText, screensOf, type ChapterPlace, type ContentsEntry, type FileLayout } from './pages'
 import { isNewerElsewhere, readPercent, ReadingProgress, SAME_PLACE, type ReadingPosition } from './progress'
 import { openPublication, type ContentsLink } from './publication'
 
@@ -13,6 +15,9 @@ import { openPublication, type ContentsLink } from './publication'
 const SEND_AFTER_MS = 2000
 /** How long the first page is given to settle before going to a place saved on another device. */
 const GO_SETTLE_MS = 500
+
+/** How long the text is given to flow again at a new size before going back to where the reader was. */
+const REFLOW_MS = 300
 
 const FONT_SIZE_KEY = 'carrel-reader-font-size'
 const FONT_STEP = 0.1
@@ -61,6 +66,12 @@ interface ReadingState {
    * of the chapter before it reaches the reader's page, which isn't where they are.
    */
   settling: boolean
+  /**
+   * Where the reader was before changing the text size or pages side by side, to go back to once the text has flowed
+   * again: its first words, which Readium finds however the text flows. Kept until they turn the page, so several
+   * changes in a row all go back to the same place rather than drifting.
+   */
+  keep: Locator | null
 }
 
 /**
@@ -78,26 +89,38 @@ function Reader({ book }: { book: BrowserBook }) {
   /** Where the seek bar is being dragged to (0 to 1), until the book gets there. */
   const [seeking, setSeeking] = useState<number | null>(null)
   const [fontSize, setFontSize] = useState(storedFontSize)
+  const [pages, setPages] = useState(storedPages)
+  /** The chapter on the left (or only) page and the pages of it showing, for the footer. */
+  const [footer, setFooter] = useState<ChapterPlace | null>(null)
   const [contents, setContents] = useState(false)
   const [elsewhere, setElsewhere] = useState<ReadingPosition | null>(null)
   const [askingRead, setAskingRead] = useState(false)
-  const state = useRef<ReadingState>({ progress: null, openedProgression: null, startedAt: null, moved: false, sending: null, settling: true })
+  const state = useRef<ReadingState>({ progress: null, openedProgression: null, startedAt: null, moved: false, sending: null, settling: true, keep: null })
   /** Goes to a place saved on another device. */
   const goTo = useRef<(position: ReadingPosition) => void>(() => {})
-  /** Takes in where the reader is (see placeChanged). */
-  const report = useRef<(current: Locator) => void>(() => {})
+  /** Takes in where the reader is (see placeChanged); `restyled` when it's from restyling, not a page turn. */
+  const report = useRef<(current: Locator, restyled?: boolean) => void>(() => {})
 
   useEffect(() => {
     let cancelled = false
     let navigator: EpubNavigator | undefined
     let positions: Locator[] = []
     let close: (() => Promise<void>) | undefined
+    let entries: ContentsEntry[] = []
+    /** The file on screen, measured; measured again when it, or how it's laid out, changes. */
+    let layout: { key: string; measured: FileLayout } | null = null
 
-    function placeChanged(current: Locator) {
-      if (state.current.settling) return
+    function placeChanged(current: Locator, restyled = false) {
+      const s = state.current
+      if (s.settling) return
+      if (!restyled) s.keep = null
       setLocator(current)
       setSeeking(null)
-      const s = state.current
+      // The last stays while a file can't be measured yet, rather than flickering.
+      if (navigator) setFooter((last) => {
+        const place = footerPlace(navigator!, current)
+        return place === undefined ? last : place
+      })
       const json = JSON.stringify(current.serialize())
       const progression = current.locations?.totalProgression
       saveBrowserBookPlace(book.id, json, progression ?? null)
@@ -135,6 +158,7 @@ function Reader({ book }: { book: BrowserBook }) {
       }
       const { publication } = opened
       positions = opened.positions
+      entries = contentsEntries(opened.contents, publication)
       const saved = book.locator ? Locator.deserialize(JSON.parse(book.locator)) : undefined
       let start: Locator | undefined
       if (!saved) {
@@ -153,7 +177,7 @@ function Reader({ book }: { book: BrowserBook }) {
         frameLoaded: (wnd) => watchFrame(wnd, () => navigator),
         positionChanged: placeChanged,
         timelineItemChanged: (item) => setChapter(item?.title?.replace(/\s+/g, ' ').trim() || null),
-      }), positions, start, { preferences: readerPreferences(storedFontSize()), defaults: {} })
+      }), positions, start, { preferences: readerPreferences(storedFontSize(), storedPages()), defaults: {} })
       await navigator.load()
       if (cancelled) return
       state.current.settling = false
@@ -199,6 +223,20 @@ function Reader({ book }: { book: BrowserBook }) {
     goTo.current = goToPosition
     report.current = placeChanged
 
+    /**
+     * The chapter and pages showing, measured in the frame on screen: null before the first contents entry (a cover,
+     * say), undefined if it can't be measured (a frame still loading).
+     */
+    function footerPlace(reader: EpubNavigator, current: Locator): ChapterPlace | null | undefined {
+      const wnd = frameWindow(reader)
+      const file = reader.publication.readingOrder.findIndexWithHref(current.href.split('#')[0])
+      const screens = wnd && screensOf(wnd)
+      if (!wnd || file < 0 || !screens) return undefined
+      const key = [file, screens.screens, screens.perScreen, wnd.document.scrollingElement?.scrollWidth, wnd.innerWidth].join(':')
+      if (layout?.key !== key) layout = { key, measured: measureFile(wnd, entries, file, screens.screens, screens.perScreen) }
+      return chapterPlace(entries, layout.measured, screens.screen * screens.perScreen, screens.perScreen)
+    }
+
     /** The position as far through the book as `progression` (0 to 1). */
     function locate(progression: number) {
       return positions[Math.min(positions.length - 1, Math.floor(progression * positions.length))]
@@ -211,18 +249,18 @@ function Reader({ book }: { book: BrowserBook }) {
     }
   }, [book])
 
-  // The text size it opened with, so only a change restyles the book.
-  const sizeShown = useRef(fontSize)
+  // The text size and pages side by side it opened with, so only a change restyles the book.
+  const shown = useRef({ fontSize, pages })
   useEffect(() => {
-    if (!open || sizeShown.current === fontSize) return
-    sizeShown.current = fontSize
-    void restyle(open.navigator, fontSize, state.current, report.current)
-  }, [open, fontSize])
+    if (!open || (shown.current.fontSize === fontSize && shown.current.pages === pages)) return
+    shown.current = { fontSize, pages }
+    void restyle(open.navigator, shown.current, state.current, report.current)
+  }, [open, fontSize, pages])
 
   // Colours follow the site's theme, which can change in another tab or with the system's.
   useEffect(() => {
     if (!open) return
-    const apply = () => void restyle(open.navigator, sizeShown.current, state.current, report.current)
+    const apply = () => void restyle(open.navigator, shown.current, state.current, report.current)
     const media = window.matchMedia('(prefers-color-scheme: dark)')
     const storageChanged = (event: StorageEvent) => {
       if (event.key !== 'carrel-theme' && event.key !== 'carrel-accent') return
@@ -292,6 +330,15 @@ function Reader({ book }: { book: BrowserBook }) {
     }
   }
 
+  function changePages(next: Pages) {
+    setPages(next)
+    try {
+      localStorage.setItem(PAGES_KEY, next)
+    } catch {
+      // Kept for this visit only.
+    }
+  }
+
   function seekTo(progression: number) {
     if (!open) return
     const { positions, navigator } = open
@@ -319,6 +366,13 @@ function Reader({ book }: { book: BrowserBook }) {
         </button>
         <h1 className="reader-title">{book.title}</h1>
         <div className="reader-tools">
+          <Select<Pages>
+            value={pages}
+            onChange={changePages}
+            options={(Object.keys(PAGES_LABELS) as Pages[]).map((value) => ({ value, label: PAGES_LABELS[value] }))}
+            aria-label="Pages side by side"
+            className="reader-pages"
+          />
           <button type="button" className="link-button" disabled={!open} onClick={() => setContents(true)}>
             Contents
           </button>
@@ -393,7 +447,12 @@ function Reader({ book }: { book: BrowserBook }) {
           {/* While dragging, where letting go will go, without the chapter it's leaving. */}
           {seeking !== null
             ? `${readPercent(seeking)}%`
-            : [progression !== undefined ? `${readPercent(progression)}%` : null, chapter].filter(Boolean).join(' · ')}
+            : [
+                progression !== undefined ? `${readPercent(progression)}%` : null,
+                footer ? `${footer.title} ${pagesText(footer)}` : chapter,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
         </span>
       </footer>
 
@@ -540,7 +599,7 @@ function watchFrame(wnd: Window, navigator: () => EpubNavigator | undefined) {
 function turnByKey(event: KeyboardEvent, navigator: EpubNavigator) {
   if (event.altKey || event.ctrlKey || event.metaKey || event.defaultPrevented) return
   const target = event.target as HTMLElement | null
-  if (target && (target.closest('input, textarea, select, [contenteditable]') || target.closest('[role="dialog"]'))) return
+  if (target?.closest('input, textarea, select, [contenteditable], [role="dialog"], [role="listbox"]')) return
   if (event.key === 'ArrowLeft') navigator.goLeft(false, () => {})
   else if (event.key === 'ArrowRight') navigator.goRight(false, () => {})
   else if (event.key === 'PageUp') navigator.goBackward(false, () => {})
@@ -553,26 +612,66 @@ function turnByKey(event: KeyboardEvent, navigator: EpubNavigator) {
  * Applies the theme's colours and the text size, then goes back to where the reader was: Readium starts the chapter
  * again when its text flows anew.
  */
-async function restyle(navigator: EpubNavigator, fontSize: number, state: ReadingState, report: (current: Locator) => void) {
-  const place = navigator.currentLocator
+async function restyle(
+  navigator: EpubNavigator,
+  look: { fontSize: number; pages: Pages },
+  state: ReadingState,
+  report: (current: Locator, restyled: boolean) => void,
+) {
+  if (!state.keep) state.keep = firstWordsLocator(navigator)
+  const place = state.keep
   state.settling = true
   try {
-    await navigator.submitPreferences(new EpubPreferences(readerPreferences(fontSize)))
+    await navigator.submitPreferences(new EpubPreferences(readerPreferences(look.fontSize, look.pages)))
+    // The text flows again after Readium has taken the change; going sooner lands where it was laid out before.
+    await new Promise((done) => window.setTimeout(done, REFLOW_MS))
   } finally {
     navigator.go(place, false, () => {
       state.settling = false
-      report(navigator.currentLocator)
+      report(navigator.currentLocator, true)
     })
   }
 }
 
-/** The book in Carrel's paper and ink, at the reader's text size (1 is the book's own). */
-function readerPreferences(fontSize: number) {
+/** Where the reader is, by the first words on the page if it has any (see firstWordsShown). */
+function firstWordsLocator(navigator: EpubNavigator): Locator {
+  const current = navigator.currentLocator
+  const wnd = frameWindow(navigator)
+  const text = wnd && firstWordsShown(wnd)
+  return text ? new Locator({ href: current.href, type: current.type, title: current.title, locations: current.locations, text }) : current
+}
+
+/** The window of the frame on screen. */
+function frameWindow(navigator: EpubNavigator): Window | null {
+  for (const frame of navigator._cframes) {
+    if (frame instanceof FrameManager) return frame.window
+  }
+  return null
+}
+
+/** Pages side by side: as the window's width suits (Readium's choice), or always one or two. */
+type Pages = 'auto' | 'one' | 'two'
+
+const PAGES_KEY = 'carrel-reader-pages'
+const PAGES_LABELS: Record<Pages, string> = { auto: 'Auto', one: 'One page', two: 'Two pages' }
+
+/** The book in Carrel's paper and ink, at the reader's text size (1 is the book's own), in one or two columns. */
+function readerPreferences(fontSize: number, pages: Pages) {
   const style = getComputedStyle(document.documentElement)
   return {
     backgroundColor: style.getPropertyValue('--paper').trim(),
     textColor: style.getPropertyValue('--ink').trim(),
     fontSize,
+    columnCount: pages === 'one' ? 1 : pages === 'two' ? 2 : null,
+  }
+}
+
+function storedPages(): Pages {
+  try {
+    const pages = localStorage.getItem(PAGES_KEY)
+    return pages === 'one' || pages === 'two' ? pages : 'auto'
+  } catch {
+    return 'auto'
   }
 }
 
@@ -583,6 +682,16 @@ function storedFontSize() {
   } catch {
     return 1
   }
+}
+
+/** The book's contents entries, in contents order, leaving out any without a title or outside the book. */
+function contentsEntries(contents: ContentsLink[], publication: Publication): ContentsEntry[] {
+  return flatten(contents, 0).flatMap(({ link }) => {
+    const title = link.title.replace(/\s+/g, ' ').trim()
+    const [href, id] = link.href.split('#')
+    const file = publication.readingOrder.findIndexWithHref(href)
+    return title && file >= 0 ? [{ title, file, id: id || null }] : []
+  })
 }
 
 /** The contents list's entries in reading order, each with how deeply it's nested. */
