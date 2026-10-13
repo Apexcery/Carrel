@@ -75,11 +75,13 @@ import androidx.fragment.compose.AndroidFragment
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import java.time.Instant
 import java.time.OffsetDateTime
 import kotlin.math.abs
 import kotlinx.coroutines.launch
 import androidx.lifecycle.lifecycleScope
+import org.json.JSONException
 import org.json.JSONObject
 import org.readium.r2.navigator.epub.EpubNavigatorFactory
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
@@ -91,6 +93,7 @@ import org.readium.r2.shared.ExperimentalReadiumApi
 import org.readium.r2.shared.publication.Link
 import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.publication.Publication
+import org.readium.r2.shared.publication.indexOfFirstWithHref
 import uk.co.zenithal.carrel.AppContainer
 import uk.co.zenithal.carrel.CarrelApp
 import uk.co.zenithal.carrel.LocalContainer
@@ -222,6 +225,8 @@ class ReaderActivity : FragmentActivity() {
     private var reopening = false
     private lateinit var prefs: SharedPreferences
     private lateinit var columns: ColumnCount
+    /** The screen showing in the file on screen, from Readium's page turns. */
+    private val turns = MutableStateFlow<PageTurn?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         container = (application as CarrelApp).container
@@ -246,6 +251,13 @@ class ReaderActivity : FragmentActivity() {
         supportFragmentManager.fragmentFactory = EpubNavigatorFactory(open.publication).createFragmentFactory(
             initialLocator = open.locator,
             initialPreferences = readerPreferences(if (dark) darkColors(accent) else lightColors(accent), prefs.fontSize, columns),
+            paginationListener = object : EpubNavigatorFragment.PaginationListener {
+                override fun onPageChanged(pageIndex: Int, totalPages: Int, locator: Locator) {
+                    if (reopening) return
+                    val file = open.publication.readingOrder.indexOfFirstWithHref(locator.href) ?: return
+                    turns.value = PageTurn(file, pageIndex, totalPages)
+                }
+            },
             configuration = EpubNavigatorFragment.Configuration(readiumCssRsProperties = layoutFor(columns)),
         )
         super.onCreate(savedInstanceState)
@@ -263,7 +275,7 @@ class ReaderActivity : FragmentActivity() {
             }
             CompositionLocalProvider(LocalContainer provides container) {
                 CarrelTheme(darkNow, chosenAccent) {
-                    ReaderScreen(open, prefs, columns, ::reopen, { reopening }, ::reload, ::showSystemBars, ::leave)
+                    ReaderScreen(open, prefs, columns, turns, ::reopen, { reopening }, ::reload, ::showSystemBars, ::leave)
                 }
             }
         }
@@ -351,6 +363,8 @@ private fun ReaderScreen(
     prefs: SharedPreferences,
     /** The pages side by side the reader was opened with; changing them opens it afresh (`reopen`). */
     openedWith: ColumnCount,
+    /** Readium's page turns, for the chapter and pages in the footer. */
+    turns: StateFlow<PageTurn?>,
     reopen: () -> Unit,
     /** Whether it's about to open again, when places it reports aren't the reader's. */
     reopening: () -> Boolean,
@@ -377,11 +391,26 @@ private fun ReaderScreen(
     /** Where the seek bar is being dragged to (0 to 1), until the book gets there. */
     var seeking by remember { mutableStateOf<Double?>(null) }
     LaunchedEffect(locator) { seeking = null }
+    /**
+     * Where the reader was before changing the text size, to go back to once the text has flowed again: Readium stays
+     * on the same page number, which is somewhere else in the text at a different size. Kept until the controls close,
+     * so several changes in a row all go back to the same place.
+     */
+    var keepPlace by remember { mutableStateOf<Locator?>(null) }
     // Unfolding a foldable, or turning the phone, changes the width.
     val columns = pages.columns(LocalConfiguration.current.screenWidthDp >= TWO_PAGES_WIDTH)
 
-    LaunchedEffect(controls) { showSystemBars(controls) }
-    LaunchedEffect(navigator, colors, fontSize) { navigator?.submitPreferences(readerPreferences(colors, fontSize, openedWith)) }
+    LaunchedEffect(controls) {
+        showSystemBars(controls)
+        if (!controls) keepPlace = null
+    }
+    LaunchedEffect(navigator, colors, fontSize) {
+        val reader = navigator ?: return@LaunchedEffect
+        reader.submitPreferences(readerPreferences(colors, fontSize, openedWith))
+        val place = keepPlace ?: return@LaunchedEffect
+        delay(REFLOW_MS)
+        reader.go(place)
+    }
     LaunchedEffect(columns) { if (columns != openedWith) reopen() }
     LaunchedEffect(navigator) {
         val reader = navigator ?: return@LaunchedEffect
@@ -412,28 +441,59 @@ private fun ReaderScreen(
         }
     }
 
+    val turn by turns.collectAsState()
+    val perScreen = if (openedWith == ColumnCount.TWO) 2 else 1
+    val entries = remember { contentsEntries(open.publication) }
+    var layout by remember { mutableStateOf<FileLayout?>(null) }
+    /** The chapter and pages in the footer; the last stays while a new file is measured, rather than flickering. */
+    var place by remember { mutableStateOf<ChapterPlace?>(null) }
+    LaunchedEffect(navigator, turn?.file, turn?.screens) {
+        val reader = navigator ?: return@LaunchedEffect
+        val at = turn ?: return@LaunchedEffect
+        layout = measureFile(reader, entries, at.file, at.screens, perScreen)
+    }
+    LaunchedEffect(turn, layout) {
+        val at = turn ?: return@LaunchedEffect
+        val measured = layout?.takeIf { it.file == at.file && it.screens == at.screens } ?: return@LaunchedEffect
+        place = chapterPlace(entries, measured, at.screen * perScreen, perScreen)
+    }
+
     fun close() {
         scope.launch { if (open.progress?.atEnd() == true) askingRead = true else leave(false) }
     }
     BackHandler { close() }
 
     fun changeSize(by: Double) {
-        fontSize = (fontSize + by).coerceIn(MIN_FONT_SIZE, MAX_FONT_SIZE)
-        prefs.edit { putFloat(FONT_SIZE, fontSize.toFloat()) }
+        scope.launch {
+            val reader = navigator
+            if (keepPlace == null && laidOut && reader != null) keepPlace = firstWordsShown(reader) ?: reader.firstVisibleElementLocator()
+            fontSize = (fontSize + by).coerceIn(MIN_FONT_SIZE, MAX_FONT_SIZE)
+            prefs.edit { putFloat(FONT_SIZE, fontSize.toFloat()) }
+        }
     }
 
     Box(Modifier.fillMaxSize().background(colors.paper)) {
-        AndroidFragment<EpubNavigatorFragment>(Modifier.fillMaxSize()) { fragment ->
-            if (navigator !== fragment) {
-                // The edges turn the page; anywhere else shows or hides the controls.
-                fragment.addInputListener(DirectionalNavigationAdapter(fragment, animatedTransition = true))
-                fragment.addInputListener(object : InputListener {
-                    override fun onTap(event: TapEvent): Boolean {
-                        controls = !controls
-                        return true
-                    }
-                })
-                navigator = fragment
+        Column(Modifier.fillMaxSize()) {
+            AndroidFragment<EpubNavigatorFragment>(Modifier.fillMaxWidth().weight(1f)) { fragment ->
+                if (navigator !== fragment) {
+                    // The edges turn the page; anywhere else shows or hides the controls.
+                    fragment.addInputListener(DirectionalNavigationAdapter(fragment, animatedTransition = true))
+                    fragment.addInputListener(object : InputListener {
+                        override fun onTap(event: TapEvent): Boolean {
+                            controls = !controls
+                            return true
+                        }
+                    })
+                    navigator = fragment
+                }
+            }
+            // The chapter on the left (or only) page, and the pages showing. Always the same height, whatever the system
+            // bars are doing, or showing the controls would resize the book and move the page.
+            Row(Modifier.fillMaxWidth().height(FOOTER_HEIGHT).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                place?.let {
+                    Text(it.title, style = Carrel.type.mono, color = colors.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    Text(" ${pagesText(it)}", style = Carrel.type.mono, color = colors.inkSoft, maxLines = 1)
+                }
             }
         }
         val newer by open.newer.collectAsState()
@@ -519,7 +579,7 @@ private fun ReaderScreen(
                     Text(
                         // While dragging, where letting go will go, without the chapter it's leaving.
                         seeking?.let { "${readPercent(it)}%" }
-                            ?: listOfNotNull(progression?.let { "${readPercent(it)}%" }, locator?.title).joinToString(" · "),
+                            ?: listOfNotNull(progression?.let { "${readPercent(it)}%" }, place?.title ?: locator?.title).joinToString(" · "),
                         style = Carrel.type.mono,
                         color = colors.inkSoft,
                         maxLines = 1,
@@ -625,8 +685,44 @@ private object KeepUpwardScroll : NestedScrollConnection {
 }
 
 /** The contents list's entries in reading order, each with how deeply it's nested. */
-private fun flatten(links: List<Link>, depth: Int): List<Pair<Link, Int>> =
+internal fun flatten(links: List<Link>, depth: Int): List<Pair<Link, Int>> =
     links.flatMap { listOf(it to depth) + flatten(it.children, depth + 1) }
+
+/**
+ * The first words on the page, as a place Readium finds again by its words (with a little either side to tell them
+ * apart) however the text flows; null on a page without any, such as a picture. Readium's own first visible paragraph
+ * can be the last one on the page before, and goes back to where that paragraph starts.
+ */
+private suspend fun firstWordsShown(navigator: EpubNavigatorFragment): Locator? {
+    val script = """
+        (function() {
+            var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+            for (var node = walker.nextNode(); node; node = walker.nextNode()) {
+                if (!node.textContent.trim()) continue;
+                var range = document.createRange();
+                range.selectNodeContents(node);
+                // The first line starting on this page (the width is rounded, hence the pixel to spare).
+                var line = Array.prototype.find.call(range.getClientRects(), function(r) {
+                    return r.width > 0 && r.left > -1 && r.left < window.innerWidth - 1;
+                });
+                if (!line) continue;
+                var caret = document.caretRangeFromPoint(line.left + 1, line.top + line.height / 2);
+                var start = caret && caret.startContainer === node ? caret.startOffset : 0;
+                var text = node.textContent;
+                return { before: text.slice(Math.max(0, start - 32), start), highlight: text.slice(start, start + 64), after: text.slice(start + 64, start + 96) };
+            }
+            return null;
+        })();
+    """.trimIndent()
+    val found = try {
+        navigator.evaluateJavascript(script)?.takeIf { it != "null" }?.let(::JSONObject)
+    } catch (_: JSONException) {
+        null
+    } ?: return null
+    return navigator.currentLocator.value.copy(
+        text = Locator.Text(before = found.optString("before"), highlight = found.optString("highlight"), after = found.optString("after")),
+    )
+}
 
 /** The book in Carrel's paper and ink, at the reader's text size (1 is the book's own), in one or two columns. */
 private fun readerPreferences(colors: CarrelColors, fontSize: Double, columns: ColumnCount) = EpubPreferences(
@@ -658,12 +754,19 @@ private enum class Pages(val label: String) {
 private val SharedPreferences.fontSize get() = getFloat(FONT_SIZE, 1f).toDouble()
 private val SharedPreferences.pages get() = Pages.entries.firstOrNull { it.name == getString(PAGES, null) } ?: Pages.Auto
 
+/** A page turn in Readium: the file on screen (its place in the reading order), the screen showing, and how many it has. */
+private data class PageTurn(val file: Int, val screen: Int, val screens: Int)
+
+private val FOOTER_HEIGHT = 24.dp
+
 /** Wide enough for two pages side by side, in dp: an unfolded foldable, a tablet, or a phone on its side. */
 private const val TWO_PAGES_WIDTH = 600
 private const val PAGES = "pages"
 
 /** How long the first page is given to settle before going to a place saved on another device. */
 private const val GO_SETTLE_MS = 500L
+/** How long the text is given to flow again at a new size before going back to where the reader was. */
+private const val REFLOW_MS = 300L
 /** How long after a page turn the place is sent to Carrel. */
 private const val SEND_AFTER_MS = 2_000L
 
