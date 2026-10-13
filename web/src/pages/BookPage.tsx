@@ -8,6 +8,7 @@ import { ErrorNotice } from '../components/ErrorNotice'
 import { GenreLinks } from '../components/GenreLinks'
 import { HardcoverRating } from '../components/HardcoverRating'
 import { LibraryPanel } from '../components/LibraryPanel'
+import { ReadInBrowser } from '../components/ReadInBrowser'
 import { SignInPrompt } from '../components/SignInPrompt'
 import { SuggestionShelf, useOwnedHardcoverIds } from '../components/SuggestionShelf'
 import { displaySubtitle, formatDate, formatDuration, listNames, otherCredits, seriesPosition } from '../format'
@@ -74,6 +75,8 @@ function BookView({ book }: { book: BookDetail }) {
           <HardcoverRating rating={book.hardcoverRating} count={book.hardcoverRatingsCount} hardcoverId={book.hardcoverId} />
           {book.firstPublishedYear && <span className="mono">First published {book.firstPublishedYear}</span>}
         </div>
+
+        <ReadInBrowser bookId={book.id} />
 
         {signedIn ? (
           <LibraryPanel book={book} />

@@ -17,6 +17,7 @@ import { ImportExportSettings } from './pages/ImportExportSettings'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { PrivacyPage } from './pages/PrivacyPage'
 import { ProfilePage } from './pages/ProfilePage'
+import { ReadingPage } from './pages/ReadingPage'
 import { SearchPage } from './pages/SearchPage'
 import { SeriesPage } from './pages/SeriesPage'
 import { SetPasswordPage } from './pages/SetPasswordPage'
@@ -71,6 +72,7 @@ function App() {
         <Route path="privacy" element={<PrivacyPage />} />
         <Route path="copyright" element={<CopyrightPage />} />
         <Route path="android" element={<AndroidPage />} />
+        <Route path="reading" element={<ReadingPage />} />
         <Route path="settings" element={<SettingsPage />}>
           <Route index element={<Navigate to={session ? 'account' : 'appearance'} replace />} />
           <Route path="appearance" element={<AppearanceSettings />} />
