@@ -3479,6 +3479,21 @@ a.primary-button:hover {
   gap: 18px;
 }
 
+/* Pages side by side: a quiet dropdown in the mono of the links beside it. */
+.reader-pages {
+  padding: 0.3em 0.6em;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: none;
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+}
+
+.reader-pages:hover {
+  color: var(--accent);
+}
+
 .reader-notice {
   display: flex;
   flex-wrap: wrap;
@@ -3608,6 +3623,11 @@ a.primary-button:hover {
 
   .reader-tools {
     gap: 12px;
+  }
+
+  /* Too narrow for two pages anyway. */
+  .reader-pages {
+    display: none;
   }
 
   /* Narrow screens turn the page by its edges and the keys only. */
