@@ -89,7 +89,11 @@ export function PrivacyPage() {
         <li>your theme and accent colour;</li>
         <li>your recent searches, which never leave your device;</li>
         <li>
-          books you add to read on the website, which are never uploaded to Carrel, and your place in them; and
+          books you add to read on the website, which are never uploaded to Carrel, and your place in them;
+        </li>
+        <li>
+          online libraries you add, and their passwords if you choose to remember them (the website reaches a library
+          straight from your browser, never through Carrel); and
         </li>
         <li>
           a copy of what it last loaded from Carrel, such as your library and profile, so it opens quickly (and in the

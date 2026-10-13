@@ -3443,6 +3443,103 @@ a.primary-button:hover {
   display: block;
 }
 
+/* Online libraries on the Reading page. */
+.reading-libraries {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+  margin-top: 48px;
+}
+
+/* ---------- Online libraries (/read/?library=…) ---------- */
+
+.library-page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 40px 24px 64px;
+}
+
+.library-intro {
+  max-width: 36em;
+}
+
+.library-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 0 0 24px;
+}
+
+.library-form {
+  display: grid;
+  gap: 16px;
+  max-width: 28em;
+  margin: 24px 0 8px;
+}
+
+.remember-box label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.remember-box p {
+  margin: 4px 0 0;
+}
+
+.library-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+}
+
+.library-remove {
+  margin-top: 36px;
+}
+
+.library-search {
+  max-width: 32em;
+  margin-bottom: 24px;
+}
+
+.library-sections {
+  display: grid;
+  gap: 2px;
+  list-style: none;
+  margin: 0 0 24px;
+  padding: 0;
+}
+
+.library-sections a {
+  display: block;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--rule);
+  text-decoration: none;
+}
+
+.library-sections a:hover {
+  color: var(--accent);
+}
+
+/* A library's cover, fetched as it comes near the screen (it's what's watched). */
+.library-cover {
+  display: block;
+  flex: none;
+}
+
+.library-books {
+  margin-bottom: 24px;
+}
+
+.library-read {
+  justify-self: start;
+}
+
+.library-summary {
+  margin: 0;
+}
+
 /* ---------- The eReader (/read/) ---------- */
 
 /* The whole window: a bar of controls, the book, and where the reader is. */
