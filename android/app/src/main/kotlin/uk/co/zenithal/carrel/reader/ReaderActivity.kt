@@ -81,6 +81,7 @@ import java.time.OffsetDateTime
 import kotlin.math.abs
 import kotlinx.coroutines.launch
 import androidx.lifecycle.lifecycleScope
+import org.json.JSONException
 import org.json.JSONObject
 import org.readium.r2.navigator.epub.EpubNavigatorFactory
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
@@ -390,11 +391,26 @@ private fun ReaderScreen(
     /** Where the seek bar is being dragged to (0 to 1), until the book gets there. */
     var seeking by remember { mutableStateOf<Double?>(null) }
     LaunchedEffect(locator) { seeking = null }
+    /**
+     * Where the reader was before changing the text size, to go back to once the text has flowed again: Readium stays
+     * on the same page number, which is somewhere else in the text at a different size. Kept until the controls close,
+     * so several changes in a row all go back to the same place.
+     */
+    var keepPlace by remember { mutableStateOf<Locator?>(null) }
     // Unfolding a foldable, or turning the phone, changes the width.
     val columns = pages.columns(LocalConfiguration.current.screenWidthDp >= TWO_PAGES_WIDTH)
 
-    LaunchedEffect(controls) { showSystemBars(controls) }
-    LaunchedEffect(navigator, colors, fontSize) { navigator?.submitPreferences(readerPreferences(colors, fontSize, openedWith)) }
+    LaunchedEffect(controls) {
+        showSystemBars(controls)
+        if (!controls) keepPlace = null
+    }
+    LaunchedEffect(navigator, colors, fontSize) {
+        val reader = navigator ?: return@LaunchedEffect
+        reader.submitPreferences(readerPreferences(colors, fontSize, openedWith))
+        val place = keepPlace ?: return@LaunchedEffect
+        delay(REFLOW_MS)
+        reader.go(place)
+    }
     LaunchedEffect(columns) { if (columns != openedWith) reopen() }
     LaunchedEffect(navigator) {
         val reader = navigator ?: return@LaunchedEffect
@@ -448,8 +464,12 @@ private fun ReaderScreen(
     BackHandler { close() }
 
     fun changeSize(by: Double) {
-        fontSize = (fontSize + by).coerceIn(MIN_FONT_SIZE, MAX_FONT_SIZE)
-        prefs.edit { putFloat(FONT_SIZE, fontSize.toFloat()) }
+        scope.launch {
+            val reader = navigator
+            if (keepPlace == null && laidOut && reader != null) keepPlace = firstWordsShown(reader) ?: reader.firstVisibleElementLocator()
+            fontSize = (fontSize + by).coerceIn(MIN_FONT_SIZE, MAX_FONT_SIZE)
+            prefs.edit { putFloat(FONT_SIZE, fontSize.toFloat()) }
+        }
     }
 
     Box(Modifier.fillMaxSize().background(colors.paper)) {
@@ -668,6 +688,42 @@ private object KeepUpwardScroll : NestedScrollConnection {
 internal fun flatten(links: List<Link>, depth: Int): List<Pair<Link, Int>> =
     links.flatMap { listOf(it to depth) + flatten(it.children, depth + 1) }
 
+/**
+ * The first words on the page, as a place Readium finds again by its words (with a little either side to tell them
+ * apart) however the text flows; null on a page without any, such as a picture. Readium's own first visible paragraph
+ * can be the last one on the page before, and goes back to where that paragraph starts.
+ */
+private suspend fun firstWordsShown(navigator: EpubNavigatorFragment): Locator? {
+    val script = """
+        (function() {
+            var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+            for (var node = walker.nextNode(); node; node = walker.nextNode()) {
+                if (!node.textContent.trim()) continue;
+                var range = document.createRange();
+                range.selectNodeContents(node);
+                // The first line starting on this page (the width is rounded, hence the pixel to spare).
+                var line = Array.prototype.find.call(range.getClientRects(), function(r) {
+                    return r.width > 0 && r.left > -1 && r.left < window.innerWidth - 1;
+                });
+                if (!line) continue;
+                var caret = document.caretRangeFromPoint(line.left + 1, line.top + line.height / 2);
+                var start = caret && caret.startContainer === node ? caret.startOffset : 0;
+                var text = node.textContent;
+                return { before: text.slice(Math.max(0, start - 32), start), highlight: text.slice(start, start + 64), after: text.slice(start + 64, start + 96) };
+            }
+            return null;
+        })();
+    """.trimIndent()
+    val found = try {
+        navigator.evaluateJavascript(script)?.takeIf { it != "null" }?.let(::JSONObject)
+    } catch (_: JSONException) {
+        null
+    } ?: return null
+    return navigator.currentLocator.value.copy(
+        text = Locator.Text(before = found.optString("before"), highlight = found.optString("highlight"), after = found.optString("after")),
+    )
+}
+
 /** The book in Carrel's paper and ink, at the reader's text size (1 is the book's own), in one or two columns. */
 private fun readerPreferences(colors: CarrelColors, fontSize: Double, columns: ColumnCount) = EpubPreferences(
     backgroundColor = ReadiumColor(colors.paper.toArgb()),
@@ -709,6 +765,8 @@ private const val PAGES = "pages"
 
 /** How long the first page is given to settle before going to a place saved on another device. */
 private const val GO_SETTLE_MS = 500L
+/** How long the text is given to flow again at a new size before going back to where the reader was. */
+private const val REFLOW_MS = 300L
 /** How long after a page turn the place is sent to Carrel. */
 private const val SEND_AFTER_MS = 2_000L
 
