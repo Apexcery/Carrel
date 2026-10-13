@@ -1,6 +1,7 @@
 using Carrel.Api.Books;
 using Carrel.Api.Data;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Carrel.Api.Library;
 
@@ -53,6 +54,7 @@ public class LibraryService(CarrelDbContext db)
         {
             throw new LibraryConflictException();
         }
+        var isNew = entry is null;
         if (entry is null)
         {
             entry = new LibraryEntry { UserId = userId, BookId = bookId, Book = book, AddedAt = now };
@@ -88,7 +90,17 @@ public class LibraryService(CarrelDbContext db)
         }
         entry.UpdatedAt = changedAt;
 
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException e) when (isNew && e.InnerException is PostgresException
+                   { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "ix_library_entries_user_id_book_id" })
+        {
+            // Another request added the book between the check and the save: save over its entry instead.
+            db.ChangeTracker.Clear();
+            return await SaveAsync(userId, bookId, request, ct);
+        }
         return ToDto(entry);
     }
 
