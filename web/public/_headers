@@ -9,3 +9,11 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
   Strict-Transport-Security: max-age=31536000
+
+# The eReader's page has its own policy in place of the one above (rules matching a path are combined, so it's taken
+# off first). Readium shows each chapter in a blob: frame, which inherits this policy, and runs its own scripts in them
+# as blob: URLs. Book scripts are stripped from each chapter, and inline ones are blocked here as well. Books' own styles
+# are mostly inline, hence 'unsafe-inline' for styles only.
+/read/*
+  ! Content-Security-Policy
+  Content-Security-Policy: default-src 'self'; script-src 'self' blob:; style-src 'self' blob: 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data: blob:; media-src blob:; frame-src blob:; connect-src 'self' https://carrel-api-3344660708.europe-west1.run.app https://iirzotkuqblvyfvjwuta.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'

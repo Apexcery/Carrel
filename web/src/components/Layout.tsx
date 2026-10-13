@@ -65,6 +65,9 @@ function Account() {
 
   return (
     <div className="account">
+      <NavLink to="/reading" className="account-reading">
+        Reading
+      </NavLink>
       {signedIn && username && (
         <NavLink to={profilePath(username)} className="account-profile">
           <Avatar url={profile.avatarUrl} size="small" />

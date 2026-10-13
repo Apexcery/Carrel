@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Carrel</title>
+    <!-- Applies the saved theme and accent before first paint. -->
+    <script src="/theme-init.js"></script>
+  </head>
+  <body class="reader-page">
+    <div id="root"></div>
+    <!-- The eReader: its own page, so it can have its own security policy (see public/_headers). -->
+    <script type="module" src="/src/reader/main.tsx"></script>
+  </body>
+</html>
