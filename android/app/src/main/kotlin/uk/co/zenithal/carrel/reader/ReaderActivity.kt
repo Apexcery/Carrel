@@ -75,6 +75,7 @@ import androidx.fragment.compose.AndroidFragment
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import java.time.Instant
 import java.time.OffsetDateTime
 import kotlin.math.abs
@@ -92,6 +93,7 @@ import org.readium.r2.shared.ExperimentalReadiumApi
 import org.readium.r2.shared.publication.Link
 import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.publication.Publication
+import org.readium.r2.shared.publication.indexOfFirstWithHref
 import uk.co.zenithal.carrel.AppContainer
 import uk.co.zenithal.carrel.CarrelApp
 import uk.co.zenithal.carrel.LocalContainer
@@ -223,6 +225,8 @@ class ReaderActivity : FragmentActivity() {
     private var reopening = false
     private lateinit var prefs: SharedPreferences
     private lateinit var columns: ColumnCount
+    /** The screen showing in the file on screen, from Readium's page turns. */
+    private val turns = MutableStateFlow<PageTurn?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         container = (application as CarrelApp).container
@@ -247,6 +251,13 @@ class ReaderActivity : FragmentActivity() {
         supportFragmentManager.fragmentFactory = EpubNavigatorFactory(open.publication).createFragmentFactory(
             initialLocator = open.locator,
             initialPreferences = readerPreferences(if (dark) darkColors(accent) else lightColors(accent), prefs.fontSize, columns),
+            paginationListener = object : EpubNavigatorFragment.PaginationListener {
+                override fun onPageChanged(pageIndex: Int, totalPages: Int, locator: Locator) {
+                    if (reopening) return
+                    val file = open.publication.readingOrder.indexOfFirstWithHref(locator.href) ?: return
+                    turns.value = PageTurn(file, pageIndex, totalPages)
+                }
+            },
             configuration = EpubNavigatorFragment.Configuration(readiumCssRsProperties = layoutFor(columns)),
         )
         super.onCreate(savedInstanceState)
@@ -264,7 +275,7 @@ class ReaderActivity : FragmentActivity() {
             }
             CompositionLocalProvider(LocalContainer provides container) {
                 CarrelTheme(darkNow, chosenAccent) {
-                    ReaderScreen(open, prefs, columns, ::reopen, { reopening }, ::reload, ::showSystemBars, ::leave)
+                    ReaderScreen(open, prefs, columns, turns, ::reopen, { reopening }, ::reload, ::showSystemBars, ::leave)
                 }
             }
         }
@@ -352,6 +363,8 @@ private fun ReaderScreen(
     prefs: SharedPreferences,
     /** The pages side by side the reader was opened with; changing them opens it afresh (`reopen`). */
     openedWith: ColumnCount,
+    /** Readium's page turns, for the chapter and pages in the footer. */
+    turns: StateFlow<PageTurn?>,
     reopen: () -> Unit,
     /** Whether it's about to open again, when places it reports aren't the reader's. */
     reopening: () -> Boolean,
@@ -428,6 +441,23 @@ private fun ReaderScreen(
         }
     }
 
+    val turn by turns.collectAsState()
+    val perScreen = if (openedWith == ColumnCount.TWO) 2 else 1
+    val entries = remember { contentsEntries(open.publication) }
+    var layout by remember { mutableStateOf<FileLayout?>(null) }
+    /** The chapter and pages in the footer; the last stays while a new file is measured, rather than flickering. */
+    var place by remember { mutableStateOf<ChapterPlace?>(null) }
+    LaunchedEffect(navigator, turn?.file, turn?.screens) {
+        val reader = navigator ?: return@LaunchedEffect
+        val at = turn ?: return@LaunchedEffect
+        layout = measureFile(reader, entries, at.file, at.screens, perScreen)
+    }
+    LaunchedEffect(turn, layout) {
+        val at = turn ?: return@LaunchedEffect
+        val measured = layout?.takeIf { it.file == at.file && it.screens == at.screens } ?: return@LaunchedEffect
+        place = chapterPlace(entries, measured, at.screen * perScreen, perScreen)
+    }
+
     fun close() {
         scope.launch { if (open.progress?.atEnd() == true) askingRead = true else leave(false) }
     }
@@ -443,17 +473,27 @@ private fun ReaderScreen(
     }
 
     Box(Modifier.fillMaxSize().background(colors.paper)) {
-        AndroidFragment<EpubNavigatorFragment>(Modifier.fillMaxSize()) { fragment ->
-            if (navigator !== fragment) {
-                // The edges turn the page; anywhere else shows or hides the controls.
-                fragment.addInputListener(DirectionalNavigationAdapter(fragment, animatedTransition = true))
-                fragment.addInputListener(object : InputListener {
-                    override fun onTap(event: TapEvent): Boolean {
-                        controls = !controls
-                        return true
-                    }
-                })
-                navigator = fragment
+        Column(Modifier.fillMaxSize()) {
+            AndroidFragment<EpubNavigatorFragment>(Modifier.fillMaxWidth().weight(1f)) { fragment ->
+                if (navigator !== fragment) {
+                    // The edges turn the page; anywhere else shows or hides the controls.
+                    fragment.addInputListener(DirectionalNavigationAdapter(fragment, animatedTransition = true))
+                    fragment.addInputListener(object : InputListener {
+                        override fun onTap(event: TapEvent): Boolean {
+                            controls = !controls
+                            return true
+                        }
+                    })
+                    navigator = fragment
+                }
+            }
+            // The chapter on the left (or only) page, and the pages showing. Always the same height, whatever the system
+            // bars are doing, or showing the controls would resize the book and move the page.
+            Row(Modifier.fillMaxWidth().height(FOOTER_HEIGHT).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                place?.let {
+                    Text(it.title, style = Carrel.type.mono, color = colors.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    Text(" ${pagesText(it)}", style = Carrel.type.mono, color = colors.inkSoft, maxLines = 1)
+                }
             }
         }
         val newer by open.newer.collectAsState()
@@ -539,7 +579,7 @@ private fun ReaderScreen(
                     Text(
                         // While dragging, where letting go will go, without the chapter it's leaving.
                         seeking?.let { "${readPercent(it)}%" }
-                            ?: listOfNotNull(progression?.let { "${readPercent(it)}%" }, locator?.title).joinToString(" · "),
+                            ?: listOfNotNull(progression?.let { "${readPercent(it)}%" }, place?.title ?: locator?.title).joinToString(" · "),
                         style = Carrel.type.mono,
                         color = colors.inkSoft,
                         maxLines = 1,
@@ -645,7 +685,7 @@ private object KeepUpwardScroll : NestedScrollConnection {
 }
 
 /** The contents list's entries in reading order, each with how deeply it's nested. */
-private fun flatten(links: List<Link>, depth: Int): List<Pair<Link, Int>> =
+internal fun flatten(links: List<Link>, depth: Int): List<Pair<Link, Int>> =
     links.flatMap { listOf(it to depth) + flatten(it.children, depth + 1) }
 
 /**
@@ -713,6 +753,11 @@ private enum class Pages(val label: String) {
 
 private val SharedPreferences.fontSize get() = getFloat(FONT_SIZE, 1f).toDouble()
 private val SharedPreferences.pages get() = Pages.entries.firstOrNull { it.name == getString(PAGES, null) } ?: Pages.Auto
+
+/** A page turn in Readium: the file on screen (its place in the reading order), the screen showing, and how many it has. */
+private data class PageTurn(val file: Int, val screen: Int, val screens: Int)
+
+private val FOOTER_HEIGHT = 24.dp
 
 /** Wide enough for two pages side by side, in dp: an unfolded foldable, a tablet, or a phone on its side. */
 private const val TWO_PAGES_WIDTH = 600
