@@ -109,6 +109,8 @@ export interface EpubDetails {
   seriesPosition: number | null
   /** ISBNs among its identifiers, to find its Carrel book. */
   isbns: string[]
+  /** All its identifiers (Calibre's book id, an ISBN, and so on), lowercased, to tell versions of the same book. */
+  identifiers: string[]
   cover: Blob | null
 }
 
@@ -131,6 +133,9 @@ export async function detailsOf(epub: Epub): Promise<EpubDetails> {
     series,
     seriesPosition: series && Number.isFinite(position) ? position : null,
     isbns: isbnsIn(opf),
+    identifiers: [
+      ...new Set([...opf.getElementsByTagNameNS(DC, 'identifier')].map((el) => el.textContent?.trim().toLowerCase() ?? '').filter(Boolean)),
+    ],
     cover: await coverOf(epub, opf, path),
   }
 }

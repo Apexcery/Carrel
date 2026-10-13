@@ -2,7 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from '@headlessui/react'
 import { EpubNavigator, EpubPreferences, FrameManager, type EpubNavigatorListeners } from '@readium/navigator'
 import { Locator, LocatorLocations, type Publication } from '@readium/shared'
-import { browserBook, browserBookFile, BrowserBookError, saveBrowserBookPlace, type BrowserBook } from '../browserBooks'
+import {
+  browserBook,
+  browserBookFile,
+  BrowserBookError,
+  replaceBrowserBook,
+  saveBrowserBookPlace,
+  type BrowserBook,
+} from '../browserBooks'
+import { downloadBook, library } from '../libraries'
 import { Select } from '../components/Select'
 import { EpubError } from '../epub'
 import { supabase } from '../supabase'
@@ -95,6 +103,8 @@ function Reader({ book }: { book: BrowserBook }) {
   const [contents, setContents] = useState(false)
   const [elsewhere, setElsewhere] = useState<ReadingPosition | null>(null)
   const [askingRead, setAskingRead] = useState(false)
+  /** A newer version of the book, downloaded from its library while it's read, to reload into. */
+  const [newer, setNewer] = useState(false)
   const state = useRef<ReadingState>({ progress: null, openedProgression: null, startedAt: null, moved: false, sending: null, settling: true, keep: null })
   /** Goes to a place saved on another device. */
   const goTo = useRef<(position: ReadingPosition) => void>(() => {})
@@ -144,13 +154,17 @@ function Reader({ book }: { book: BrowserBook }) {
 
     ;(async () => {
       const { data } = await supabase.auth.getSession()
+      // Closed already (in development, React opens it twice): the library mustn't be changed twice at once.
+      if (cancelled) return
       const progress = data.session && book.bookId !== null ? new ReadingProgress(book.bookId) : null
       state.current.progress = progress
       // Where a copy never opened here starts depends on the library, so that waits; otherwise it carries on alongside.
       const starting = progress?.start()
       if (book.locator === null) await starting
 
-      const opened = await openPublication(await browserBookFile(book))
+      // Read into memory whole, so the copy can be replaced (and its old file deleted) while it's open.
+      const file = await browserBookFile(book)
+      const opened = await openPublication(new Blob([await file.arrayBuffer()], { type: file.type }))
       close = opened.close
       if (cancelled) {
         void opened.close()
@@ -184,11 +198,31 @@ function Reader({ book }: { book: BrowserBook }) {
       placeChanged(navigator.currentLocator)
       setOpen({ navigator, publication, positions, contents: opened.contents })
       if (progress) void syncPosition(progress)
+      void checkForNewer()
     })().catch((e: unknown) => {
       if (cancelled) return
       console.error(e)
       setError(e instanceof BrowserBookError || e instanceof EpubError ? e.message : 'This book couldn’t be opened.')
     })
+
+    /**
+     * Downloads a newer version of a book from its online library while it's read, and offers it to reload into (the
+     * next time it opens uses it anyway). Nothing happens if it's unchanged, or the library can't be reached, or wants
+     * a password this tab doesn't have.
+     */
+    async function checkForNewer() {
+      const source = book.source
+      const lib = source && library(source.libraryId)
+      if (!source || !lib) return
+      try {
+        const fetched = await downloadBook(lib, source.downloadUrl, source.etag, source.lastModified)
+        if (fetched.unchanged || cancelled) return
+        const updated = await replaceBrowserBook(book, fetched.file, fetched.etag, fetched.lastModified)
+        if (!cancelled && updated.fingerprint !== book.fingerprint) setNewer(true)
+      } catch {
+        // Carries on with the version that's open.
+      }
+    }
 
     /**
      * Compares the place in the book saved in Carrel (from any device) with this browser's: a more recent one
@@ -384,6 +418,24 @@ function Reader({ book }: { book: BrowserBook }) {
           </button>
         </div>
       </header>
+
+      {newer && (
+        <div className="reader-notice" role="status">
+          <span>A newer version of this book is ready.</span>
+          <button
+            type="button"
+            className="link-button accent"
+            onClick={() => {
+              void flush().then(() => window.location.reload())
+            }}
+          >
+            Reload
+          </button>
+          <button type="button" className="link-button" onClick={() => setNewer(false)}>
+            Later
+          </button>
+        </div>
+      )}
 
       {elsewhere && (
         <div className="reader-notice" role="status">

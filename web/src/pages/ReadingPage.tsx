@@ -8,12 +8,14 @@ import {
   byRecent,
   readerPath,
   removeBrowserBook,
+  removeOldCopies,
   useBrowserBooks,
   type BrowserBook,
 } from '../browserBooks'
 import { Cover } from '../components/Cover'
 import { LinkBookDialog } from '../components/LinkBookDialog'
 import { listNames } from '../format'
+import { libraries } from '../libraries'
 import { usePageTitle } from '../pageTitle'
 
 /**
@@ -28,6 +30,12 @@ export function ReadingPage() {
   const [error, setError] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
   const [linking, setLinking] = useState<BrowserBook | null>(null)
+  const [onlineLibraries] = useState(libraries)
+
+  // Copies that newer versions from a library replaced (the reader keeps its own copy of an open book in memory).
+  useEffect(() => {
+    void removeOldCopies().catch(() => {})
+  }, [])
 
   async function add(files: File[]) {
     if (files.length === 0) return
@@ -106,6 +114,29 @@ export function ReadingPage() {
           ))}
         </ul>
       )}
+
+      <section className="reading-libraries" aria-labelledby="online-libraries">
+        <h2 id="online-libraries" className="section-title">
+          Online libraries
+        </h2>
+        <p className="muted">
+          Browse an OPDS catalogue, such as Calibre’s content server, and read its books here. It needs an https://
+          address that allows Carrel’s website.
+        </p>
+        {onlineLibraries.length > 0 && (
+          <ul className="library-sections">
+            {onlineLibraries.map((lib) => (
+              // The libraries are browsed on the eReader's page, whose security policy lets it reach them.
+              <li key={lib.id}>
+                <a href={`/read/?library=${encodeURIComponent(lib.id)}`}>{lib.name} →</a>
+              </li>
+            ))}
+          </ul>
+        )}
+        <a href="/read/?library=new" className="secondary-button">
+          Add a library
+        </a>
+      </section>
 
       <LinkBookDialog book={linking} onClose={() => setLinking(null)} />
     </section>
