@@ -3446,20 +3446,24 @@ a.primary-button:hover {
 /* ---------- Online libraries (/read/?library=…) ---------- */
 
 .library-page {
-  max-width: 760px;
+  max-width: 1120px;
   margin: 0 auto;
-  padding: 40px 24px 64px;
+  padding: 0 24px 64px;
+}
+
+/* The site's wordmark, back to Carrel, and the books in this browser, as the site's own header would have. */
+.library-masthead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 28px 0 18px;
+  margin-bottom: 36px;
+  border-bottom: 3px double var(--rule-strong);
 }
 
 .library-intro {
   max-width: 36em;
-}
-
-.library-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 18px;
-  margin: 0 0 24px;
 }
 
 .library-form {
@@ -3520,12 +3524,235 @@ a.primary-button:hover {
   flex: none;
 }
 
-.library-books {
+.library-read {
+  justify-self: start;
+}
+
+/* A library's catalogue: its name, search, tabs for its top sections, the way back, and what's here. */
+.catalogue-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 24px;
+  margin-bottom: 18px;
+}
+
+.catalogue-head h1:focus,
+.catalogue-title:focus {
+  outline: none;
+}
+
+/* The top sections, wrapping onto more rows when there are more than fit. */
+.catalogue-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  margin-bottom: 28px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.catalogue-tab {
+  flex: none;
+  padding: 0 0 10px;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.catalogue-tab:hover {
+  color: var(--accent);
+}
+
+.catalogue-tab[aria-current] {
+  border-bottom-color: var(--accent);
+  color: var(--ink);
+}
+
+.catalogue-trail ol {
+  display: flex;
+  flex-wrap: wrap;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+}
+
+.catalogue-trail li + li::before {
+  content: '›';
+  margin: 0 0.6em;
+  color: var(--ink-faint);
+}
+
+.catalogue-trail a {
+  color: var(--ink-soft);
+}
+
+.catalogue-trail a:hover {
+  color: var(--accent);
+}
+
+.catalogue-title {
+  margin: 6px 0 24px;
+  font-family: var(--font-display);
+  font-size: var(--text-heading);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.catalogue-shelf {
+  margin-bottom: 36px;
+}
+
+.catalogue-see-all {
+  margin-left: 1em;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+/* Books open their details: buttons that look like the shelves' links, as wide as their place (a button otherwise
+   shrinks to its content, and Calibre's thumbnails are small). */
+.catalogue-book {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.catalogue-books {
   margin-bottom: 24px;
 }
 
-.library-read {
-  justify-self: start;
+/* A list grouped by letter, as Calibre groups a long one: a tile per letter. */
+.catalogue-letters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 10px;
+  list-style: none;
+  margin: 0 0 24px;
+  padding: 0;
+}
+
+.catalogue-letters a {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 12px 6px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  text-decoration: none;
+}
+
+.catalogue-letters a:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.catalogue-letters span {
+  white-space: nowrap;
+}
+
+.catalogue-letter {
+  font-family: var(--font-display);
+  font-size: var(--text-heading);
+}
+
+/* A long list's filter and A–Z. */
+.catalogue-tools {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.catalogue-filter {
+  max-width: 24em;
+  padding: 0.5em 0.7em;
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+}
+
+.catalogue-az {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.catalogue-az button {
+  min-width: 1.9em;
+  padding: 0.3em 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+  cursor: pointer;
+}
+
+.catalogue-az button:hover:not(:disabled) {
+  color: var(--accent);
+}
+
+.catalogue-az button:disabled {
+  color: var(--ink-faint);
+  cursor: default;
+}
+
+/* Sections (authors, series, and so on) in columns, each with its count. */
+.catalogue-sections {
+  columns: 16em;
+  column-gap: 32px;
+  list-style: none;
+  margin: 0 0 24px;
+  padding: 0;
+}
+
+.catalogue-sections li {
+  break-inside: avoid;
+}
+
+.catalogue-sections a {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--rule);
+  text-decoration: none;
+  scroll-margin-top: 24px;
+}
+
+.catalogue-sections a:hover {
+  color: var(--accent);
+}
+
+.catalogue-sections .mono {
+  flex: none;
+}
+
+.catalogue-sections a > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.catalogue-more {
+  min-height: 24px;
 }
 
 .library-summary {
