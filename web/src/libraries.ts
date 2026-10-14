@@ -24,6 +24,9 @@ export interface OnlineFeed {
 export interface Section {
   title: string
   url: string
+  /** Its description, such as Calibre's "12 books". */
+  summary: string | null
+  rels: string[]
 }
 
 /** A book in a catalogue. `epub` is where to download it, null when it isn't offered as an EPUB. */
@@ -183,7 +186,9 @@ export async function loadFeed(lib: Library, url: string = lib.url, login?: stri
       if (acquisition(entry)) return []
       const link = links(entry).find((l) => (l.getAttribute('type') ?? '').includes('atom+xml'))
       const href = link && resolve(link.getAttribute('href'), base)
-      return href ? [{ title: text(child(entry, 'title')) || 'Untitled', url: href }] : []
+      return href
+        ? [{ title: text(child(entry, 'title')) || 'Untitled', url: href, summary: plainText(child(entry, 'content') ?? child(entry, 'summary')), rels: rel(link) }]
+        : []
     }),
     books: entries(feed).flatMap((entry) => {
       if (!acquisition(entry)) return []
@@ -195,7 +200,7 @@ export async function loadFeed(lib: Library, url: string = lib.url, login?: stri
       const epubUrl = epub ? resolve(epub.getAttribute('href'), base) : null
       const id = text(child(entry, 'id')) || epubUrl
       if (!id) return []
-      const thumbnail = image(true)
+      const thumbnail = sharperThumbnail(image(true))
       return [{
         id,
         title: text(child(entry, 'title')) || 'Untitled',
@@ -232,6 +237,18 @@ function resolve(href: string | null, base: string): string | null {
   } catch {
     return null
   }
+}
+
+/**
+ * Calibre's thumbnails (/get/thumb/…) are 60 by 80 unless asked for more, too small for the catalogue's covers, so a
+ * larger one is asked for (Calibre makes it once and keeps it).
+ */
+function sharperThumbnail(url: string | null): string | null {
+  if (!url) return null
+  const address = new URL(url)
+  if (!address.pathname.includes('/get/thumb/') || address.searchParams.has('sz')) return url
+  address.searchParams.set('sz', '300x400')
+  return address.href
 }
 
 /** A book's summary as plain paragraphs; HTML in it is read as text, never put on the page. */
@@ -272,6 +289,15 @@ function resolveTemplate(template: string, base: string): string | null {
   const plain = template.replace(/\{[^}]*\?\}/g, '').replace(SEARCH_TERMS, 'SEARCHTERMS')
   const url = resolve(plain, base)
   return url ? url.replace('SEARCHTERMS', SEARCH_TERMS) : null
+}
+
+/** The section of the newest books, as on Android: OPDS's sort/new, Calibre's "Newest", or one called something like it. */
+export function newestSection(sections: Section[]): Section | undefined {
+  return (
+    sections.find((s) => s.rels.includes('http://opds-spec.org/sort/new')) ??
+    sections.find((s) => s.url.includes('/navcatalog/4f6e6577657374')) ??
+    sections.find((s) => /\b(newest|recently added|new books|latest)\b/i.test(s.title))
+  )
 }
 
 /** Where a catalogue search for `words` is. */

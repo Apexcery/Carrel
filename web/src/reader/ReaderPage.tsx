@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from '@headlessui/react'
 import { EpubNavigator, EpubPreferences, FrameManager, type EpubNavigatorListeners } from '@readium/navigator'
-import { Locator, LocatorLocations, type Publication } from '@readium/shared'
+import { Locator, LocatorLocations, ReadingProgression, type Publication } from '@readium/shared'
 import {
   browserBook,
   browserBookFile,
@@ -83,7 +83,8 @@ interface ReadingState {
 }
 
 /**
- * Reads an EPUB with Readium. Clicking the edges of the page, the arrows beside it, or the arrow keys turns the page.
+ * Reads an EPUB with Readium. Clicking the edges of the page, the arrows beside it, or the arrow keys turns the page;
+ * clicking its middle hides the bars around it.
  * A book linked to Carrel moves to Reading as it opens, saves its progress, and carries on from (and is carried on
  * from) the other devices the reader reads it on.
  */
@@ -105,6 +106,8 @@ function Reader({ book }: { book: BrowserBook }) {
   const [askingRead, setAskingRead] = useState(false)
   /** A newer version of the book, downloaded from its library while it's read, to reload into. */
   const [newer, setNewer] = useState(false)
+  /** The bar of controls and the footer, hidden by clicking the middle of the page (and shown again the same way). */
+  const [barsHidden, setBarsHidden] = useState(false)
   const state = useRef<ReadingState>({ progress: null, openedProgression: null, startedAt: null, moved: false, sending: null, settling: true, keep: null })
   /** Goes to a place saved on another device. */
   const goTo = useRef<(position: ReadingPosition) => void>(() => {})
@@ -188,6 +191,8 @@ function Reader({ book }: { book: BrowserBook }) {
       state.current.startedAt = state.current.openedProgression
 
       navigator = new EpubNavigator(holder.current!, publication, listeners({
+        tap: pressed,
+        click: pressed,
         frameLoaded: (wnd) => watchFrame(wnd, () => navigator),
         positionChanged: placeChanged,
         timelineItemChanged: (item) => setChapter(item?.title?.replace(/\s+/g, ' ').trim() || null),
@@ -204,6 +209,17 @@ function Reader({ book }: { book: BrowserBook }) {
       console.error(e)
       setError(e instanceof BrowserBookError || e instanceof EpubError ? e.message : 'This book couldn’t be opened.')
     })
+
+    /** A click or tap on the page: its outer thirds turn the page, and its middle shows or hides the bars around it. */
+    function pressed(event: Parameters<EpubNavigatorListeners['tap']>[0]) {
+      const wnd = navigator && frameWindow(navigator)
+      if (!navigator || !wnd) return false
+      const third = (wnd.innerWidth * wnd.devicePixelRatio) / 3
+      if (event.x < third) navigator.goLeft(false, () => {})
+      else if (event.x > third * 2) turnRight(navigator)
+      else setBarsHidden((hidden) => !hidden)
+      return true
+    }
 
     /**
      * Downloads a newer version of a book from its online library while it's read, and offers it to reload into (the
@@ -393,7 +409,7 @@ function Reader({ book }: { book: BrowserBook }) {
   }
 
   return (
-    <div className="reader">
+    <div className={barsHidden ? 'reader bars-hidden' : 'reader'}>
       <header className="reader-bar">
         <button type="button" className="link-button" onClick={() => void close()}>
           Close
@@ -460,20 +476,24 @@ function Reader({ book }: { book: BrowserBook }) {
         <button type="button" className="reader-turn" aria-label="Previous page" disabled={!open} onClick={() => open?.navigator.goLeft(false, () => {})}>
           <span aria-hidden="true">‹</span>
         </button>
-        {/* Readium sizes its own box (holder) for a comfortable line length; the space either side turns the page too. */}
+        {/*
+          Readium sizes its own box (holder) for a comfortable line length; the space around it works like the page,
+          by thirds.
+        */}
         <div
           className="reader-book"
           aria-busy={!open}
           onClick={(e) => {
             if (!open || e.target !== e.currentTarget) return
             const box = e.currentTarget.getBoundingClientRect()
-            if (e.clientX < box.left + box.width / 2) open.navigator.goLeft(false, () => {})
-            else open.navigator.goRight(false, () => {})
+            if (e.clientX < box.left + box.width / 3) open.navigator.goLeft(false, () => {})
+            else if (e.clientX > box.left + (box.width * 2) / 3) turnRight(open.navigator)
+            else setBarsHidden((hidden) => !hidden)
           }}
         >
           <div className="reader-frames" ref={holder} />
         </div>
-        <button type="button" className="reader-turn" aria-label="Next page" disabled={!open} onClick={() => open?.navigator.goRight(false, () => {})}>
+        <button type="button" className="reader-turn" aria-label="Next page" disabled={!open} onClick={() => open && turnRight(open.navigator)}>
           <span aria-hidden="true">›</span>
         </button>
       </div>
@@ -605,11 +625,11 @@ function MarkReadDialog({
 }
 
 /** Readium's listeners, doing nothing but what's given. */
-function listeners(given: Pick<EpubNavigatorListeners, 'frameLoaded' | 'positionChanged' | 'timelineItemChanged'>): EpubNavigatorListeners {
+function listeners(
+  given: Pick<EpubNavigatorListeners, 'tap' | 'click' | 'frameLoaded' | 'positionChanged' | 'timelineItemChanged'>,
+): EpubNavigatorListeners {
   const noop = () => {}
   return {
-    tap: () => false,
-    click: () => false,
     zoom: noop,
     miscPointer: noop,
     scroll: noop,
@@ -644,7 +664,7 @@ function watchFrame(wnd: Window, navigator: () => EpubNavigator | undefined) {
   })
   doc.addEventListener('mousedown', (event) => {
     const width = wnd.innerWidth
-    if (event.detail > 1 && (event.clientX < width / 4 || event.clientX > (width * 3) / 4)) event.preventDefault()
+    if (event.detail > 1 && (event.clientX < width / 3 || event.clientX > (width * 2) / 3)) event.preventDefault()
   })
 }
 
@@ -653,11 +673,30 @@ function turnByKey(event: KeyboardEvent, navigator: EpubNavigator) {
   const target = event.target as HTMLElement | null
   if (target?.closest('input, textarea, select, [contenteditable], [role="dialog"], [role="listbox"]')) return
   if (event.key === 'ArrowLeft') navigator.goLeft(false, () => {})
-  else if (event.key === 'ArrowRight') navigator.goRight(false, () => {})
+  else if (event.key === 'ArrowRight') turnRight(navigator)
   else if (event.key === 'PageUp') navigator.goBackward(false, () => {})
-  else if (event.key === 'PageDown' || (event.key === ' ' && !event.shiftKey)) navigator.goForward(false, () => {})
+  else if (event.key === 'PageDown' || (event.key === ' ' && !event.shiftKey)) nextPage(navigator)
   else return
   event.preventDefault()
+}
+
+/** Turns the page to the right: the next page in a book read left to right, the one before in one read right to left. */
+function turnRight(navigator: EpubNavigator) {
+  if (navigator.readingProgression === ReadingProgression.ltr) nextPage(navigator)
+  else navigator.goRight(false, () => {})
+}
+
+/**
+ * Turns to the next page, unless this is the book's last: there Readium shakes the page instead, and in Firefox the
+ * shake leaves it at the top of the chapter.
+ */
+function nextPage(navigator: EpubNavigator) {
+  const { readingOrder } = navigator.publication
+  const wnd = frameWindow(navigator)
+  const scroller = wnd?.document.scrollingElement
+  const lastFile = readingOrder.findIndexWithHref(navigator.currentLocator.href.split('#')[0]) === readingOrder.items.length - 1
+  if (lastFile && wnd && scroller && wnd.scrollX + wnd.innerWidth >= scroller.scrollWidth - 1) return
+  navigator.goForward(false, () => {})
 }
 
 /**
