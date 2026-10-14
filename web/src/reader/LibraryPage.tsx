@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { Fragment, useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useInfiniteQuery } from '@tanstack/react-query'
 import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from '@headlessui/react'
 import { addDownloadedBook, BrowserBookError, fromLibrary, readerPath, type BrowserBook } from '../browserBooks'
 import { Cover } from '../components/Cover'
 import { LinkBookDialog } from '../components/LinkBookDialog'
+import { ShelfRow } from '../components/ShelfRow'
 import { listNames } from '../format'
 import {
   downloadBook,
@@ -11,6 +12,7 @@ import {
   libraryPicture,
   LibraryError,
   loadFeed,
+  newestSection,
   password,
   passwordRemembered,
   removeLibrary,
@@ -19,7 +21,7 @@ import {
   setPassword,
   type Library,
   type OnlineBook,
-  type OnlineFeed,
+  type Section,
 } from '../libraries'
 import { supabase } from '../supabase'
 
@@ -40,9 +42,12 @@ export function LibraryPage() {
   const id = params.get('library') ?? ''
   const [lib] = useState(() => (id === 'new' ? null : findLibrary(id)))
 
+  const editing = !lib || params.get('edit') !== null
+
+  // The catalogue names its own place.
   useEffect(() => {
-    document.title = id === 'new' ? 'Carrel | Add a library' : lib ? `Carrel | ${lib.name}` : 'Carrel'
-  }, [id, lib])
+    if (editing) document.title = id === 'new' ? 'Carrel | Add a library' : lib ? `Carrel | ${lib.name}` : 'Carrel'
+  }, [editing, id, lib])
 
   if (id !== 'new' && !lib) {
     return (
@@ -56,12 +61,16 @@ export function LibraryPage() {
   }
   return (
     <div className="library-page">
-      <p className="kicker">
-        <a href="/reading" className="kicker-link">
-          Reading
+      {/* The eReader's page has no site header (it's a page of its own), so this leads back to Carrel and the books here. */}
+      <header className="library-masthead">
+        <a href="/" className="wordmark" aria-label="Carrel home">
+          Carrel
         </a>
-      </p>
-      {!lib || params.get('edit') ? <LibraryForm lib={lib ?? null} /> : <Catalogue lib={lib} url={params.get('url') ?? lib.url} />}
+        <a href="/reading" className="link-button">
+          Your books
+        </a>
+      </header>
+      {editing || !lib ? <LibraryForm lib={lib ?? null} /> : <Catalogue lib={lib} start={params.get('url') ?? lib.url} />}
     </div>
   )
 }
@@ -183,26 +192,241 @@ function RememberBox({ checked, onChange }: { checked: boolean; onChange: (check
   )
 }
 
-/** A library's catalogue at `url`: its sections, its books, more of a list, and searching it. */
-function Catalogue({ lib, url }: { lib: Library; url: string }) {
-  const first = useQuery({ queryKey: ['opds', lib.id, url], queryFn: () => loadFeed(lib, url), retry: false })
-  const [more, setMore] = useState<OnlineFeed[]>([])
-  const [loadingMore, setLoadingMore] = useState(false)
-  const [moreError, setMoreError] = useState<string | null>(null)
+/** A place in a library's catalogue: its address, and the steps taken from the start to get there. */
+interface Place {
+  url: string
+  trail: Step[]
+}
+
+interface Step {
+  title: string
+  url: string
+}
+
+/** A place as kept in its history entry, with how much of it was loaded and how far down it the reader was. */
+interface SavedPlace extends Place {
+  pages: number
+  scrollY: number
+}
+
+/** Pages of a list of sections fetched straight away, so its A–Z and filter cover it all; past that, scrolling loads more. */
+const WHOLE_LIST_PAGES = 20
+/** How long a catalogue page fetched in this tab is used again (going back to it, say) rather than fetched afresh. */
+const FRESH_MS = 5 * 60_000
+/** A list of sections this long gets an A–Z and a filter. */
+const LONG_LIST = 30
+/** More sections than this at the start are listed there, rather than as tabs. */
+const MAX_TABS = 12
+const SHELF_BOOKS = 20
+
+function savedPlace(state: unknown): SavedPlace | null {
+  const saved = state as Partial<SavedPlace> | null
+  return saved && typeof saved.url === 'string' && Array.isArray(saved.trail) && typeof saved.pages === 'number' && typeof saved.scrollY === 'number'
+    ? (saved as SavedPlace)
+    : null
+}
+
+/** A catalogue page and the pages after it, loaded as they're wanted. */
+function useFeed(lib: Library, url: string | undefined) {
+  return useInfiniteQuery({
+    queryKey: ['opds', lib.id, url],
+    queryFn: ({ pageParam }) => loadFeed(lib, pageParam),
+    initialPageParam: url ?? '',
+    getNextPageParam: (last, _pages, lastUrl) => (last.next && last.next !== lastUrl ? last.next : undefined),
+    enabled: url !== undefined,
+    staleTime: FRESH_MS,
+    retry: false,
+  })
+}
+
+/** A plain click, which the page handles; others (a new tab, say) are left to the browser. */
+function plainClick(e: MouseEvent) {
+  return e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey
+}
+
+/**
+ * A library's catalogue: its top sections as tabs, the way back up from where the reader is, and the sections and
+ * books there. Moving around stays on the page, with each place in the browser's history, so Back (in the page, or
+ * from reading a book) returns to the same place, as far down it as before.
+ */
+function Catalogue({ lib, start }: { lib: Library; start: string }) {
+  // Opened from the history (Back, or a reload), it goes back to where the reader was.
+  const [opened] = useState(() => savedPlace(window.history.state))
+  /** Where the reader was in the place they've come back to, until the page gets there. */
+  const restoring = useRef(opened)
+  const [place, setPlace] = useState<Place>(opened ?? { url: start, trail: start === lib.url ? [] : [{ title: '', url: start }] })
+  const heading = useRef<HTMLHeadingElement>(null)
+  const moved = useRef(false)
   const [words, setWords] = useState('')
   const [chosen, setChosen] = useState<OnlineBook | null>(null)
-  const atStart = url === lib.url
 
-  if (first.isPending) return <p className="muted mono">Loading…</p>
-  if (first.isError) {
-    const error = first.error
+  const root = useFeed(lib, lib.url)
+  const current = useFeed(lib, place.url)
+  const atStart = place.url === lib.url
+  const rootSections = root.data?.pages[0].sections ?? []
+  const tabs = rootSections.length <= MAX_TABS ? rootSections : []
+  const newest = atStart ? newestSection(tabs) : undefined
+  const shelf = useFeed(lib, newest?.url)
+  const pages = current.data?.pages ?? []
+  const pagesLoaded = pages.length
+  const sections = pages.flatMap((p) => p.sections)
+  const books = pages.flatMap((p) => p.books)
+  const here = place.trail[place.trail.length - 1]
+  // A place opened by its address (in a new tab, say) has no steps to it, so it's named by its tab or its page.
+  const title = atStart ? lib.name : here?.title || rootSections.find((s) => s.url === place.url)?.title || pages[0]?.title || lib.name
+  // A reading list comes sorted by title, but its order can be in each book's details: put it back in that order.
+  const order = atStart ? null : listOrder(books, title)
+  const shownBooks = order
+    ? books
+        .map((book, i) => ({ book, at: order[i], i }))
+        .toSorted((a, b) => a.at - b.at || a.i - b.i)
+        .map(({ book }) => book)
+    : books
+  // The whole library's search, from its start.
+  const searchFeed = root.data?.pages[0].search ? root.data.pages[0] : pages[0]?.search ? pages[0] : null
+  const { hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = current
+
+  useEffect(() => {
+    document.title = atStart ? `Carrel | ${lib.name}` : `Carrel | ${title} · ${lib.name}`
+  }, [atStart, title, lib.name])
+
+  // The page keeps its place itself: the browser's own would scroll before the books are back.
+  useEffect(() => {
+    window.history.scrollRestoration = 'manual'
+    const popped = (event: PopStateEvent) => {
+      const saved = savedPlace(event.state)
+      restoring.current = saved
+      moved.current = true
+      setPlace(saved ?? { url: new URLSearchParams(window.location.search).get('url') ?? lib.url, trail: [] })
+    }
+    window.addEventListener('popstate', popped)
+    return () => window.removeEventListener('popstate', popped)
+  }, [lib.url])
+
+  // Keeps this place's history entry up to date as the reader moves, scrolls, and loads more, and as the page is left.
+  const latest = useRef({ place, pagesLoaded })
+  const save = useCallback(() => {
+    if (restoring.current) return
+    const saved: SavedPlace = { ...latest.current.place, pages: Math.max(1, latest.current.pagesLoaded), scrollY: window.scrollY }
+    window.history.replaceState(saved, '')
+  }, [])
+  useEffect(() => {
+    latest.current = { place, pagesLoaded }
+    save()
+  }, [place, pagesLoaded, save])
+  useEffect(() => {
+    let timer = 0
+    const scrolled = () => {
+      window.clearTimeout(timer)
+      timer = window.setTimeout(save, 200)
+    }
+    window.addEventListener('scroll', scrolled, { passive: true })
+    window.addEventListener('pagehide', save)
+    return () => {
+      window.clearTimeout(timer)
+      window.removeEventListener('scroll', scrolled)
+      window.removeEventListener('pagehide', save)
+    }
+  }, [save])
+
+  // Coming back: loads as many pages as before, then scrolls to where the reader was.
+  useEffect(() => {
+    const target = restoring.current
+    if (!target || target.url !== place.url || !current.data) return
+    if (current.data.pages.length < target.pages && hasNextPage && !isFetchNextPageError) {
+      void fetchNextPage({ cancelRefetch: false })
+      return
+    }
+    restoring.current = null
+    window.scrollTo(0, target.scrollY)
+  }, [place.url, current.data, hasNextPage, isFetchNextPageError, fetchNextPage])
+
+  // After a move, the heading has focus (once it's there), as after a page load.
+  useEffect(() => {
+    if (!moved.current || !heading.current) return
+    moved.current = false
+    heading.current.focus({ preventScroll: true })
+  }, [place, current.isPending])
+
+  // A list of sections is loaded whole (up to a point), so its A–Z and filter see all of it, and so is a reading list,
+  // so it can be put in order.
+  const wholeList = current.data !== undefined && ((books.length === 0 && sections.length > 0) || order !== null)
+  useEffect(() => {
+    if (wholeList && hasNextPage && !isFetchingNextPage && !isFetchNextPageError && pages.length < WHOLE_LIST_PAGES) {
+      void fetchNextPage({ cancelRefetch: false })
+    }
+  }, [wholeList, hasNextPage, isFetchingNextPage, isFetchNextPageError, pages.length, fetchNextPage])
+
+  const loadMore = useCallback(() => void fetchNextPage({ cancelRefetch: false }), [fetchNextPage])
+
+  function go(next: Place) {
+    save()
+    const saved: SavedPlace = { ...next, pages: 1, scrollY: 0 }
+    window.history.pushState(saved, '', libraryPath(lib.id, { url: next.url === lib.url ? undefined : next.url }))
+    restoring.current = null
+    moved.current = true
+    setPlace(next)
+    window.scrollTo(0, 0)
+  }
+
+  /** A link to another place in the catalogue, opened in the page (or, by the browser, in a new tab). */
+  function link(to: Place, children: ReactNode, props: { className?: string; current?: boolean | 'page'; id?: string; title?: string } = {}) {
+    return (
+      <a
+        href={libraryPath(lib.id, { url: to.url === lib.url ? undefined : to.url })}
+        className={props.className}
+        id={props.id}
+        title={props.title}
+        aria-current={props.current || undefined}
+        onClick={(e) => {
+          if (!plainClick(e.nativeEvent)) return
+          e.preventDefault()
+          go(to)
+        }}
+      >
+        {children}
+      </a>
+    )
+  }
+
+  /** A link into a section from here. */
+  const into = (section: Section, children: ReactNode, props: { className?: string; id?: string; title?: string } = {}) =>
+    link({ url: section.url, trail: [...place.trail, { title: section.title, url: section.url }] }, children, props)
+
+  function submitSearch(e: FormEvent) {
+    e.preventDefault()
+    const target = words.trim() && searchFeed && searchUrl(searchFeed, words)
+    if (target) go({ url: target, trail: [{ title: `Search: ${words.trim()}`, url: target }] })
+  }
+
+  // Without the start (for the tabs), the rest still works; the place itself has to load. A failure loading more
+  // keeps what's there.
+  const error = current.data ? null : current.error
+  if (current.isPending && !error) return <p className="muted mono">Loading…</p>
+  if (error) {
     if (error instanceof LibraryError && error.needsLogin) {
-      return <LoginForm lib={lib} message={error.message} onDone={() => void first.refetch()} />
+      return (
+        <LoginForm
+          lib={lib}
+          message={error.message}
+          onDone={() => {
+            void root.refetch()
+            void current.refetch()
+          }}
+        />
+      )
     }
     return (
       <div className="notice" role="alert">
         <p>{error instanceof LibraryError ? error.message : 'Something went wrong. Try again.'}</p>
-        <button type="button" className="link-button" onClick={() => void first.refetch()}>
+        <button
+          type="button"
+          className="link-button"
+          onClick={() => {
+            void root.refetch()
+            void current.refetch()
+          }}
+        >
           Try again
         </button>
         <a href={libraryPath(lib.id, { edit: true })} className="link-button">
@@ -212,49 +436,24 @@ function Catalogue({ lib, url }: { lib: Library; url: string }) {
     )
   }
 
-  const feeds = [first.data, ...more]
-  const sections = feeds.flatMap((f) => f.sections)
-  const books = feeds.flatMap((f) => f.books)
-  const next = feeds[feeds.length - 1].next
-
-  async function loadMore() {
-    if (!next) return
-    setLoadingMore(true)
-    setMoreError(null)
-    try {
-      const page = await loadFeed(lib, next)
-      setMore((pages) => [...pages, page])
-    } catch (e) {
-      setMoreError(e instanceof LibraryError ? e.message : 'Something went wrong. Try again.')
-    } finally {
-      setLoadingMore(false)
-    }
-  }
-
-  function search(e: FormEvent) {
-    e.preventDefault()
-    const target = words.trim() && searchUrl(first.data!, words)
-    if (target) window.location.assign(libraryPath(lib.id, { url: target }))
-  }
+  // At the start, the sections are the tabs above (unless there are too many for tabs).
+  const listed = atStart && tabs.length > 0 ? [] : sections
+  const moreError: unknown = current.error
+  const letters = listed.length > 0 && listed.every((s) => [...s.title.trim()].length === 1)
 
   return (
     <>
-      <h1 className="search-title">{atStart ? lib.name : first.data.title}</h1>
-      <p className="library-links">
-        {!atStart && (
-          <a href={libraryPath(lib.id)} className="link-button">
-            {lib.name}
-          </a>
-        )}
-        {atStart && (
-          <a href={libraryPath(lib.id, { edit: true })} className="link-button">
-            Change this library’s details
-          </a>
-        )}
-      </p>
+      <div className="catalogue-head">
+        <h1 ref={atStart ? heading : undefined} tabIndex={-1} className="search-title">
+          {lib.name}
+        </h1>
+        <a href={libraryPath(lib.id, { edit: true })} className="link-button">
+          Change this library’s details
+        </a>
+      </div>
 
-      {first.data.search && (
-        <form className="link-search library-search" onSubmit={search}>
+      {searchFeed && (
+        <form className="link-search library-search" onSubmit={submitSearch}>
           <label htmlFor="library-search" className="visually-hidden">
             Search this library
           </label>
@@ -272,47 +471,233 @@ function Catalogue({ lib, url }: { lib: Library; url: string }) {
         </form>
       )}
 
-      {sections.length > 0 && (
-        <ul className="library-sections">
-          {sections.map((section) => (
+      {tabs.length > 0 && (
+        <nav className="catalogue-tabs" aria-label="Sections">
+          {tabs.map((tab) => {
+            const active = place.trail[0]?.url === tab.url
+            return (
+              <Fragment key={tab.url}>
+                {link({ url: tab.url, trail: [{ title: tab.title, url: tab.url }] }, tab.title, {
+                  className: 'catalogue-tab',
+                  current: active && (place.trail.length === 1 ? 'page' : true),
+                })}
+              </Fragment>
+            )
+          })}
+        </nav>
+      )}
+
+      {!atStart && (
+        <>
+          <nav className="catalogue-trail" aria-label="The way back">
+            <ol>
+              <li>{link({ url: lib.url, trail: [] }, lib.name)}</li>
+              {place.trail.slice(0, -1).map((step, i) => (
+                <li key={step.url}>{link({ url: step.url, trail: place.trail.slice(0, i + 1) }, step.title)}</li>
+              ))}
+            </ol>
+          </nav>
+          <h2 ref={heading} tabIndex={-1} className="catalogue-title">
+            {title}
+          </h2>
+        </>
+      )}
+
+      {atStart && newest && shelf.data && shelf.data.pages[0].books.length > 0 && (
+        <section className="catalogue-shelf">
+          <ShelfRow
+            heading={
+              <h3 className="section-title">
+                {newest.title}{' '}
+                {into(newest, 'See all →', { className: 'catalogue-see-all' })}
+              </h3>
+            }
+          >
+            {shelf.data.pages[0].books.slice(0, SHELF_BOOKS).map((book) => (
+              <li key={book.id}>
+                <button type="button" className="shelf-book catalogue-book" aria-label={book.title} onClick={() => setChosen(book)}>
+                  <LibraryCover lib={lib} url={book.thumbnail} title={book.title} author={book.authors[0]} />
+                </button>
+              </li>
+            ))}
+          </ShelfRow>
+        </section>
+      )}
+      {atStart && !newest && books.length === 0 && listed.length === 0 && <p className="muted">Choose a section to browse.</p>}
+
+      {letters ? (
+        <ul className="catalogue-letters">
+          {listed.map((section) => (
             <li key={section.url}>
-              <a href={libraryPath(lib.id, { url: section.url })}>{section.title} →</a>
+              {into(
+                section,
+                <>
+                  <span className="catalogue-letter">{section.title}</span>
+                  {section.summary && <span className="mono muted">{section.summary}</span>}
+                </>,
+              )}
             </li>
           ))}
         </ul>
+      ) : (
+        listed.length > 0 && <SectionList sections={listed} partial={hasNextPage} into={into} />
       )}
 
       {books.length > 0 && (
-        <ul className="link-results library-books">
-          {books.map((book) => (
+        <ul className="shelf-grid catalogue-books">
+          {shownBooks.map((book) => (
             <li key={book.id}>
-              <button type="button" className="link-result" onClick={() => setChosen(book)}>
-                <LibraryCover lib={lib} url={book.thumbnail} title={book.title} author={book.authors[0]} size="small" />
-                <span>
-                  <span className="link-result-title">{book.title}</span>
-                  {book.authors.length > 0 && <span className="muted">{listNames(book.authors)}</span>}
-                  {fromLibrary(lib.id, book.id) && <span className="mono muted">In this browser</span>}
-                </span>
+              <button type="button" className="shelf-grid-book catalogue-book" onClick={() => setChosen(book)}>
+                <LibraryCover lib={lib} url={book.thumbnail} title={book.title} author={book.authors[0]} />
+                <span className="shelf-grid-title">{book.title}</span>
+                {book.authors.length > 0 && <span className="shelf-grid-author">{listNames(book.authors)}</span>}
+                {fromLibrary(lib.id, book.id) && <span className="mono muted">In this browser</span>}
               </button>
             </li>
           ))}
         </ul>
       )}
 
-      {sections.length === 0 && books.length === 0 && <p className="muted">No books here.</p>}
-      {moreError && (
+      {!atStart && sections.length === 0 && books.length === 0 && <p className="muted">No books here.</p>}
+      {isFetchNextPageError ? (
         <p className="form-message error" role="alert">
-          {moreError}
+          {moreError instanceof LibraryError ? moreError.message : 'More couldn’t be loaded.'}{' '}
+          <button type="button" className="link-button" onClick={() => void fetchNextPage({ cancelRefetch: false })}>
+            Try again
+          </button>
         </p>
-      )}
-      {next && (
-        <button type="button" className="secondary-button library-more" disabled={loadingMore} onClick={() => void loadMore()}>
-          {loadingMore ? 'Loading…' : 'Load more'}
-        </button>
+      ) : (
+        hasNextPage && <MoreOnScroll pages={pages.length} loading={isFetchingNextPage} onMore={loadMore} />
       )}
 
       <BookDialog lib={lib} book={chosen} onClose={() => setChosen(null)} />
     </>
+  )
+}
+
+/**
+ * A list of sections (authors, series, and so on) in columns. A long one has an A–Z to jump along it and a filter;
+ * `partial` while more of it is still to load.
+ */
+function SectionList({
+  sections,
+  partial,
+  into,
+}: {
+  sections: Section[]
+  partial: boolean
+  into: (section: Section, children: ReactNode, props?: { className?: string; id?: string; title?: string }) => ReactNode
+}) {
+  const [filter, setFilter] = useState('')
+  const long = sections.length >= LONG_LIST
+  const words = filter.trim().toLowerCase()
+  const shown = words ? sections.filter((s) => s.title.toLowerCase().includes(words)) : sections
+  // The first section under each letter, for the A–Z to jump to.
+  const firsts = new Map<string, string>()
+  for (const s of shown) if (!firsts.has(letterOf(s.title))) firsts.set(letterOf(s.title), s.url)
+
+  function jump(letter: string) {
+    const target = document.getElementById(`section-${letter}`)
+    target?.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+    target?.focus({ preventScroll: true })
+  }
+
+  return (
+    <>
+      {long && (
+        <div className="catalogue-tools">
+          <label htmlFor="section-filter" className="visually-hidden">
+            Filter this list
+          </label>
+          <input
+            id="section-filter"
+            type="search"
+            className="catalogue-filter"
+            placeholder="Filter this list"
+            autoComplete="off"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          />
+          <nav className="catalogue-az" aria-label="Jump to a letter">
+            {ALPHABET.map((letter) => (
+              <button key={letter} type="button" disabled={!firsts.has(letter)} onClick={() => jump(letter)}>
+                {letter}
+              </button>
+            ))}
+          </nav>
+        </div>
+      )}
+      {words && partial && <p className="muted mono">Only the part of this list loaded so far is filtered. Search the library for the rest.</p>}
+      {shown.length === 0 && <p className="muted">Nothing here matches.</p>}
+      <ul className="catalogue-sections">
+        {shown.map((section) => (
+          <li key={section.url}>
+            {into(
+              section,
+              <>
+                <span>{section.title}</span>
+                {section.summary && section.summary.length <= 24 && <span className="mono muted">{section.summary}</span>}
+              </>,
+              {
+                id: long && firsts.get(letterOf(section.title)) === section.url ? `section-${letterOf(section.title)}` : undefined,
+                // Each is one line, so a long name is cut short; the whole of it shows on hover.
+                title: section.title,
+              },
+            )}
+          </li>
+        ))}
+      </ul>
+    </>
+  )
+}
+
+/**
+ * Where each book comes in the list called `name`, from a line in its details such as "Reading List Order: Cosmere [6]":
+ * a series-like column, which Calibre's Reading List plugin can keep a list's order in. Null unless every book has one.
+ */
+function listOrder(books: OnlineBook[], name: string): number[] | null {
+  if (books.length === 0) return null
+  const wanted = name.trim().toLowerCase()
+  const order: number[] = []
+  for (const book of books) {
+    const place = (book.summary ?? '')
+      .split('\n')
+      .map((line) => /^[^:]+:\s*(.+?)\s*\[(\d+(?:\.\d+)?)\]$/.exec(line.trim()))
+      .find((match) => match?.[1].toLowerCase() === wanted)
+    if (!place) return null
+    order.push(Number(place[2]))
+  }
+  return order
+}
+
+const ALPHABET = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ', '#']
+
+/**
+ * The letter a title is listed under: its first after any "The", "A", or "An" (as Calibre sorts series), without
+ * accents, or # for anything else.
+ */
+function letterOf(title: string) {
+  const first = title.trim().replace(/^(the|an?)\s+/i, '').normalize('NFD').charAt(0).toUpperCase()
+  return first >= 'A' && first <= 'Z' ? first : '#'
+}
+
+/** Asks for more of the list as the end of it comes near the screen. */
+function MoreOnScroll({ pages, loading, onMore }: { pages: number; loading: boolean; onMore: () => void }) {
+  const marker = useRef<HTMLDivElement>(null)
+  // Watched afresh after each page arrives, in case the end is still in sight.
+  useEffect(() => {
+    const el = marker.current
+    if (!el) return
+    const observer = new IntersectionObserver((seen) => {
+      if (seen.some((s) => s.isIntersecting)) onMore()
+    }, { rootMargin: '800px' })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [pages, onMore])
+  return (
+    <div ref={marker} className="catalogue-more">
+      {loading && <span className="muted mono">Loading…</span>}
+    </div>
   )
 }
 
