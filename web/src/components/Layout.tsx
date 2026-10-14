@@ -65,9 +65,11 @@ function Account() {
 
   return (
     <div className="account">
-      <NavLink to="/reading" className="account-reading">
-        Reading
-      </NavLink>
+      <Tooltip content="Reading">
+        <NavLink to="/reading" className="account-reading" aria-label="Reading">
+          <BookIcon />
+        </NavLink>
+      </Tooltip>
       {signedIn && username && (
         <NavLink to={profilePath(username)} className="account-profile">
           <Avatar url={profile.avatarUrl} size="small" />
@@ -89,6 +91,16 @@ function Account() {
         </Link>
       )}
     </div>
+  )
+}
+
+/** The "book-open" icon from Lucide (lucide.dev, ISC licence). */
+function BookIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 7v14" />
+      <path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z" />
+    </svg>
   )
 }
 
