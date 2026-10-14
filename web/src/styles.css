@@ -375,33 +375,25 @@ a.primary-button:hover {
   min-width: 0;
 }
 
-.account-settings {
+/* Settings, and the books in this browser to read (/reading). */
+.account-settings,
+.account-reading {
   display: inline-flex;
   align-self: center;
   color: var(--ink-soft);
 }
 
 .account-settings:hover,
-.account-settings[aria-current='page'] {
-  color: var(--accent);
-}
-
-.account-settings svg {
-  width: 1.15rem;
-  height: 1.15rem;
-}
-
-/* The books in this browser, to read (/reading). */
-.account-reading {
-  font-family: var(--font-mono);
-  font-size: var(--text-mono);
-  color: var(--ink-soft);
-  text-decoration: none;
-}
-
+.account-settings[aria-current='page'],
 .account-reading:hover,
 .account-reading[aria-current='page'] {
   color: var(--accent);
+}
+
+.account-settings svg,
+.account-reading svg {
+  width: 1.15rem;
+  height: 1.15rem;
 }
 
 /* The reader's picture and username, linking to their profile. */
@@ -3618,8 +3610,10 @@ a.primary-button:hover {
   min-height: 0;
 }
 
+/* Room above and below the page, so the text doesn't run up to the bars. */
 .reader-book {
   min-height: 0;
+  padding: 24px 0;
   cursor: pointer;
 }
 
@@ -3664,6 +3658,24 @@ a.primary-button:hover {
 .reader-seek {
   width: 100%;
   margin: 0;
+}
+
+/* Clicking the middle of the page hides the bars. Their space stays, so the book doesn't flow again. */
+.reader-bar,
+.reader-footer,
+.reader-turn {
+  transition: opacity 200ms ease, visibility 200ms ease;
+}
+
+.bars-hidden .reader-bar,
+.bars-hidden .reader-footer {
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* The arrows fade too, but still turn the page. */
+.bars-hidden .reader-turn {
+  opacity: 0;
 }
 
 .reader-place {
