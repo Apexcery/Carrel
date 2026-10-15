@@ -1,6 +1,7 @@
 package uk.co.zenithal.carrel.data
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -101,5 +102,47 @@ class OnlineLibrariesTest {
     fun leavesDownloadsElsewhereAlone() {
         assertNull(movedDownload("http://cdn.example.com/get/1", "http://192.168.1.20:8080/opds", "http://192.168.1.30:8080/opds"))
         assertNull(movedDownload("http://192.168.1.20:8080/get/1", "http://192.168.1.20:8080/opds", "http://192.168.1.20:8080/catalogue"))
+    }
+
+    @Test
+    fun leavesOutTheReadingListOrderColumn() {
+        assertTrue(browsable(Section("By Reading List", "/opds/navcatalog/4e23726c")))
+        assertFalse(browsable(Section("By Reading List Order", "/opds/navcatalog/4e23726c6f")))
+    }
+
+    @Test
+    fun readsPlacesInListsFromCalibresDetails() {
+        // As Calibre's content server writes it: pretty-printed, with the details as XHTML.
+        val atom = """
+            <feed xmlns="http://www.w3.org/2005/Atom">
+              <entry>
+                <title>Elantris</title>
+                <id>urn:uuid:1</id>
+                <content type="xhtml">
+                  <div xmlns="http://www.w3.org/1999/xhtml">TAGS: Fantasy<br/>SERIES: Elantris [1]<br/>Reading List Order: Cosmere &amp; More [6]<br/>Reading List: Cosmere<br/><p>A city of gods.</p></div>
+                </content>
+              </entry>
+              <entry>
+                <title>No details</title>
+                <id>urn:uuid:2</id>
+              </entry>
+            </feed>
+        """
+        assertEquals(mapOf("urn:uuid:1" to mapOf("elantris" to 1.0, "cosmere & more" to 6.0)), listPlaces(atom))
+    }
+
+    @Test
+    fun putsAReadingListInItsOrder() {
+        fun book(title: String, places: Map<String, Double>) = OnlineBook(title, title, emptyList(), null, null, null, null, null, null, places)
+        val books = listOf(
+            book("Elantris", mapOf("cosmere" to 2.0)),
+            book("Mistborn", mapOf("cosmere" to 1.0, "mistborn" to 1.0)),
+            book("Warbreaker", mapOf("cosmere" to 2.0)),
+        )
+        assertEquals(listOf("Mistborn", "Elantris", "Warbreaker"), inListOrder(books, "Cosmere").map { it.title })
+        // Not every book has a place in the list, or it's a list of another name: left as it came.
+        assertEquals(books, inListOrder(books, "Mistborn"))
+        assertEquals(books, inListOrder(books, "Stormlight"))
+        assertEquals(books, inListOrder(books, null))
     }
 }
