@@ -127,7 +127,7 @@ import kotlin.reflect.KClass
 /** `readAfter`: a book just downloaded, read once it's linked (or not). */
 @Serializable data class LinkBookRoute(val phoneBookId: Long, val readAfter: Boolean = false)
 /** An online library's catalogue, at its start (no `url`) or a page of it. */
-@Serializable data class CatalogueRoute(val libraryId: Long, val url: String? = null)
+@Serializable data class CatalogueRoute(val libraryId: Long, val url: String? = null, val title: String? = null)
 /** Adding an online library (no id) or changing one. */
 @Serializable data class LibraryFormRoute(val libraryId: Long? = null)
 
@@ -286,7 +286,8 @@ fun MainScreen(nav: NavHostController, session: Session, profile: Profile?, dest
                 CatalogueScreen(
                     route.libraryId,
                     route.url,
-                    openPage = { url -> nav.navigate(CatalogueRoute(route.libraryId, url)) },
+                    route.title,
+                    openPage = { url, title -> nav.navigate(CatalogueRoute(route.libraryId, url, title)) },
                     editLibrary = { nav.navigate(LibraryFormRoute(route.libraryId)) },
                 ) { id -> nav.navigate(LinkBookRoute(id, readAfter = true)) }
             }
