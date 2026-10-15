@@ -263,13 +263,13 @@ function Catalogue({ lib, start }: { lib: Library; start: string }) {
   const root = useFeed(lib, lib.url)
   const current = useFeed(lib, place.url)
   const atStart = place.url === lib.url
-  const rootSections = root.data?.pages[0].sections ?? []
+  const rootSections = (root.data?.pages[0].sections ?? []).filter(browsable)
   const tabs = rootSections.length <= MAX_TABS ? rootSections : []
   const newest = atStart ? newestSection(tabs) : undefined
   const shelf = useFeed(lib, newest?.url)
   const pages = current.data?.pages ?? []
   const pagesLoaded = pages.length
-  const sections = pages.flatMap((p) => p.sections)
+  const sections = pages.flatMap((p) => p.sections).filter(browsable)
   const books = pages.flatMap((p) => p.books)
   const here = place.trail[place.trail.length - 1]
   // A place opened by its address (in a new tab, say) has no steps to it, so it's named by its tab or its page.
@@ -668,6 +668,11 @@ function listOrder(books: OnlineBook[], name: string): number[] | null {
     order.push(Number(place[2]))
   }
   return order
+}
+
+/** False for the Reading List plugin's order column, which only keeps each list's order, so isn't worth browsing by. */
+function browsable(section: { title: string }) {
+  return !/reading list order/i.test(section.title)
 }
 
 const ALPHABET = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ', '#']
