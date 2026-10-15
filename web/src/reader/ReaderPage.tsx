@@ -672,8 +672,8 @@ function turnByKey(event: KeyboardEvent, navigator: EpubNavigator) {
   if (event.altKey || event.ctrlKey || event.metaKey || event.defaultPrevented) return
   const target = event.target as HTMLElement | null
   if (target?.closest('input, textarea, select, [contenteditable], [role="dialog"], [role="listbox"]')) return
-  if (event.key === 'ArrowLeft') navigator.goLeft(false, () => {})
-  else if (event.key === 'ArrowRight') turnRight(navigator)
+  if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') navigator.goLeft(false, () => {})
+  else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') turnRight(navigator)
   else if (event.key === 'PageUp') navigator.goBackward(false, () => {})
   else if (event.key === 'PageDown' || (event.key === ' ' && !event.shiftKey)) nextPage(navigator)
   else return

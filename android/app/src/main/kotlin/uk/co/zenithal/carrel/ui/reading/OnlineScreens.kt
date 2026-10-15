@@ -61,6 +61,8 @@ import uk.co.zenithal.carrel.data.OnlineBook
 import uk.co.zenithal.carrel.data.OnlineFeed
 import uk.co.zenithal.carrel.data.PhoneBookException
 import uk.co.zenithal.carrel.data.Section
+import uk.co.zenithal.carrel.data.browsable
+import uk.co.zenithal.carrel.data.inListOrder
 import uk.co.zenithal.carrel.data.listNames
 import uk.co.zenithal.carrel.data.newestSection
 import uk.co.zenithal.carrel.data.seriesPosition
@@ -162,11 +164,11 @@ private fun NewestRow(library: Library, attempt: Int, seeAll: () -> Unit, choose
 }
 
 /**
- * An online library's catalogue: at its start (`url` null) or a section, search results, or more of a list. Sections
- * open further pages (`openPage`); books open their sheet, to download and read.
+ * An online library's catalogue: at its start (`url` null) or a section (named `title`), search results, or more of a
+ * list. Sections open further pages (`openPage`, with their names); books open their sheet, to download and read.
  */
 @Composable
-fun CatalogueScreen(libraryId: Long, url: String?, openPage: (String) -> Unit, editLibrary: () -> Unit, linkThenRead: (Long) -> Unit) {
+fun CatalogueScreen(libraryId: Long, url: String?, title: String?, openPage: (String, String?) -> Unit, editLibrary: () -> Unit, linkThenRead: (Long) -> Unit) {
     val container = LocalContainer.current
     val colors = Carrel.colors
     var library by remember { mutableStateOf<Library?>(null) }
@@ -217,11 +219,11 @@ fun CatalogueScreen(libraryId: Long, url: String?, openPage: (String) -> Unit, e
                         { words = it },
                         Modifier.padding(top = 24.dp),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        onDone = { container.libraries.searchUrl(page, words)?.takeIf { words.isNotBlank() }?.let(openPage) },
+                        onDone = { container.libraries.searchUrl(page, words)?.takeIf { words.isNotBlank() }?.let { openPage(it, null) } },
                     )
                 }
                 OpenReaderStatus(read, Modifier.padding(top = 12.dp))
-                val sections = page.sections + moreSections
+                val sections = (page.sections + moreSections).filter(::browsable)
                 if (sections.isNotEmpty()) {
                     Column(Modifier.padding(top = 16.dp)) {
                         sections.forEach { section ->
@@ -231,14 +233,15 @@ fun CatalogueScreen(libraryId: Long, url: String?, openPage: (String) -> Unit, e
                                 color = colors.ink,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable(role = Role.Button) { openPage(section.url) }
+                                    .clickable(role = Role.Button) { openPage(section.url, section.title) }
                                     .underRule(colors.rule)
                                     .padding(vertical = 14.dp),
                             )
                         }
                     }
                 }
-                val books = page.books + more
+                // A reading list comes sorted by title, but its order can be in each book's details: put it back in that order.
+                val books = inListOrder(page.books + more, title)
                 if (sections.isEmpty() && books.isEmpty()) {
                     Text("No books here.", style = Carrel.type.body, color = colors.inkSoft, modifier = Modifier.padding(top = 24.dp))
                 }

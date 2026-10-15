@@ -96,6 +96,8 @@ data class OnlineBook(
     val cover: String?,
     val thumbnail: String?,
     val epub: String?,
+    /** Where it comes in each list it has a place in, by the list's name in lower case. */
+    val listPlaces: Map<String, Double> = emptyMap(),
 )
 
 /** A failed request to an online library, with a message to show. */
@@ -175,13 +177,15 @@ class OnlineLibraries(private val dao: LibraryDao, private val secrets: Secrets)
                 } catch (_: Exception) {
                     null
                 } ?: throw LibraryException(NOT_A_CATALOGUE)
+                val atom = if (json) null else String(bytes, Charsets.UTF_8)
                 // Readium doesn't keep an Atom feed's search template as written, so it's read from the feed itself.
-                val search = if (json) {
+                val search = if (atom == null) {
                     parsed.links.firstOrNull { "search" in it.rels }?.let { it.href.toString() to it.mediaType?.toString() }
                 } else {
-                    atomSearchLink(String(bytes, Charsets.UTF_8))
+                    atomSearchLink(atom)
                 }
-                toOnlineFeed(parsed, finalUrl, library, search?.let { (href, type) -> searchTemplate(href, type, finalUrl) })
+                val places = atom?.let(::listPlaces).orEmpty()
+                toOnlineFeed(parsed, finalUrl, library, search?.let { (href, type) -> searchTemplate(href, type, finalUrl) }, places)
             }
         }
         feeds[url] = feed
@@ -262,7 +266,7 @@ class OnlineLibraries(private val dao: LibraryDao, private val secrets: Secrets)
         return openSearchTemplate(description)?.let { resolveTemplate(it, base) }
     }
 
-    private fun toOnlineFeed(feed: Feed, base: String, library: Library, search: String?): OnlineFeed = OnlineFeed(
+    private fun toOnlineFeed(feed: Feed, base: String, library: Library, search: String?, places: Map<String, Map<String, Double>>): OnlineFeed = OnlineFeed(
         title = feed.metadata.title.ifBlank { library.name },
         sections = feed.navigation.mapNotNull { link ->
             resolve(link.href.toString(), base)?.let { Section(link.title?.takeIf { it.isNotBlank() } ?: "Untitled", it, link.rels) }
@@ -276,8 +280,9 @@ class OnlineLibraries(private val dao: LibraryDao, private val secrets: Secrets)
             val thumbnail = images.firstOrNull { link -> link.rels.any { "thumbnail" in it } } ?: images.firstOrNull()
             val cover = images.firstOrNull { link -> link.rels.none { "thumbnail" in it } } ?: thumbnail
             val series = metadata.belongsToSeries.firstOrNull()
+            val id = metadata.identifier ?: epub ?: return@mapNotNull null
             OnlineBook(
-                id = metadata.identifier ?: epub ?: return@mapNotNull null,
+                id = id,
                 title = metadata.title?.takeIf { it.isNotBlank() } ?: "Untitled",
                 authors = metadata.authors.map { it.name },
                 series = series?.name,
@@ -286,6 +291,7 @@ class OnlineLibraries(private val dao: LibraryDao, private val secrets: Secrets)
                 cover = cover?.let { resolve(it.href.toString(), base) },
                 thumbnail = thumbnail?.let { resolve(it.href.toString(), base) },
                 epub = epub,
+                listPlaces = places[id].orEmpty(),
             )
         },
         next = feed.links.firstOrNull { "next" in it.rels }?.let { resolve(it.href.toString(), base) },
@@ -365,6 +371,34 @@ fun newestSection(sections: List<Section>): Section? =
         ?: sections.firstOrNull { NEWEST.containsMatchIn(it.title) }
 
 private val NEWEST = Regex("""\b(newest|recently added|new books|latest)\b""", RegexOption.IGNORE_CASE)
+
+/** False for the Reading List plugin's order column, which only keeps each list's order, so isn't worth browsing by. */
+internal fun browsable(section: Section) = !section.title.contains("reading list order", ignoreCase = true)
+
+/**
+ * Where each book in an Atom feed comes in its lists, by the entry's id, from lines in its details such as "Reading List
+ * Order: Cosmere [6]": a series-like column, which Calibre's Reading List plugin can keep a list's order in. Read from
+ * the feed itself, since Readium keeps only the details' text before their first tag (with Calibre's, only spaces).
+ */
+internal fun listPlaces(atom: String): Map<String, Map<String, Double>> =
+    ENTRY.findAll(atom).mapNotNull { entry ->
+        val id = ATOM_ID.find(entry.value)?.groupValues?.get(1)?.trim() ?: return@mapNotNull null
+        val content = CONTENT.find(entry.value)?.groupValues?.get(1) ?: return@mapNotNull null
+        id to plainText(content).lines().mapNotNull { PLACE.find(it.trim()) }
+            .associate { it.groupValues[1].lowercase() to it.groupValues[2].toDouble() }
+    }.toMap()
+
+/** `books` in the order of the list called `name`, if every one of them has a place in it; otherwise as they are. */
+internal fun inListOrder(books: List<OnlineBook>, name: String?): List<OnlineBook> {
+    val wanted = name?.trim()?.lowercase() ?: return books
+    if (books.isEmpty() || books.any { wanted !in it.listPlaces }) return books
+    return books.sortedBy { it.listPlaces.getValue(wanted) }
+}
+
+private val ENTRY = Regex("""<entry\b.*?</entry>""", RegexOption.DOT_MATCHES_ALL)
+private val ATOM_ID = Regex("""<id>([^<]*)</id>""")
+private val CONTENT = Regex("""<content\b[^>]*>(.*?)</content>""", RegexOption.DOT_MATCHES_ALL)
+private val PLACE = Regex("""^[^:]+:\s*(.+?)\s*\[(\d+(?:\.\d+)?)\]$""")
 
 /** HTML in a book's summary, as plain paragraphs. */
 private fun plainText(html: String) = html
