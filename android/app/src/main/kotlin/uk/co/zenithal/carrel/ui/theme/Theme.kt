@@ -18,12 +18,19 @@ object Carrel {
     val type: CarrelType @Composable get() = LocalType.current
 }
 
-/** Paper and ink in light or dark, following the phone's setting, with Material's components mapped onto them. */
+/**
+ * Paper and ink in light or dark, following the phone's setting, with Material's components mapped onto them. The
+ * eReader passes its own `colors` when one of its themes is chosen.
+ */
 @Composable
-fun CarrelTheme(dark: Boolean = isSystemInDarkTheme(), accent: Accent = Accent.Red, content: @Composable () -> Unit) {
-    val colors = if (dark) darkColors(accent) else lightColors(accent)
-    val type = carrelType(dark)
-    val scheme = (if (dark) darkColorScheme() else lightColorScheme()).copy(
+fun CarrelTheme(
+    dark: Boolean = isSystemInDarkTheme(),
+    accent: Accent = Accent.Red,
+    colors: CarrelColors = if (dark) darkColors(accent) else lightColors(accent),
+    content: @Composable () -> Unit,
+) {
+    val type = carrelType(colors.isDark)
+    val scheme = (if (colors.isDark) darkColorScheme() else lightColorScheme()).copy(
         primary = colors.accent,
         onPrimary = colors.onAccent,
         secondary = colors.inkSoft,

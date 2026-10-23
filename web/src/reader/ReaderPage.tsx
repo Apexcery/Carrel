@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from '@headlessui/react'
+import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { Dialog, DialogBackdrop, DialogPanel, DialogTitle, Popover, PopoverButton, PopoverPanel } from '@headlessui/react'
 import { EpubNavigator, EpubPreferences, FrameManager, type EpubNavigatorListeners } from '@readium/navigator'
 import { Locator, LocatorLocations, ReadingProgression, type Publication } from '@readium/shared'
 import {
@@ -11,10 +11,31 @@ import {
   type BrowserBook,
 } from '../browserBooks'
 import { downloadBook, library } from '../libraries'
-import { Select } from '../components/Select'
 import { EpubError } from '../epub'
 import { supabase } from '../supabase'
 import { getAccent, getTheme, setAccent, setTheme } from '../theme'
+import {
+  applyTheme,
+  bookStyle,
+  FONT_STEP,
+  fontInjectables,
+  FONTS,
+  framesStyle,
+  loadFont,
+  MARGIN_LABELS,
+  MARGINS,
+  MAX_FONT_SIZE,
+  MIN_FONT_SIZE,
+  PAGES_LABELS,
+  readerPreferences,
+  SPACING_LABELS,
+  storedLook,
+  storeLook,
+  THEME_LABELS,
+  type Look,
+  type Margin,
+  type ReaderFont,
+} from './look'
 import { chapterPlace, firstWordsShown, measureFile, pagesText, screensOf, type ChapterPlace, type ContentsEntry, type FileLayout } from './pages'
 import { isNewerElsewhere, readPercent, ReadingProgress, SAME_PLACE, type ReadingPosition } from './progress'
 import { openPublication, type ContentsLink } from './publication'
@@ -26,11 +47,6 @@ const GO_SETTLE_MS = 500
 
 /** How long the text is given to flow again at a new size before going back to where the reader was. */
 const REFLOW_MS = 300
-
-const FONT_SIZE_KEY = 'carrel-reader-font-size'
-const FONT_STEP = 0.1
-const MIN_FONT_SIZE = 0.7
-const MAX_FONT_SIZE = 2
 
 /** The eReader (/read/?book=…): a book in this browser, full page. */
 export function ReaderPage() {
@@ -70,12 +86,12 @@ interface ReadingState {
   /** The place waiting to be sent, a moment after a page turn. */
   sending: { timer: number; send: () => Promise<void> } | null
   /**
-   * While Readium is laying the book out (opening it, or after a change of text size or colours): it reports the top
+   * While Readium is laying the book out (opening it, or after a change to how it looks): it reports the top
    * of the chapter before it reaches the reader's page, which isn't where they are.
    */
   settling: boolean
   /**
-   * Where the reader was before changing the text size or pages side by side, to go back to once the text has flowed
+   * Where the reader was before changing how the book looks, to go back to once the text has flowed
    * again: its first words, which Readium finds however the text flows. Kept until they turn the page, so several
    * changes in a row all go back to the same place rather than drifting.
    */
@@ -97,8 +113,9 @@ function Reader({ book }: { book: BrowserBook }) {
   const [chapter, setChapter] = useState<string | null>(null)
   /** Where the seek bar is being dragged to (0 to 1), until the book gets there. */
   const [seeking, setSeeking] = useState<number | null>(null)
-  const [fontSize, setFontSize] = useState(storedFontSize)
-  const [pages, setPages] = useState(storedPages)
+  const [look, setLook] = useState(storedLook)
+  /** The look the book is shown in, which follows `look` once the book is open. */
+  const shown = useRef(look)
   /** The chapter on the left (or only) page and the pages of it showing, for the footer. */
   const [footer, setFooter] = useState<ChapterPlace | null>(null)
   const [contents, setContents] = useState(false)
@@ -189,6 +206,8 @@ function Reader({ book }: { book: BrowserBook }) {
       }
       state.current.openedProgression = start?.locations?.totalProgression ?? null
       state.current.startedAt = state.current.openedProgression
+      await loadFont(shown.current)
+      if (cancelled) return
 
       navigator = new EpubNavigator(holder.current!, publication, listeners({
         tap: pressed,
@@ -196,7 +215,7 @@ function Reader({ book }: { book: BrowserBook }) {
         frameLoaded: (wnd) => watchFrame(wnd, () => navigator),
         positionChanged: placeChanged,
         timelineItemChanged: (item) => setChapter(item?.title?.replace(/\s+/g, ' ').trim() || null),
-      }), positions, start, { preferences: readerPreferences(storedFontSize(), storedPages()), defaults: {} })
+      }), positions, start, { preferences: readerPreferences(shown.current), defaults: {}, injectables: fontInjectables() })
       await navigator.load()
       if (cancelled) return
       state.current.settling = false
@@ -299,13 +318,13 @@ function Reader({ book }: { book: BrowserBook }) {
     }
   }, [book])
 
-  // The text size and pages side by side it opened with, so only a change restyles the book.
-  const shown = useRef({ fontSize, pages })
+  // Only a change of look restyles the book.
   useEffect(() => {
-    if (!open || (shown.current.fontSize === fontSize && shown.current.pages === pages)) return
-    shown.current = { fontSize, pages }
-    void restyle(open.navigator, shown.current, state.current, report.current)
-  }, [open, fontSize, pages])
+    if (!open || shown.current === look) return
+    shown.current = look
+    applyTheme(look.theme)
+    void restyle(open.navigator, look, state.current, report.current)
+  }, [open, look])
 
   // Colours follow the site's theme, which can change in another tab or with the system's.
   useEffect(() => {
@@ -370,23 +389,16 @@ function Reader({ book }: { book: BrowserBook }) {
     }
   }
 
-  function changeSize(by: number) {
-    const next = Math.round(Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, fontSize + by)) * 10) / 10
-    setFontSize(next)
-    try {
-      localStorage.setItem(FONT_SIZE_KEY, String(next))
-    } catch {
-      // Kept for this visit only.
-    }
+  function changeLook(change: Partial<Look> | ((look: Look) => Partial<Look>)) {
+    setLook((last) => {
+      const next = { ...last, ...(typeof change === 'function' ? change(last) : change) }
+      storeLook(next)
+      return next
+    })
   }
 
-  function changePages(next: Pages) {
-    setPages(next)
-    try {
-      localStorage.setItem(PAGES_KEY, next)
-    } catch {
-      // Kept for this visit only.
-    }
+  function changeSize(by: number) {
+    changeLook((last) => ({ fontSize: Math.round(Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, last.fontSize + by)) * 10) / 10 }))
   }
 
   function seekTo(progression: number) {
@@ -416,22 +428,18 @@ function Reader({ book }: { book: BrowserBook }) {
         </button>
         <h1 className="reader-title">{book.title}</h1>
         <div className="reader-tools">
-          <Select<Pages>
-            value={pages}
-            onChange={changePages}
-            options={(Object.keys(PAGES_LABELS) as Pages[]).map((value) => ({ value, label: PAGES_LABELS[value] }))}
-            aria-label="Pages side by side"
-            className="reader-pages"
-          />
           <button type="button" className="link-button" disabled={!open} onClick={() => setContents(true)}>
             Contents
           </button>
-          <button type="button" className="link-button" aria-label="Smaller text" disabled={fontSize <= MIN_FONT_SIZE} onClick={() => changeSize(-FONT_STEP)}>
-            A−
-          </button>
-          <button type="button" className="link-button" aria-label="Larger text" disabled={fontSize >= MAX_FONT_SIZE} onClick={() => changeSize(FONT_STEP)}>
-            A+
-          </button>
+          <Popover className="reader-look-menu">
+            <PopoverButton className="link-button" aria-label="How the book looks">
+              Aa
+            </PopoverButton>
+            {/* Beside the book rather than over a dimmed one, so each change shows as it's made. */}
+            <PopoverPanel anchor="bottom end" className="reader-look">
+              <LookPanel look={look} changeLook={changeLook} changeSize={changeSize} />
+            </PopoverPanel>
+          </Popover>
         </div>
       </header>
 
@@ -482,6 +490,7 @@ function Reader({ book }: { book: BrowserBook }) {
         */}
         <div
           className="reader-book"
+          style={bookStyle(look)}
           aria-busy={!open}
           onClick={(e) => {
             if (!open || e.target !== e.currentTarget) return
@@ -491,7 +500,7 @@ function Reader({ book }: { book: BrowserBook }) {
             else setBarsHidden((hidden) => !hidden)
           }}
         >
-          <div className="reader-frames" ref={holder} />
+          <div className="reader-frames" style={framesStyle(look)} ref={holder} />
         </div>
         <button type="button" className="reader-turn" aria-label="Next page" disabled={!open} onClick={() => open && turnRight(open.navigator)}>
           <span aria-hidden="true">›</span>
@@ -566,6 +575,146 @@ function Reader({ book }: { book: BrowserBook }) {
         onClose={() => setAskingRead(false)}
         onDone={(finished) => leave(finished)}
       />
+    </div>
+  )
+}
+
+/**
+ * The reader's settings: the theme, then the text and the layout, each folded away until it's wanted, one at a time
+ * (both folded each time the panel opens).
+ */
+function LookPanel({
+  look,
+  changeLook,
+  changeSize,
+}: {
+  look: Look
+  changeLook: (change: Partial<Look>) => void
+  changeSize: (by: number) => void
+}) {
+  const [section, setSection] = useState<'text' | 'layout' | null>(null)
+  const toggle = (which: 'text' | 'layout') => setSection(section === which ? null : which)
+
+  return (
+    <>
+      <LookChoice label="Theme" labels={THEME_LABELS} value={look.theme} onChange={(theme) => changeLook({ theme })} />
+      <LookSection title="Text" open={section === 'text'} onToggle={() => toggle('text')}>
+        <div className="reader-look-row">
+          <span className="reader-look-label" id="reader-font-label">
+            Font
+          </span>
+          <div className="reader-fonts" role="radiogroup" aria-labelledby="reader-font-label">
+            {(Object.keys(FONTS) as ReaderFont[]).map((font) => (
+              <button
+                key={font}
+                type="button"
+                role="radio"
+                aria-checked={look.font === font}
+                style={{ fontFamily: FONTS[font].family ?? undefined }}
+                onClick={() => changeLook({ font })}
+              >
+                {FONTS[font].label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="reader-look-row">
+          <span className="reader-look-label">Size</span>
+          <div className="reader-size">
+            <button type="button" className="link-button" aria-label="Smaller text" disabled={look.fontSize <= MIN_FONT_SIZE} onClick={() => changeSize(-FONT_STEP)}>
+              A−
+            </button>
+            <span>{Math.round(look.fontSize * 100)}%</span>
+            <button type="button" className="link-button" aria-label="Larger text" disabled={look.fontSize >= MAX_FONT_SIZE} onClick={() => changeSize(FONT_STEP)}>
+              A+
+            </button>
+          </div>
+        </div>
+      </LookSection>
+      <LookSection title="Layout" open={section === 'layout'} onToggle={() => toggle('layout')}>
+        <LookChoice label="Line spacing" labels={SPACING_LABELS} value={look.spacing} onChange={(spacing) => changeLook({ spacing })} />
+        <div className="reader-look-row">
+          <span className="reader-look-label">Margins</span>
+          <div className="reader-margins">
+            {(Object.keys(MARGINS) as Margin[]).map((margin) => (
+              <Fragment key={margin}>
+                <span>{MARGINS[margin]}</span>
+                <OptionSwitch
+                  label={`${MARGINS[margin]} margin`}
+                  labels={MARGIN_LABELS}
+                  value={look[margin]}
+                  onChange={(step) => changeLook({ [margin]: step })}
+                />
+              </Fragment>
+            ))}
+          </div>
+        </div>
+        <LookChoice label="Pages side by side" labels={PAGES_LABELS} value={look.pages} onChange={(pages) => changeLook({ pages })} className="reader-look-pages" />
+      </LookSection>
+    </>
+  )
+}
+
+/** A heading in the reader's settings that shows or hides the settings under it. */
+function LookSection({ title, open, onToggle, children }: { title: string; open: boolean; onToggle: () => void; children: ReactNode }) {
+  const id = useId()
+  return (
+    <section className="reader-look-section">
+      <button type="button" className="reader-look-heading" aria-expanded={open} aria-controls={id} onClick={onToggle}>
+        {title}
+        <span className="disclosure-arrow" aria-hidden="true">
+          ▾
+        </span>
+      </button>
+      {open && (
+        <div id={id} className="reader-look-body">
+          {children}
+        </div>
+      )}
+    </section>
+  )
+}
+
+/** One of the reader's settings, as a row of choices. */
+function LookChoice<T extends string>({
+  label,
+  labels,
+  value,
+  onChange,
+  className,
+}: {
+  label: string
+  labels: Record<T, string>
+  value: T
+  onChange: (value: T) => void
+  className?: string
+}) {
+  return (
+    <div className={className ? `reader-look-row ${className}` : 'reader-look-row'}>
+      <span className="reader-look-label">{label}</span>
+      <OptionSwitch label={label} labels={labels} value={value} onChange={onChange} />
+    </div>
+  )
+}
+
+function OptionSwitch<T extends string>({
+  label,
+  labels,
+  value,
+  onChange,
+}: {
+  label: string
+  labels: Record<T, string>
+  value: T
+  onChange: (value: T) => void
+}) {
+  return (
+    <div className="option-switch" role="radiogroup" aria-label={label}>
+      {(Object.keys(labels) as T[]).map((option) => (
+        <button key={option} type="button" role="radio" aria-checked={value === option} onClick={() => onChange(option)}>
+          {labels[option]}
+        </button>
+      ))}
     </div>
   )
 }
@@ -671,7 +820,7 @@ function watchFrame(wnd: Window, navigator: () => EpubNavigator | undefined) {
 function turnByKey(event: KeyboardEvent, navigator: EpubNavigator) {
   if (event.altKey || event.ctrlKey || event.metaKey || event.defaultPrevented) return
   const target = event.target as HTMLElement | null
-  if (target?.closest('input, textarea, select, [contenteditable], [role="dialog"], [role="listbox"]')) return
+  if (target?.closest('input, textarea, select, [contenteditable], [role="dialog"], [role="listbox"], .reader-look')) return
   if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') navigator.goLeft(false, () => {})
   else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') turnRight(navigator)
   else if (event.key === 'PageUp') navigator.goBackward(false, () => {})
@@ -700,12 +849,12 @@ function nextPage(navigator: EpubNavigator) {
 }
 
 /**
- * Applies the theme's colours and the text size, then goes back to where the reader was: Readium starts the chapter
- * again when its text flows anew.
+ * Applies the look (with the theme's colours), then goes back to where the reader was: Readium starts the chapter again
+ * when its text flows anew.
  */
 async function restyle(
   navigator: EpubNavigator,
-  look: { fontSize: number; pages: Pages },
+  look: Look,
   state: ReadingState,
   report: (current: Locator, restyled: boolean) => void,
 ) {
@@ -713,7 +862,11 @@ async function restyle(
   const place = state.keep
   state.settling = true
   try {
-    await navigator.submitPreferences(new EpubPreferences(readerPreferences(look.fontSize, look.pages)))
+    await loadFont(look)
+    await navigator.submitPreferences(new EpubPreferences(readerPreferences(look)))
+    // A font not shown yet arrives a moment later, and the text flows again when it does.
+    const family = FONTS[look.font].family
+    if (family) await frameWindow(navigator)?.document.fonts.load(`1em ${family}`)
     // The text flows again after Readium has taken the change; going sooner lands where it was laid out before.
     await new Promise((done) => window.setTimeout(done, REFLOW_MS))
   } finally {
@@ -738,41 +891,6 @@ function frameWindow(navigator: EpubNavigator): Window | null {
     if (frame instanceof FrameManager) return frame.window
   }
   return null
-}
-
-/** Pages side by side: as the window's width suits (Readium's choice), or always one or two. */
-type Pages = 'auto' | 'one' | 'two'
-
-const PAGES_KEY = 'carrel-reader-pages'
-const PAGES_LABELS: Record<Pages, string> = { auto: 'Auto', one: 'One page', two: 'Two pages' }
-
-/** The book in Carrel's paper and ink, at the reader's text size (1 is the book's own), in one or two columns. */
-function readerPreferences(fontSize: number, pages: Pages) {
-  const style = getComputedStyle(document.documentElement)
-  return {
-    backgroundColor: style.getPropertyValue('--paper').trim(),
-    textColor: style.getPropertyValue('--ink').trim(),
-    fontSize,
-    columnCount: pages === 'one' ? 1 : pages === 'two' ? 2 : null,
-  }
-}
-
-function storedPages(): Pages {
-  try {
-    const pages = localStorage.getItem(PAGES_KEY)
-    return pages === 'one' || pages === 'two' ? pages : 'auto'
-  } catch {
-    return 'auto'
-  }
-}
-
-function storedFontSize() {
-  try {
-    const size = Number(localStorage.getItem(FONT_SIZE_KEY))
-    return size >= MIN_FONT_SIZE && size <= MAX_FONT_SIZE ? size : 1
-  } catch {
-    return 1
-  }
 }
 
 /** The book's contents entries, in contents order, leaving out any without a title or outside the book. */
