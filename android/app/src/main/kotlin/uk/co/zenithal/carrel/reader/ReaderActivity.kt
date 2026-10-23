@@ -7,10 +7,17 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.res.Configuration
 import android.os.Bundle
+import android.view.View
+import android.view.ViewGroup
+import android.webkit.WebView
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.absolutePadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,6 +37,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.unit.em
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -46,7 +57,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -55,7 +65,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -66,8 +76,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.content.edit
 import androidx.core.view.WindowCompat
+import androidx.core.view.children
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.fragment.app.FragmentActivity
@@ -79,13 +89,13 @@ import kotlinx.coroutines.flow.StateFlow
 import java.time.Instant
 import java.time.OffsetDateTime
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import androidx.lifecycle.lifecycleScope
 import org.json.JSONException
 import org.json.JSONObject
 import org.readium.r2.navigator.epub.EpubNavigatorFactory
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
-import org.readium.r2.navigator.epub.EpubPreferences
 import org.readium.r2.navigator.input.InputListener
 import org.readium.r2.navigator.input.TapEvent
 import org.readium.r2.navigator.util.DirectionalNavigationAdapter
@@ -107,13 +117,9 @@ import uk.co.zenithal.carrel.edgeToEdge
 import uk.co.zenithal.carrel.ui.components.FormMessage
 import uk.co.zenithal.carrel.ui.components.LinkButton
 import uk.co.zenithal.carrel.ui.components.Tone
-import uk.co.zenithal.carrel.ui.theme.CarrelColors
 import uk.co.zenithal.carrel.ui.theme.CarrelTheme
 import uk.co.zenithal.carrel.ui.theme.Carrel
 import uk.co.zenithal.carrel.ui.theme.ThemeChoice
-import uk.co.zenithal.carrel.ui.theme.darkColors
-import uk.co.zenithal.carrel.ui.theme.lightColors
-import org.readium.r2.navigator.preferences.Color as ReadiumColor
 import org.readium.r2.navigator.preferences.ColumnCount
 import org.readium.r2.navigator.epub.css.ColCount
 import org.readium.r2.navigator.epub.css.Length
@@ -121,6 +127,7 @@ import org.readium.r2.navigator.epub.css.RsProperties
 import org.readium.r2.shared.publication.services.locateProgression
 import uk.co.zenithal.carrel.auth.Session
 import uk.co.zenithal.carrel.ui.library.Choices
+import uk.co.zenithal.carrel.ui.library.FieldLabel
 
 /**
  * The book open in the reader, handed from the app to ReaderActivity (an activity can't be given a Publication), with
@@ -215,8 +222,8 @@ private suspend fun checkForNewer(container: AppContainer, open: OpenBook) {
 }
 
 /**
- * Reads an EPUB from the phone with Readium, full screen. Tapping the middle shows the controls (contents, text size,
- * and pages side by side); tapping the edges or swiping turns the page. Colours follow the app's theme.
+ * Reads an EPUB from the phone with Readium, full screen. Tapping the middle shows the controls (contents, and how the
+ * book looks); tapping the edges or swiping turns the page. Colours follow the app's theme, or the reader's own.
  */
 class ReaderActivity : FragmentActivity() {
     private lateinit var container: AppContainer
@@ -246,11 +253,12 @@ class ReaderActivity : FragmentActivity() {
             ThemeChoice.Dark -> true
         }
         val accent = container.appearance.accent.value
+        val look = prefs.look
         // Fixed while the reader is open; a change of pages side by side opens it afresh (see reopen).
-        val columns = prefs.pages.columns(resources.configuration.screenWidthDp >= TWO_PAGES_WIDTH).also { columns = it }
+        val columns = look.pages.columns(resources.configuration.screenWidthDp >= TWO_PAGES_WIDTH).also { columns = it }
         supportFragmentManager.fragmentFactory = EpubNavigatorFactory(open.publication).createFragmentFactory(
             initialLocator = open.locator,
-            initialPreferences = readerPreferences(if (dark) darkColors(accent) else lightColors(accent), prefs.fontSize, columns),
+            initialPreferences = readerPreferences(look, look.theme.colors(dark, accent), columns),
             paginationListener = object : EpubNavigatorFragment.PaginationListener {
                 override fun onPageChanged(pageIndex: Int, totalPages: Int, locator: Locator) {
                     if (reopening) return
@@ -258,7 +266,7 @@ class ReaderActivity : FragmentActivity() {
                     turns.value = PageTurn(file, pageIndex, totalPages)
                 }
             },
-            configuration = EpubNavigatorFragment.Configuration(readiumCssRsProperties = layoutFor(columns)),
+            configuration = EpubNavigatorFragment.Configuration(readiumCssRsProperties = layoutFor(columns)).apply { addReaderFonts() },
         )
         super.onCreate(savedInstanceState)
         setContent {
@@ -269,13 +277,19 @@ class ReaderActivity : FragmentActivity() {
                 ThemeChoice.Light -> false
                 ThemeChoice.Dark -> true
             }
-            DisposableEffect(darkNow) {
-                edgeToEdge(darkNow)
+            var lookNow by remember { mutableStateOf(look) }
+            // The whole reader, its bars and sheets too, takes the reader's colours.
+            val colors = lookNow.theme.colors(darkNow, chosenAccent)
+            DisposableEffect(colors.isDark) {
+                edgeToEdge(colors.isDark)
                 onDispose {}
             }
             CompositionLocalProvider(LocalContainer provides container) {
-                CarrelTheme(darkNow, chosenAccent) {
-                    ReaderScreen(open, prefs, columns, turns, ::reopen, { reopening }, ::reload, ::showSystemBars, ::leave)
+                CarrelTheme(colors = colors) {
+                    ReaderScreen(open, prefs, lookNow, { changed ->
+                        lookNow = changed
+                        prefs.saveLook(changed)
+                    }, columns, turns, ::reopen, { reopening }, ::reload, ::showSystemBars, ::leave)
                 }
             }
         }
@@ -288,7 +302,7 @@ class ReaderActivity : FragmentActivity() {
      */
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        if (open != null && prefs.pages.columns(newConfig.screenWidthDp >= TWO_PAGES_WIDTH) != columns) reopen()
+        if (open != null && prefs.look.pages.columns(newConfig.screenWidthDp >= TWO_PAGES_WIDTH) != columns) reopen()
     }
 
     override fun onStop() {
@@ -361,6 +375,8 @@ class ReaderActivity : FragmentActivity() {
 private fun ReaderScreen(
     open: OpenBook,
     prefs: SharedPreferences,
+    look: ReaderLook,
+    changeLook: (ReaderLook) -> Unit,
     /** The pages side by side the reader was opened with; changing them opens it afresh (`reopen`). */
     openedWith: ColumnCount,
     /** Readium's page turns, for the chapter and pages in the footer. */
@@ -380,8 +396,7 @@ private fun ReaderScreen(
     var controls by rememberSaveable { mutableStateOf(false) }
     var contents by rememberSaveable { mutableStateOf(false) }
     var askingRead by rememberSaveable { mutableStateOf(false) }
-    var fontSize by remember { mutableDoubleStateOf(prefs.fontSize) }
-    var pages by remember { mutableStateOf(prefs.pages) }
+    var lookSheet by rememberSaveable { mutableStateOf(false) }
     var locator by remember { mutableStateOf(open.locator) }
     // Where the book opened, to tell whether the reader has started reading yet.
     val openedProgression = remember { open.locator?.locations?.totalProgression }
@@ -392,22 +407,26 @@ private fun ReaderScreen(
     var seeking by remember { mutableStateOf<Double?>(null) }
     LaunchedEffect(locator) { seeking = null }
     /**
-     * Where the reader was before changing the text size, to go back to once the text has flowed again: Readium stays
-     * on the same page number, which is somewhere else in the text at a different size. Kept until the controls close,
-     * so several changes in a row all go back to the same place.
+     * Where the reader was before changing how the text flows (its size, font, spacing, or margins), to go back to once
+     * it has flowed again: Readium stays on the same page number, which is somewhere else in the text now. Kept until
+     * the controls or the look sheet close, so several changes in a row all go back to the same place.
      */
     var keepPlace by remember { mutableStateOf<Locator?>(null) }
     // Unfolding a foldable, or turning the phone, changes the width.
-    val columns = pages.columns(LocalConfiguration.current.screenWidthDp >= TWO_PAGES_WIDTH)
+    val columns = look.pages.columns(LocalConfiguration.current.screenWidthDp >= TWO_PAGES_WIDTH)
 
     LaunchedEffect(controls) {
         showSystemBars(controls)
         if (!controls) keepPlace = null
     }
-    LaunchedEffect(navigator, colors, fontSize) {
+    LaunchedEffect(lookSheet) { if (!lookSheet) keepPlace = null }
+    LaunchedEffect(navigator, colors, look) {
         val reader = navigator ?: return@LaunchedEffect
-        reader.submitPreferences(readerPreferences(colors, fontSize, openedWith))
+        reader.submitPreferences(readerPreferences(look, colors, openedWith))
         val place = keepPlace ?: return@LaunchedEffect
+        delay(REFLOW_MS)
+        // A change of margins has resized the book by now.
+        reader.remeasure()
         delay(REFLOW_MS)
         reader.go(place)
     }
@@ -463,18 +482,31 @@ private fun ReaderScreen(
     }
     BackHandler { close() }
 
-    fun changeSize(by: Double) {
+    fun change(next: ReaderLook) {
         scope.launch {
             val reader = navigator
-            if (keepPlace == null && laidOut && reader != null) keepPlace = firstWordsShown(reader) ?: reader.firstVisibleElementLocator()
-            fontSize = (fontSize + by).coerceIn(MIN_FONT_SIZE, MAX_FONT_SIZE)
-            prefs.edit { putFloat(FONT_SIZE, fontSize.toFloat()) }
+            if (next.reflowsFrom(look) && keepPlace == null && laidOut && reader != null) {
+                keepPlace = firstWordsShown(reader) ?: reader.firstVisibleElementLocator()
+            }
+            changeLook(next)
         }
     }
 
     Box(Modifier.fillMaxSize().background(colors.paper)) {
         Column(Modifier.fillMaxSize()) {
-            AndroidFragment<EpubNavigatorFragment>(Modifier.fillMaxWidth().weight(1f)) { fragment ->
+            // The margins are space around the book's pages, which shows or hides the controls like the pages' middle.
+            AndroidFragment<EpubNavigatorFragment>(
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .clickable(interactionSource = null, indication = null) { controls = !controls }
+                    .absolutePadding(
+                        left = look.marginLeft.beside,
+                        top = look.marginTop.aboveBelow,
+                        right = look.marginRight.beside,
+                        bottom = look.marginBottom.aboveBelow,
+                    ),
+            ) { fragment ->
                 if (navigator !== fragment) {
                     // The edges turn the page; anywhere else shows or hides the controls.
                     fragment.addInputListener(DirectionalNavigationAdapter(fragment, animatedTransition = true))
@@ -585,15 +617,10 @@ private fun ReaderScreen(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    Choices(Pages.entries.map { it to it.label }, pages, { choice ->
-                        pages = choice
-                        prefs.edit { putString(PAGES, choice.name) }
-                    })
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         LinkButton("Contents", { contents = true }, color = colors.ink)
                         Spacer(Modifier.weight(1f))
-                        LinkButton("A−", { changeSize(-FONT_STEP) }, Modifier.semantics { contentDescription = "Smaller text" }, color = colors.ink)
-                        LinkButton("A+", { changeSize(FONT_STEP) }, Modifier.semantics { contentDescription = "Larger text" }, color = colors.ink)
+                        LinkButton("Aa", { lookSheet = true }, Modifier.semantics { contentDescription = "How the book looks" }, color = colors.ink)
                     }
                 }
             }
@@ -636,6 +663,69 @@ private fun ReaderScreen(
         }
     }
 
+    if (lookSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { lookSheet = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = colors.paperRaised,
+            // The book stays undimmed above the sheet, so each change shows as it's made.
+            scrimColor = Color.Transparent,
+        ) {
+            // The theme, then the text and the layout, each folded away until it's wanted, one at a time (both folded
+            // each time the sheet opens).
+            var section by remember { mutableStateOf<LookSection?>(null) }
+            Column(
+                Modifier.verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                LookRow("Theme") {
+                    Choices(ReaderTheme.entries.map { it to it.label }, look.theme, { change(look.copy(theme = it)) })
+                }
+                LookHeading("Text", section == LookSection.Text) { section = LookSection.Text.takeUnless { section == it } }
+                if (section == LookSection.Text) {
+                    LookRow("Font") {
+                        Choices(ReaderFont.entries.map { it to it.label }, look.font, { change(look.copy(font = it)) })
+                    }
+                    LookRow("Size") {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                            LinkButton("A−", {
+                                change(look.copy(fontSize = (look.fontSize - FONT_STEP).coerceIn(MIN_FONT_SIZE, MAX_FONT_SIZE)))
+                            }, Modifier.semantics { contentDescription = "Smaller text" }, color = colors.ink)
+                            Text("${(look.fontSize * 100).roundToInt()}%", style = Carrel.type.mono, color = colors.ink)
+                            LinkButton("A+", {
+                                change(look.copy(fontSize = (look.fontSize + FONT_STEP).coerceIn(MIN_FONT_SIZE, MAX_FONT_SIZE)))
+                            }, Modifier.semantics { contentDescription = "Larger text" }, color = colors.ink)
+                        }
+                    }
+                }
+                LookHeading("Layout", section == LookSection.Layout) { section = LookSection.Layout.takeUnless { section == it } }
+                if (section == LookSection.Layout) {
+                    LookRow("Line spacing") {
+                        Choices(Step.entries.map { it to it.spacingLabel }, look.spacing, { change(look.copy(spacing = it)) })
+                    }
+                    LookRow("Margins") {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Margin.entries.forEach { margin ->
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(margin.label, style = Carrel.type.mono, color = colors.inkSoft, modifier = Modifier.width(64.dp))
+                                    Choices(
+                                        Step.entries.map { it to it.marginLabel },
+                                        margin.of(look),
+                                        { change(margin.set(look, it)) },
+                                        Modifier.semantics { contentDescription = "${margin.label} margin" },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    LookRow("Pages side by side") {
+                        Choices(Pages.entries.map { it to it.label }, look.pages, { change(look.copy(pages = it)) })
+                    }
+                }
+            }
+        }
+    }
+
     if (askingRead) {
         var saving by remember { mutableStateOf(false) }
         var error by remember { mutableStateOf<String?>(null) }
@@ -669,6 +759,57 @@ private fun ReaderScreen(
             },
             dismissButton = { LinkButton("Not now", { leave(false) }, Modifier.padding(horizontal = 8.dp)) },
         )
+    }
+}
+
+/**
+ * Has each of Readium's web views measure its width again. Readium lays its pages out to `--RS__viewportWidth`, which
+ * it only measures again when the book's body changes size, and the body's width comes from that same value: so when
+ * a margin changes the web views' width, the pages keep their old width (and are cut off). Setting it from the new
+ * width sets Readium's own measuring going, which lines the pages up again.
+ */
+private fun EpubNavigatorFragment.remeasure() {
+    fun webViews(view: View): Sequence<WebView> = when (view) {
+        is WebView -> sequenceOf(view)
+        is ViewGroup -> view.children.flatMap(::webViews)
+        else -> emptySequence()
+    }
+    view?.let(::webViews)?.forEach { it.evaluateJavascript(REMEASURE_SCRIPT, null) }
+}
+
+private const val REMEASURE_SCRIPT =
+    "document.documentElement.style.setProperty('--RS__viewportWidth', " +
+        "'calc(' + Android.getViewportWidth() + 'px / ' + window.devicePixelRatio + ')')"
+
+/** The look sheet's sections, which fold away. */
+private enum class LookSection { Text, Layout }
+
+/** A heading across the look sheet that shows or hides the settings under it. */
+@Composable
+private fun LookHeading(title: String, open: Boolean, onToggle: () -> Unit) {
+    val colors = Carrel.colors
+    Column {
+        HorizontalDivider(color = colors.rule)
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable(role = Role.Button, onClick = onToggle)
+                .semantics { stateDescription = if (open) "Expanded" else "Collapsed" }
+                .padding(top = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(title.uppercase(), style = Carrel.type.mono.copy(letterSpacing = 0.1.em), color = colors.ink, modifier = Modifier.weight(1f))
+            Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = null, tint = colors.inkSoft, modifier = Modifier.rotate(if (open) 180f else 0f))
+        }
+    }
+}
+
+/** One of the reader's settings in the look sheet: its name, and its choices. */
+@Composable
+private fun LookRow(label: String, content: @Composable () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        FieldLabel(label)
+        content()
     }
 }
 
@@ -724,14 +865,6 @@ private suspend fun firstWordsShown(navigator: EpubNavigatorFragment): Locator? 
     )
 }
 
-/** The book in Carrel's paper and ink, at the reader's text size (1 is the book's own), in one or two columns. */
-private fun readerPreferences(colors: CarrelColors, fontSize: Double, columns: ColumnCount) = EpubPreferences(
-    backgroundColor = ReadiumColor(colors.paper.toArgb()),
-    columnCount = columns,
-    textColor = ReadiumColor(colors.ink.toArgb()),
-    fontSize = fontSize,
-)
-
 /**
  * Two pages side by side. Readium's own stylesheet only splits the page from 960 CSS pixels wide, wider than an unfolded
  * foldable or a phone on its side, so its column settings are set outright: two narrow columns fill the width. As in
@@ -740,20 +873,6 @@ private fun readerPreferences(colors: CarrelColors, fontSize: Double, columns: C
 private fun layoutFor(columns: ColumnCount) =
     if (columns == ColumnCount.TWO) RsProperties(colCount = ColCount.TWO, colWidth = Length.Em(10.0)) else RsProperties()
 
-/** Pages side by side: automatically when the screen is wide (unfolded, a tablet, or landscape), or always one or two. */
-private enum class Pages(val label: String) {
-    Auto("Auto"), One("One page"), Two("Two pages");
-
-    fun columns(wide: Boolean) = when (this) {
-        Auto -> if (wide) ColumnCount.TWO else ColumnCount.ONE
-        One -> ColumnCount.ONE
-        Two -> ColumnCount.TWO
-    }
-}
-
-private val SharedPreferences.fontSize get() = getFloat(FONT_SIZE, 1f).toDouble()
-private val SharedPreferences.pages get() = Pages.entries.firstOrNull { it.name == getString(PAGES, null) } ?: Pages.Auto
-
 /** A page turn in Readium: the file on screen (its place in the reading order), the screen showing, and how many it has. */
 private data class PageTurn(val file: Int, val screen: Int, val screens: Int)
 
@@ -761,7 +880,6 @@ private val FOOTER_HEIGHT = 24.dp
 
 /** Wide enough for two pages side by side, in dp: an unfolded foldable, a tablet, or a phone on its side. */
 private const val TWO_PAGES_WIDTH = 600
-private const val PAGES = "pages"
 
 /** How long the first page is given to settle before going to a place saved on another device. */
 private const val GO_SETTLE_MS = 500L
@@ -769,8 +887,3 @@ private const val GO_SETTLE_MS = 500L
 private const val REFLOW_MS = 300L
 /** How long after a page turn the place is sent to Carrel. */
 private const val SEND_AFTER_MS = 2_000L
-
-private const val FONT_SIZE = "fontSize"
-private const val FONT_STEP = 0.1
-private const val MIN_FONT_SIZE = 0.7
-private const val MAX_FONT_SIZE = 2.0
