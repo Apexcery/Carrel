@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Readium's fixed space above and below the book's pages: the reader's own top and bottom margins replace it
+         (see ReaderLook.kt). -->
+    <dimen name="readium_navigator_epub_vertical_padding">0dp</dimen>
+</resources>
