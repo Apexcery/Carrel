@@ -22,9 +22,12 @@ import kotlinx.coroutines.withContext
 import org.readium.r2.shared.publication.Publication
 import org.readium.r2.shared.publication.services.coverFitting
 import org.readium.r2.shared.publication.services.isRestricted
+import org.readium.r2.shared.util.Try
 import org.readium.r2.shared.util.asset.AssetRetriever
 import org.readium.r2.shared.util.getOrElse
 import org.readium.r2.shared.util.http.DefaultHttpClient
+import org.readium.r2.shared.util.resource.TransformingContainer
+import org.readium.r2.shared.util.resource.map
 import org.readium.r2.streamer.PublicationOpener
 import org.readium.r2.streamer.parser.DefaultPublicationParser
 import java.io.File
@@ -356,7 +359,13 @@ class PhoneBooks(private val context: Context, private val dao: PhoneBookDao, pr
 
     private suspend fun open(file: File): Publication {
         val asset = assets.retrieve(file).getOrElse { throw PhoneBookException(NOT_EPUB) }
-        val publication = opener.open(asset, allowUserInteraction = false).getOrElse {
+        val publication = opener.open(asset, allowUserInteraction = false, onCreatePublication = {
+            container = TransformingContainer(container) { url, resource ->
+                if (manifest.linkWithHref(url)?.mediaType?.isHtml != true) return@TransformingContainer resource
+                // Byte for byte (ISO-8859-1), so the chapter comes back unchanged in whatever encoding it's in.
+                resource.map { Try.success(htmlStyleInHead(String(it, Charsets.ISO_8859_1)).toByteArray(Charsets.ISO_8859_1)) }
+            }
+        }).getOrElse {
             asset.close()
             throw PhoneBookException(NOT_EPUB)
         }
@@ -442,6 +451,21 @@ fun isbnsInPackage(opf: String): List<String> =
         .distinct()
         .toList()
 
+/**
+ * A chapter (XHTML) with the style on its <html> tag, if any, moved into a <style> at the end of its head. Readium adds
+ * a style attribute of its own to that tag, and two are an error in XHTML, so the chapter wouldn't show at all.
+ */
+fun htmlStyleInHead(chapter: String): String {
+    val html = HTML_TAG.find(chapter) ?: return chapter
+    val style = STYLE_ATTRIBUTE.find(html.value) ?: return chapter
+    val headEnd = chapter.indexOf("</head>", html.range.last, ignoreCase = true).takeIf { it >= 0 } ?: return chapter
+    val css = style.groups[1]?.value ?: style.groups[2]?.value
+    return chapter.substring(0, html.range.first) + html.value.removeRange(style.range) +
+        chapter.substring(html.range.last + 1, headEnd) + "<style>:root { $css }</style>" + chapter.substring(headEnd)
+}
+
+private val HTML_TAG = Regex("""<html\b[^>]*>""", RegexOption.IGNORE_CASE)
+private val STYLE_ATTRIBUTE = Regex("""\s+style\s*=\s*(?:"([^"]*)"|'([^']*)')""", RegexOption.IGNORE_CASE)
 private val ROOTFILE = Regex("""full-path\s*=\s*["']([^"']+)["']""")
 private val IDENTIFIER = Regex("""<(?:dc:)?identifier\b[^>]*>([^<]*)</(?:dc:)?identifier>""", RegexOption.IGNORE_CASE)
 private val ISBN_TEXT = Regex("""(?:urn:isbn:|isbn:?\s*)?\d[\d -]{8,15}[\dX]""", RegexOption.IGNORE_CASE)
