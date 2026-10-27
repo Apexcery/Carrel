@@ -61,6 +61,35 @@ class PhoneBooksTest {
     }
 
     @Test
+    fun movesTheStyleOnAChaptersHtmlTagIntoItsHead() {
+        // As Calibre writes some chapters.
+        val chapter = """
+            <html xmlns="http://www.w3.org/1999/xhtml" style="font-size:1.205rem;">
+            <head>
+              <title>Chosen</title>
+            </head>
+            <body class="calibre"><p style="color: red">Text</p></body>
+            </html>
+        """
+        val moved = """
+            <html xmlns="http://www.w3.org/1999/xhtml">
+            <head>
+              <title>Chosen</title>
+            <style>:root { font-size:1.205rem; }</style></head>
+            <body class="calibre"><p style="color: red">Text</p></body>
+            </html>
+        """
+        assertEquals(moved, htmlStyleInHead(chapter))
+        assertEquals(
+            "<html lang='en'><head><style>:root { margin: 0 }</style></head></html>",
+            htmlStyleInHead("<html style='margin: 0' lang='en'><head></head></html>"),
+        )
+        // Chapters without one stay as they are.
+        val plain = "<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\"><head></head><body style=\"margin: 0\"></body></html>"
+        assertEquals(plain, htmlStyleInHead(plain))
+    }
+
+    @Test
     fun readsWholePercentages() {
         assertEquals(0, readPercent(0.0))
         assertEquals(43, readPercent(0.4321))
