@@ -25,8 +25,8 @@ public class Book
     public int? HardcoverRatingsCount { get; set; }
 
     /// <summary>
-    /// Copyright takedowns, set by hand after a valid notice (see the README). They hide the cover (the book's and its
-    /// editions') or the description wherever Carrel shows this book, and refreshes don't clear them.
+    /// Copyright takedowns, set by hand after a valid notice (see docs/operations.md). They hide the cover (the book's
+    /// and its editions') or the description wherever Carrel shows this book, and refreshes don't clear them.
     /// </summary>
     public bool CoverSuppressed { get; set; }
     public bool DescriptionSuppressed { get; set; }

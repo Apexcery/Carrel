@@ -4,7 +4,7 @@ import type { EmailOtpType } from '@supabase/supabase-js'
 import { usePageTitle } from '../pageTitle'
 import { supabase } from '../supabase'
 
-/** The link types Carrel's email templates use (configured in Supabase; see the README). */
+/** The link types Carrel's email templates use (configured in Supabase; see docs/operations.md). */
 const TYPES: EmailOtpType[] = ['email', 'invite', 'recovery', 'email_change']
 
 /**

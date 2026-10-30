@@ -10,7 +10,7 @@ local.properties
 captures/
 .externalNativeBuild/
 .cxx/
-# Signing keys and their settings never go in the repo (see the README)
+# Signing keys and their settings never go in the repo (see docs/development.md)
 *.jks
 *.keystore
 keystore.properties
