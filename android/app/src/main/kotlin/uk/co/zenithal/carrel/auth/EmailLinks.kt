@@ -5,8 +5,8 @@ import io.github.jan.supabase.auth.OtpType
 
 /**
  * A link from one of Carrel's emails (/auth/confirm?token_hash=…&type=…), which the website also handles. The link
- * types are the ones Carrel's email templates use (configured in Supabase; see the README). A link missing either
- * part has null for it, and can't be used.
+ * types are the ones Carrel's email templates use (configured in Supabase; see docs/operations.md). A link missing
+ * either part has null for it, and can't be used.
  */
 data class EmailLink(val tokenHash: String?, val type: OtpType.Email?) {
     /** Signing in by the link means choosing a password next: resetting one, or setting one when invited. */
