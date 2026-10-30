@@ -23,6 +23,7 @@
                 <data android:host="carrel.zenithal.co.uk" />
                 <data android:pathPrefix="/books/" />
                 <data android:pathPrefix="/series/" />
+                <data android:pathPrefix="/authors/" />
                 <data android:path="/genres" />
                 <data android:pathPrefix="/genres/" />
                 <data android:path="/search" />

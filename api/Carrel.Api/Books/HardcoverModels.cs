@@ -28,6 +28,29 @@ public record HardcoverSearchDocument(
     int? RatingsCount,
     HardcoverBookSeries? FeaturedSeries);
 
+public record HardcoverAuthorSearchData(HardcoverAuthorSearch Search);
+
+public record HardcoverAuthorSearch(HardcoverAuthorSearchResults Results);
+
+public record HardcoverAuthorSearchResults(int Found, HardcoverAuthorSearchHit[] Hits);
+
+public record HardcoverAuthorSearchHit(HardcoverAuthorSearchDocument Document);
+
+// Books are titles, most read first.
+public record HardcoverAuthorSearchDocument(string Id, string Name, HardcoverImage? Image, string[]? Books);
+
+public record HardcoverAuthorData(HardcoverAuthorDetail? AuthorsByPk);
+
+public record HardcoverAuthorDetail(
+    int Id,
+    int? CanonicalId,
+    string Name,
+    string? Bio,
+    int? BornYear,
+    int? DeathYear,
+    string? Location,
+    HardcoverImage? CachedImage);
+
 public record HardcoverSeriesData(HardcoverSeriesDetail? SeriesByPk);
 
 public record HardcoverSeriesDetail(

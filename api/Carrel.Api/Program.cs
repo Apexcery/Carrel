@@ -172,6 +172,7 @@ builder.Services.AddHttpClient<ProfilePictures>(client =>
 builder.Services.AddScoped<CoverSuppression>();
 builder.Services.AddScoped<BookService>();
 builder.Services.AddScoped<SeriesService>();
+builder.Services.AddScoped<AuthorService>();
 builder.Services.AddScoped<LibraryService>();
 builder.Services.AddScoped<LibraryExport>();
 builder.Services.AddScoped<RecommendationService>();
@@ -245,5 +246,6 @@ static string RateLimitPartitionKey(HttpContext context) =>
 
 static bool IsBookSourceRequest(HttpContext context) =>
     context.Request.Path.StartsWithSegments("/books") || context.Request.Path.StartsWithSegments("/series")
+    || context.Request.Path.StartsWithSegments("/authors")
     // A genre's page, but not the list of genres.
     || (context.Request.Path.StartsWithSegments("/genres", out var genre) && genre.Value is { Length: > 1 });

@@ -1,15 +1,16 @@
 import { useEffect, type CSSProperties } from 'react'
-import { useInfiniteQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router'
 import { apiGet } from '../api'
 import { useSession } from '../auth'
 import { usePageTitle } from '../pageTitle'
 import { addRecentSearch } from '../recentSearches'
+import { AuthorPhoto } from '../components/AuthorPhoto'
 import { Cover } from '../components/Cover'
 import { ErrorNotice } from '../components/ErrorNotice'
 import { HardcoverRating } from '../components/HardcoverRating'
 import { displaySubtitle, listNames, seriesPosition } from '../format'
-import type { BookSearchResponse, BookSearchResult } from '../types'
+import type { AuthorSearchResult, BookSearchResponse, BookSearchResult } from '../types'
 
 const PAGE_SIZE = 20
 const MAX_PAGE = 50
@@ -58,6 +59,8 @@ export function SearchPage() {
         )}
       </header>
 
+      <AuthorResults q={q} />
+
       {search.isPending && <ResultSkeleton />}
       {search.isError && <ErrorNotice error={search.error} onRetry={() => search.refetch()} />}
 
@@ -80,6 +83,36 @@ export function SearchPage() {
         </button>
       )}
       {search.isFetchNextPageError && <ErrorNotice error={search.error} />}
+    </section>
+  )
+}
+
+/** Authors whose names match the search, above the books. Hidden when there are none or they fail to load. */
+function AuthorResults({ q }: { q: string }) {
+  const authors = useQuery({
+    queryKey: ['author-search', q],
+    queryFn: () => apiGet<AuthorSearchResult[]>(`/authors/search?q=${encodeURIComponent(q)}`),
+  })
+  if (!authors.data?.length) {
+    return null
+  }
+
+  return (
+    <section className="author-results">
+      <h2 className="section-title">Authors</h2>
+      <ul>
+        {authors.data.map((author) => (
+          <li key={author.hardcoverId}>
+            <Link to={`/authors/hardcover/${author.hardcoverId}`} className="author-result">
+              <AuthorPhoto url={author.photoUrl} size="small" />
+              <span>
+                <span className="author-result-name">{author.name}</span>
+                {author.knownFor.length > 0 && <span className="author-result-known">{listNames(author.knownFor)}</span>}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
     </section>
   )
 }

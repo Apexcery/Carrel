@@ -40,6 +40,8 @@ export interface BookDetail {
 
 export interface Contributor {
   id: number
+  /** Null for contributors only Open Library knows, who have no author page. */
+  hardcoverId: number | null
   name: string
   role: string
 }
@@ -99,7 +101,35 @@ export interface RelatedBooks {
   similar: BookSuggestion[]
   /** The book's first author, whose other books are in byAuthor. */
   author: string | null
+  authorHardcoverId: number | null
   byAuthor: BookSuggestion[]
+}
+
+/** An author's page: their books grouped by series (most read first), then the books in no series. */
+export interface AuthorDetail {
+  hardcoverId: number
+  name: string
+  photoUrl: string | null
+  bornYear: number | null
+  deathYear: number | null
+  location: string | null
+  bio: string | null
+  series: AuthorSeries[]
+  standalones: BookSuggestion[]
+}
+
+export interface AuthorSeries {
+  hardcoverId: number
+  name: string
+  books: BookSuggestion[]
+}
+
+/** An author search hit; knownFor holds a few of their most read titles. */
+export interface AuthorSearchResult {
+  hardcoverId: number
+  name: string
+  photoUrl: string | null
+  knownFor: string[]
 }
 
 /** Popular books in the reader's top genre; genre is null until their books have one. */

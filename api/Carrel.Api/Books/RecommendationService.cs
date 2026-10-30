@@ -38,8 +38,9 @@ public class RecommendationService(
     private const int MinTagVotes = 2;
     private const int MinReaders = 50;
 
-    // More by the author leaves out books with less than this share of the readers of the author's most-read book.
-    private const double MinAuthorReadersShare = 0.01;
+    // More by the author (and the author's page) leaves out books with less than this share of the readers of the
+    // author's most-read book.
+    internal const double MinAuthorReadersShare = 0.01;
 
     // Popular in a genre: books with the genre in their top GenreTopTags, from the GenreFetchSize most read with it at all.
     private const int GenreTopTags = 3;
@@ -72,7 +73,7 @@ public class RecommendationService(
         }
         if (book.HardcoverId is not { } hardcoverId)
         {
-            return new RelatedBooks([], null, []);
+            return new RelatedBooks([], null, null, []);
         }
 
         var key = $"related:{hardcoverId}";
@@ -325,7 +326,7 @@ public class RecommendationService(
         var book = await hardcover.GetBookTagsAsync(hardcoverId, ct);
         if (book is null)
         {
-            return new RelatedBooks([], null, []);
+            return new RelatedBooks([], null, null, []);
         }
         var author = book.Contributions.Where(IsAuthor).Select(c => c.Author).FirstOrDefault();
         var authorIds = book.Contributions.Where(IsAuthor).Select(c => c.Author.Id).ToHashSet();
@@ -350,7 +351,7 @@ public class RecommendationService(
         }
         if (firstFilters.Count == 0)
         {
-            return new RelatedBooks([], null, []);
+            return new RelatedBooks([], null, null, []);
         }
 
         bool OtherSeries(HardcoverListedBook b) => seriesId is null || MainSeries(b.BookSeries)?.Series!.Id != seriesId;
@@ -390,6 +391,7 @@ public class RecommendationService(
         return new RelatedBooks(
             Similar(candidates).Select(ToSuggestion).ToArray(),
             author?.Name,
+            author?.Id,
             OnePerSeries(byAuthor).Take(ListSize).Select(ToSuggestion).ToArray());
     }
 
@@ -428,7 +430,7 @@ public class RecommendationService(
     }
 
     /// <summary>A Hardcover books filter that leaves out merged and removed books and box sets.</summary>
-    private static Dictionary<string, object> CatalogueFilter(Dictionary<string, object> conditions)
+    internal static Dictionary<string, object> CatalogueFilter(Dictionary<string, object> conditions)
     {
         conditions["canonical_id"] = new { _is_null = true };
         conditions["book_status_id"] = new { _eq = 1 };
@@ -462,17 +464,17 @@ public class RecommendationService(
     }
 
     /// <summary>The series to show first for a book, as BookService stores it: Hardcover's featured series.</summary>
-    private static HardcoverBookSeries? MainSeries(HardcoverBookSeries[] series) =>
+    internal static HardcoverBookSeries? MainSeries(HardcoverBookSeries[] series) =>
         series
             .Where(bs => bs.Series is not null)
             .OrderByDescending(bs => bs.Featured)
             .ThenBy(bs => bs.Position ?? decimal.MaxValue)
             .FirstOrDefault();
 
-    private static bool IsAuthor(HardcoverContribution c) =>
+    internal static bool IsAuthor(HardcoverContribution c) =>
         string.IsNullOrEmpty(c.Contribution) || c.Contribution.Equals("author", StringComparison.OrdinalIgnoreCase);
 
-    private static BookSuggestion ToSuggestion(HardcoverListedBook book)
+    internal static BookSuggestion ToSuggestion(HardcoverListedBook book)
     {
         var series = MainSeries(book.BookSeries);
         return new BookSuggestion(

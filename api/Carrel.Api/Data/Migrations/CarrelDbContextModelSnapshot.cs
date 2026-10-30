@@ -31,6 +31,10 @@ namespace Carrel.Api.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<bool>("BioSuppressed")
+                        .HasColumnType("boolean")
+                        .HasColumnName("bio_suppressed");
+
                     b.Property<long?>("HardcoverId")
                         .HasColumnType("bigint")
                         .HasColumnName("hardcover_id");
@@ -43,6 +47,10 @@ namespace Carrel.Api.Data.Migrations
                     b.Property<string>("OpenLibraryAuthorKey")
                         .HasColumnType("text")
                         .HasColumnName("open_library_author_key");
+
+                    b.Property<bool>("PhotoSuppressed")
+                        .HasColumnType("boolean")
+                        .HasColumnName("photo_suppressed");
 
                     b.HasKey("Id")
                         .HasName("pk_authors");
