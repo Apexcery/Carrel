@@ -10,7 +10,7 @@ public static class BookEndpoints
 
     public static void MapBookEndpoints(this IEndpointRouteBuilder app)
     {
-        // Browsing is public: anyone can search and read book and series pages; only the library needs signing in.
+        // Browsing is public: anyone can search and read book, series, and author pages; only the library needs signing in.
         var books = app.MapGroup("/books").AllowAnonymous().RequireRateLimiting(BookSourcesRateLimit);
 
         books.MapGet("/search", (string q, int? page, BookService service, CancellationToken ct) =>
@@ -51,7 +51,22 @@ public static class BookEndpoints
                     ? Results.Ok(series)
                     : Results.NotFound()));
 
-        books.MapGet("/{id:long}", (long id, BookService service, CancellationToken ct) =>
+        var authors = app.MapGroup("/authors").AllowAnonymous().RequireRateLimiting(BookSourcesRateLimit);
+
+        authors.MapGet("/search", (string q, AuthorService service, CancellationToken ct) =>
+            string.IsNullOrWhiteSpace(q) || q.Length > MaxQueryLength
+                ? Task.FromResult(Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["q"] = [$"Search text is required, up to {MaxQueryLength} characters."],
+                }))
+                : FromBookSource(async () => Results.Ok(await service.SearchAsync(q, ct))));
+
+        authors.MapGet("/hardcover/{hardcoverId:int}", (int hardcoverId, AuthorService service, CancellationToken ct) =>
+            FromBookSource(async () => await service.GetByHardcoverIdAsync(hardcoverId, ct) is { } author
+                ? Results.Ok(author)
+                : Results.NotFound()));
+
+        books.MapGet("/{id:long}",(long id, BookService service, CancellationToken ct) =>
             FromBookSource(async () => await service.GetByIdAsync(id, ct) is { } book
                 ? Results.Ok(book)
                 : Results.NotFound()));

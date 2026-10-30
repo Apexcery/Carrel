@@ -45,7 +45,7 @@ fun ReaderScreen(username: String, openBook: (path: String) -> Unit, openShelf: 
             reader.loaded.error?.status == 404 -> NotFound()
             data != null -> {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Avatar(data.avatarUrl, data.username)
+                    Avatar(data.avatarUrl, "@${data.username}’s profile picture")
                     Column(Modifier.padding(start = 18.dp)) {
                         Text("@${data.username}", style = Carrel.type.displayMedium, color = colors.ink)
                         Text(

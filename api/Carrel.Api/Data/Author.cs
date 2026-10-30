@@ -8,6 +8,14 @@ public class Author
     public long? HardcoverId { get; set; }
     public string? OpenLibraryAuthorKey { get; set; }
 
+    /// <summary>
+    /// Copyright takedowns, set by hand after a valid notice (see docs/operations.md). They hide the photo or the bio
+    /// on the author's page and in search results. Author pages come live from Hardcover, so an author taken down may
+    /// have a row only for these flags.
+    /// </summary>
+    public bool PhotoSuppressed { get; set; }
+    public bool BioSuppressed { get; set; }
+
     public List<BookAuthor> Books { get; } = [];
 }
 

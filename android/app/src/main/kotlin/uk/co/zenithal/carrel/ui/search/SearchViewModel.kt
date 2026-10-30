@@ -8,8 +8,10 @@ import androidx.lifecycle.viewModelScope
 import io.ktor.http.encodeURLParameter
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.serialization.builtins.ListSerializer
 import uk.co.zenithal.carrel.data.ApiClient
 import uk.co.zenithal.carrel.data.ApiException
+import uk.co.zenithal.carrel.data.AuthorSearchResult
 import uk.co.zenithal.carrel.data.BookSearchResponse
 import uk.co.zenithal.carrel.data.BookSearchResult
 import uk.co.zenithal.carrel.data.RecentSearches
@@ -24,6 +26,9 @@ class SearchViewModel(private val api: ApiClient, private val recent: RecentSear
         private set
     var results by mutableStateOf<List<BookSearchResult>>(emptyList())
         private set
+    /** Authors whose names match, shown above the books; none if they fail to load. */
+    var authors by mutableStateOf<List<AuthorSearchResult>>(emptyList())
+        private set
     /** How many books match, once the first page has loaded. */
     var found by mutableStateOf<Int?>(null)
         private set
@@ -34,6 +39,7 @@ class SearchViewModel(private val api: ApiClient, private val recent: RecentSear
     private var page = 0
     private var hasMore = false
     private var job: Job? = null
+    private var authorsJob: Job? = null
     /** Bumped by each new search, so a cancelled one's late finish can't touch the new one's state. */
     private var generation = 0
 
@@ -43,23 +49,28 @@ class SearchViewModel(private val api: ApiClient, private val recent: RecentSear
         if (q.isEmpty()) return
         recent.add(userId, q)
         job?.cancel()
+        authorsJob?.cancel()
         generation++
         loading = false
         query = q
         results = emptyList()
+        authors = emptyList()
         found = null
         page = 0
         hasMore = true
         error = null
         loadMore()
+        loadAuthors(q)
     }
 
     /** Goes back to no search, e.g. once the search box is emptied. */
     fun clear() {
         job?.cancel()
+        authorsJob?.cancel()
         generation++
         query = null
         results = emptyList()
+        authors = emptyList()
         found = null
         loading = false
         error = null
@@ -84,6 +95,18 @@ class SearchViewModel(private val api: ApiClient, private val recent: RecentSear
                 if (mine == generation) error = e.message
             } finally {
                 if (mine == generation) loading = false
+            }
+        }
+    }
+
+    private fun loadAuthors(q: String) {
+        val mine = generation
+        authorsJob = viewModelScope.launch {
+            try {
+                val found = api.get("/authors/search?q=${q.encodeURLParameter()}", ListSerializer(AuthorSearchResult.serializer()))
+                if (mine == generation) authors = found
+            } catch (_: ApiException) {
+                // The books still show.
             }
         }
     }

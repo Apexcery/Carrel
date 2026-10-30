@@ -32,6 +32,20 @@ update books set description_suppressed = true where id = <book id>;
 
 The book id is the number in the page address, e.g. `/books/20`. A book that only appears in search results has no row yet: open its page once to store it, then set the flag. Tell the source (Hardcover or Open Library) as well.
 
+An author's photo or bio is hidden the same way, by the Hardcover id in the author page's address (`/authors/hardcover/<id>`). Author pages come live from Hardcover, so the author may not have a row yet; this adds one if needed:
+
+```sql
+-- Hide the photo, on the author's page and in search results.
+insert into authors (name, hardcover_id, photo_suppressed) values ('<name>', <hardcover id>, true)
+on conflict (hardcover_id) do update set photo_suppressed = true;
+
+-- Hide the bio.
+insert into authors (name, hardcover_id, bio_suppressed) values ('<name>', <hardcover id>, true)
+on conflict (hardcover_id) do update set bio_suppressed = true;
+```
+
+Pages are cached for up to 12 hours, but the flags are checked on every request, so they take effect straight away. Hardcover sometimes merges duplicate authors; the flag belongs on the id the page's data gives as `hardcoverId` (from `/authors/hardcover/<id>` on the API), which is the merged record's.
+
 A profile picture is the reader's own upload, so it's removed outright. Find its file by the username in the profile's address (`/@username`):
 
 ```sql

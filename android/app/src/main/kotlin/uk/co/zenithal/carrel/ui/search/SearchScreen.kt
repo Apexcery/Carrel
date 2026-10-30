@@ -40,12 +40,14 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import uk.co.zenithal.carrel.LocalContainer
 import uk.co.zenithal.carrel.auth.Session
+import uk.co.zenithal.carrel.data.AuthorSearchResult
 import uk.co.zenithal.carrel.data.BookSearchResult
 import uk.co.zenithal.carrel.data.GENRES_PATH
 import uk.co.zenithal.carrel.data.GenreIndex
@@ -65,6 +67,7 @@ import uk.co.zenithal.carrel.ui.components.SectionTitle
 import uk.co.zenithal.carrel.ui.components.SkeletonLine
 import uk.co.zenithal.carrel.ui.rememberLoaded
 import uk.co.zenithal.carrel.ui.theme.Carrel
+import uk.co.zenithal.carrel.ui.you.Avatar
 
 /**
  * The Search tab: a search box, then results as the website lists them. Before searching, the reader's recent
@@ -74,6 +77,7 @@ import uk.co.zenithal.carrel.ui.theme.Carrel
 fun SearchScreen(
     openBook: (path: String) -> Unit,
     openSeries: (hardcoverId: Int, fromBook: Int?) -> Unit,
+    openAuthor: (hardcoverId: Int) -> Unit,
     openGenre: (GenreLink) -> Unit,
     openAllGenres: () -> Unit,
     searchFor: String?,
@@ -138,6 +142,9 @@ fun SearchScreen(
                         )
                     }
                 }
+            }
+            if (model.authors.isNotEmpty()) {
+                item { Authors(model.authors, openAuthor) }
             }
             itemsIndexed(model.results, key = { _, r -> r.hardcoverId?.toString() ?: r.openLibraryWorkId.orEmpty() }) { index, result ->
                 if (index > 0) HorizontalDivider(color = Carrel.colors.rule)
@@ -229,6 +236,32 @@ private fun Idle(
             GenreLinks(genres.nonfiction, openGenre, Modifier.padding(top = 14.dp))
             Gap(16)
             LinkButton("Find another genre →", openAllGenres, color = Carrel.colors.accent)
+        }
+    }
+}
+
+/** Authors whose names match the search, above the books: photo, name, and a few of their best-known titles. */
+@Composable
+private fun Authors(authors: List<AuthorSearchResult>, openAuthor: (Int) -> Unit) {
+    val colors = Carrel.colors
+    Column(Modifier.padding(top = 16.dp, bottom = 24.dp)) {
+        SectionTitle("Authors")
+        Column(Modifier.padding(top = 8.dp)) {
+            authors.forEach { author ->
+                Row(
+                    Modifier.fillMaxWidth().clickable(role = Role.Button) { openAuthor(author.hardcoverId) }.padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    Avatar(author.photoUrl, "Photo of ${author.name}", 48.dp, zoomable = false)
+                    Column(Modifier.weight(1f)) {
+                        Text(author.name, style = Carrel.type.heading, color = colors.ink)
+                        if (author.knownFor.isNotEmpty()) {
+                            Text(listNames(author.knownFor), style = Carrel.type.body, color = colors.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+            }
         }
     }
 }

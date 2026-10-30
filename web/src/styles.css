@@ -1319,6 +1319,98 @@ a.primary-button:hover {
   white-space: nowrap;
 }
 
+/* ---------- Authors ---------- */
+
+.author-header {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  margin-bottom: 28px;
+}
+
+.author-header .avatar {
+  width: 6.5rem;
+  height: 6.5rem;
+}
+
+/* So a long name wraps rather than pushing past the page. */
+.author-header > div {
+  min-width: 0;
+}
+
+.author-bio .link-button {
+  margin-top: 0.9em;
+}
+
+/* A shelf title that opens the whole series, or the author's page. */
+.section-title-link {
+  color: inherit;
+  text-decoration: none;
+  transition: color 140ms ease;
+}
+
+.section-title-link:hover {
+  color: var(--accent);
+}
+
+/* Authors matching a search, above the books. */
+.author-results {
+  margin-bottom: 32px;
+}
+
+.author-results ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+  gap: 4px 24px;
+}
+
+.author-result {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px;
+  color: inherit;
+  text-decoration: none;
+  transition: background-color 140ms ease;
+}
+
+.author-result:hover {
+  color: inherit;
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+
+.author-result .avatar {
+  width: 3rem;
+  height: 3rem;
+}
+
+.author-result > span:last-child {
+  min-width: 0;
+}
+
+.author-result-name {
+  display: block;
+  font-family: var(--font-display);
+  font-size: var(--text-heading);
+  line-height: 1.15;
+  transition: color 140ms ease;
+}
+
+.author-result:hover .author-result-name {
+  color: var(--accent);
+}
+
+.author-result-known {
+  display: block;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ---------- Shelf panel (book page) ---------- */
 
 /* Spaced with margins rather than a grid gap, so the collapsed edit section takes no space at all. */
@@ -3269,6 +3361,15 @@ a.primary-button:hover {
   .series-item-link {
     gap: 16px;
     padding-inline: 0;
+  }
+
+  .author-header {
+    gap: 16px;
+  }
+
+  .author-header .avatar {
+    width: 4.5rem;
+    height: 4.5rem;
   }
 
   .shelf-panel {

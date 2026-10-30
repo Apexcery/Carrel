@@ -78,6 +78,34 @@ public partial class HardcoverClient(HttpClient http, ILogger<HardcoverClient> l
     public async Task<HardcoverSeriesDetail?> GetSeriesAsync(int id, CancellationToken ct) =>
         (await QueryAsync<HardcoverSeriesData>(SeriesQuery, new { id }, ct)).SeriesByPk;
 
+    private const string AuthorQuery = """
+        query Author($id: Int!) {
+          authors_by_pk(id: $id) { id canonical_id name bio born_year death_year location cached_image }
+        }
+        """;
+
+    /// <summary>Returns the author, following Hardcover's duplicate merges to the canonical record; null if not found.</summary>
+    public async Task<HardcoverAuthorDetail?> GetAuthorAsync(int id, CancellationToken ct)
+    {
+        var author = (await QueryAsync<HardcoverAuthorData>(AuthorQuery, new { id }, ct)).AuthorsByPk;
+        if (author?.CanonicalId is { } canonicalId && canonicalId != id)
+        {
+            author = (await QueryAsync<HardcoverAuthorData>(AuthorQuery, new { id = canonicalId }, ct)).AuthorsByPk;
+        }
+        return author;
+    }
+
+    // Matches book titles as well as names ("mistborn" finds Brandon Sanderson and his narrators); AuthorService keeps
+    // only the names that match.
+    private const string AuthorSearchQuery = """
+        query SearchAuthors($query: String!, $perPage: Int!) {
+          search(query: $query, query_type: "Author", per_page: $perPage, page: 1) { results }
+        }
+        """;
+
+    public async Task<HardcoverAuthorSearchResults> SearchAuthorsAsync(string query, int perPage, CancellationToken ct) =>
+        (await QueryAsync<HardcoverAuthorSearchData>(AuthorSearchQuery, new { query, perPage }, ct)).Search.Results;
+
     private const string IsbnQuery = """
         query BookByIsbn($isbns: [String!]!) {
           editions(where: {_or: [{isbn_13: {_in: $isbns}}, {isbn_10: {_in: $isbns}}]}, limit: 1) { book_id }

@@ -58,6 +58,7 @@ import uk.co.zenithal.carrel.data.Profile
 import uk.co.zenithal.carrel.ui.book.BookScreen
 import uk.co.zenithal.carrel.ui.book.FindBookScreen
 import uk.co.zenithal.carrel.ui.book.ShelfPanelSignedOut
+import uk.co.zenithal.carrel.ui.browse.AuthorScreen
 import uk.co.zenithal.carrel.ui.browse.GenreScreen
 import uk.co.zenithal.carrel.ui.browse.GenresScreen
 import uk.co.zenithal.carrel.ui.browse.SeriesScreen
@@ -105,6 +106,7 @@ import kotlin.reflect.KClass
  */
 @Serializable data class BookRoute(val path: String, val finished: Boolean = false)
 @Serializable data class SeriesRoute(val hardcoverId: Int, val fromBook: Int? = null)
+@Serializable data class AuthorRoute(val hardcoverId: Int)
 @Serializable data class GenreRoute(val slug: String)
 @Serializable data object GenresRoute
 /** One of the reader's shelves, by its slug (want-to-read), not the enum, for the same reason as SignInRoute. */
@@ -154,6 +156,7 @@ fun MainScreen(nav: NavHostController, session: Session, profile: Profile?, dest
     val signingIn = entry?.destination?.hasRoute(SignInRoute::class) == true
     val openBook = { path: String -> nav.navigate(BookRoute(path)) }
     val openSeries = { id: Int, fromBook: Int? -> nav.navigate(SeriesRoute(id, fromBook)) }
+    val openAuthor = { id: Int -> nav.navigate(AuthorRoute(id)) }
     val openGenre = { genre: GenreLink -> nav.navigate(GenreRoute(genre.slug)) }
     // A search from a link or share, run once the Search tab shows.
     var searchFor by rememberSaveable { mutableStateOf<String?>(null) }
@@ -166,6 +169,7 @@ fun MainScreen(nav: NavHostController, session: Session, profile: Profile?, dest
         when (destination) {
             is Destination.Book -> openBook(destination.path)
             is Destination.Series -> openSeries(destination.hardcoverId, destination.fromBook)
+            is Destination.Author -> openAuthor(destination.hardcoverId)
             Destination.Genres -> nav.navigate(GenresRoute)
             is Destination.Genre -> nav.navigate(GenreRoute(destination.slug))
             is Destination.Search -> {
@@ -207,11 +211,11 @@ fun MainScreen(nav: NavHostController, session: Session, profile: Profile?, dest
                 HomeScreen(signedIn = profile != null, openBook) { nav.navigate(ReadingRoute(resume = true)) }
             }
             composable<SearchRoute> {
-                SearchScreen(openBook, openSeries, openGenre, { nav.navigate(GenresRoute) }, searchFor) { searchFor = null }
+                SearchScreen(openBook, openSeries, openAuthor, openGenre, { nav.navigate(GenresRoute) }, searchFor) { searchFor = null }
             }
             composable<BookRoute> { backStackEntry ->
                 val route = backStackEntry.toRoute<BookRoute>()
-                BookScreen(route.path, openBook, openSeries, openGenre) {
+                BookScreen(route.path, openBook, openSeries, openAuthor, openGenre) {
                     if (profile == null) {
                         ShelfPanelSignedOut({ signIn(SignInMode.SignIn) }, { signIn(SignInMode.SignUp) })
                     } else {
@@ -223,6 +227,9 @@ fun MainScreen(nav: NavHostController, session: Session, profile: Profile?, dest
             composable<SeriesRoute> { backStackEntry ->
                 val route = backStackEntry.toRoute<SeriesRoute>()
                 SeriesScreen(route.hardcoverId, route.fromBook, openBook)
+            }
+            composable<AuthorRoute> { backStackEntry ->
+                AuthorScreen(backStackEntry.toRoute<AuthorRoute>().hardcoverId, openBook) { id -> openSeries(id, null) }
             }
             composable<GenreRoute> { backStackEntry ->
                 GenreScreen(backStackEntry.toRoute<GenreRoute>().slug, openBook)
