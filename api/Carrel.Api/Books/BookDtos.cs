@@ -31,6 +31,26 @@ public record SeriesDetail(
     SeriesBook[] Books,
     SeriesBook[] OtherBooks);
 
+/// <summary>
+/// An author as listed by Hardcover: their details, then their books, grouped by series (most read first) in reading
+/// order, then the books in no series, most read first.
+/// </summary>
+public record AuthorDetail(
+    int HardcoverId,
+    string Name,
+    string? PhotoUrl,
+    int? BornYear,
+    int? DeathYear,
+    string? Location,
+    string? Bio,
+    AuthorSeries[] Series,
+    BookSuggestion[] Standalones);
+
+public record AuthorSeries(int HardcoverId, string Name, BookSuggestion[] Books);
+
+/// <summary>An author search hit; KnownFor holds a few of their most read titles.</summary>
+public record AuthorSearchResult(int HardcoverId, string Name, string? PhotoUrl, string[] KnownFor);
+
 public record SeriesBook(
     int HardcoverId,
     decimal? Position,
@@ -70,7 +90,7 @@ public record BookSuggestion(
     decimal? SeriesPosition);
 
 /// <summary>Suggestions for a book's page: books like it, and more by its first author (named in Author).</summary>
-public record RelatedBooks(BookSuggestion[] Similar, string? Author, BookSuggestion[] ByAuthor);
+public record RelatedBooks(BookSuggestion[] Similar, string? Author, int? AuthorHardcoverId, BookSuggestion[] ByAuthor);
 
 /// <summary>The Discover shelves on the home page, the same for every reader.</summary>
 public record DiscoverShelves(
@@ -93,7 +113,7 @@ public record GenreIndex(GenreLink[] Fiction, GenreLink[] Nonfiction, GenreLink[
 /// <summary>A genre's page: its most read books, its best rated, and its popular new releases.</summary>
 public record GenreShelves(string Name, BookSuggestion[] Popular, BookSuggestion[] TopRated, BookSuggestion[] NewReleases);
 
-public record ContributorDto(long Id, string Name, string Role);
+public record ContributorDto(long Id, long? HardcoverId, string Name, string Role);
 
 public record SeriesEntryDto(long Id, long? HardcoverId, string Name, decimal? Position);
 

@@ -14,15 +14,17 @@ const NONE = new Set<number>()
 
 /**
  * A titled row of suggested book covers, or nothing when there are none to show. Books not out yet are marked
- * Upcoming, unless markUpcoming is false (on a shelf where they all are).
+ * Upcoming, unless markUpcoming is false (on a shelf where they all are). The title links to titleHref, if given.
  */
 export function SuggestionShelf({
   title,
+  titleHref,
   books,
   limit,
   markUpcoming = true,
 }: {
   title: string
+  titleHref?: string
   books: BookSuggestion[]
   limit: number
   markUpcoming?: boolean
@@ -32,7 +34,19 @@ export function SuggestionShelf({
   }
   return (
     <section className="book-section">
-      <ShelfRow heading={<h2 className="section-title">{title}</h2>}>
+      <ShelfRow
+        heading={
+          <h2 className="section-title">
+            {titleHref ? (
+              <Link to={titleHref} className="section-title-link">
+                {title} →
+              </Link>
+            ) : (
+              title
+            )}
+          </h2>
+        }
+      >
         {books.slice(0, limit).map((book) => {
           const upcoming = markUpcoming && book.releaseYear !== null && book.releaseYear > THIS_YEAR
           return (

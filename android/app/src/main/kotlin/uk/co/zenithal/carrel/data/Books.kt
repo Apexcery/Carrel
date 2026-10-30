@@ -48,8 +48,9 @@ data class BookDetail(
     val editions: List<Edition>,
 )
 
+/** `hardcoverId` is null for contributors only Open Library knows, who have no author page. */
 @Serializable
-data class Contributor(val id: Long, val name: String, val role: String)
+data class Contributor(val id: Long, val name: String, val role: String, val hardcoverId: Int? = null)
 
 @Serializable
 data class SeriesEntry(val id: Long, val hardcoverId: Int?, val name: String, val position: Double?)
@@ -105,7 +106,33 @@ data class BookSuggestion(
 
 /** Suggestions for a book's page: books like it, and more by its first author (named in author). */
 @Serializable
-data class RelatedBooks(val similar: List<BookSuggestion>, val author: String?, val byAuthor: List<BookSuggestion>)
+data class RelatedBooks(
+    val similar: List<BookSuggestion>,
+    val author: String?,
+    val authorHardcoverId: Int? = null,
+    val byAuthor: List<BookSuggestion>,
+)
+
+/** An author's page: their books grouped by series (most read first), then the books in no series. */
+@Serializable
+data class AuthorDetail(
+    val hardcoverId: Int,
+    val name: String,
+    val photoUrl: String?,
+    val bornYear: Int?,
+    val deathYear: Int?,
+    val location: String?,
+    val bio: String?,
+    val series: List<AuthorSeries>,
+    val standalones: List<BookSuggestion>,
+)
+
+@Serializable
+data class AuthorSeries(val hardcoverId: Int, val name: String, val books: List<BookSuggestion>)
+
+/** An author search hit; knownFor holds a few of their most read titles. */
+@Serializable
+data class AuthorSearchResult(val hardcoverId: Int, val name: String, val photoUrl: String?, val knownFor: List<String>)
 
 @Serializable
 data class GenreLink(val name: String, val slug: String)

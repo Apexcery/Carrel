@@ -129,7 +129,7 @@ fun PictureSetting(profile: Profile) {
 
     Text("PROFILE PICTURE", style = Carrel.type.mono.copy(letterSpacing = 0.1.em), color = colors.inkSoft)
     Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-        Avatar(profile.avatarUrl, profile.username.orEmpty())
+        Avatar(profile.avatarUrl, "@${profile.username.orEmpty()}’s profile picture")
         Column(Modifier.weight(1f)) {
             Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                 LinkButton(if (profile.avatarUrl != null) "Change" else "Add", { if (!saving.busy) choose() }, color = colors.ink)

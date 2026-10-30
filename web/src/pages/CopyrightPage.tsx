@@ -13,7 +13,8 @@ export function CopyrightPage() {
       </header>
 
       <p className="legal-lede">
-        Book covers and descriptions on Carrel come from Hardcover and Open Library. If you own the copyright in
+        Book covers and descriptions, and authors’ photos and biographies, on Carrel come from Hardcover and Open
+        Library. If you own the copyright in
         something shown here and don’t want it used, tell us and it will be taken down.
       </p>
 
@@ -27,8 +28,8 @@ export function CopyrightPage() {
         <a href="https://openlibrary.org" rel="noreferrer">
           Open Library
         </a>
-        , and covers load from their servers. The only thing readers upload that Carrel shows is their profile
-        picture.
+        , and covers load from their servers. Authors’ photos and biographies come from Hardcover, and photos load from
+        its servers. The only thing readers upload that Carrel shows is their profile picture.
       </p>
 
       <h2>Asking for something to be taken down</h2>

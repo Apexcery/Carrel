@@ -36,6 +36,18 @@ import {
   type Margin,
   type ReaderFont,
 } from './look'
+import {
+  durationText,
+  FOOTER_ITEMS,
+  pagesLeftText,
+  ReadingSpeed,
+  SLOT_LABELS,
+  storedFooter,
+  storeFooter,
+  type FooterItem,
+  type FooterSettings,
+  type FooterSlot,
+} from './footer'
 import { chapterPlace, firstWordsShown, measureFile, pagesText, screensOf, type ChapterPlace, type ContentsEntry, type FileLayout } from './pages'
 import { isNewerElsewhere, readPercent, ReadingProgress, SAME_PLACE, type ReadingPosition } from './progress'
 import { openPublication, type ContentsLink } from './publication'
@@ -118,6 +130,11 @@ function Reader({ book }: { book: BrowserBook }) {
   const shown = useRef(look)
   /** The chapter on the left (or only) page and the pages of it showing, for the footer. */
   const [footer, setFooter] = useState<ChapterPlace | null>(null)
+  /** How many of Readium's positions make a page of the file on screen, for the time left in the chapter. */
+  const [pagePositions, setPagePositions] = useState<number | null>(null)
+  /** Seconds a position, once the reader's been timed (see ReadingSpeed). */
+  const [speed, setSpeed] = useState<number | null>(null)
+  const [footerSettings, setFooterSettings] = useState(storedFooter)
   const [contents, setContents] = useState(false)
   const [elsewhere, setElsewhere] = useState<ReadingPosition | null>(null)
   const [askingRead, setAskingRead] = useState(false)
@@ -137,8 +154,13 @@ function Reader({ book }: { book: BrowserBook }) {
     let positions: Locator[] = []
     let close: (() => Promise<void>) | undefined
     let entries: ContentsEntry[] = []
+    /** How many positions each file in the reading order has. */
+    let filePositions: number[] = []
     /** The file on screen, measured; measured again when it, or how it's laid out, changes. */
     let layout: { key: string; measured: FileLayout } | null = null
+    const speed = new ReadingSpeed()
+    /** The screen the reader was last on, to tell a page turned forward from a jump. */
+    let lastScreen: { file: number; screen: number } | null = null
 
     function placeChanged(current: Locator, restyled = false) {
       const s = state.current
@@ -147,12 +169,24 @@ function Reader({ book }: { book: BrowserBook }) {
       setLocator(current)
       setSeeking(null)
       // The last stays while a file can't be measured yet, rather than flickering.
-      if (navigator) setFooter((last) => {
-        const place = footerPlace(navigator!, current)
-        return place === undefined ? last : place
-      })
+      const measured = navigator && footerPlace(navigator, current)
+      if (measured) {
+        setFooter(measured.place)
+        setPagePositions(measured.pagePositions)
+      }
       const json = JSON.stringify(current.serialize())
       const progression = current.locations?.totalProgression
+      const screen = measured ? { file: measured.file, screen: measured.screen } : null
+      const forward =
+        !restyled &&
+        screen !== null &&
+        lastScreen !== null &&
+        ((screen.file === lastScreen.file && screen.screen === lastScreen.screen + 1) || (screen.file === lastScreen.file + 1 && screen.screen === 0))
+      lastScreen = screen
+      if (progression !== undefined) {
+        speed.arrived(progression, positions.length, forward)
+        setSpeed(speed.estimate)
+      }
       saveBrowserBookPlace(book.id, json, progression ?? null)
       if (s.progress?.moved(progression)) void s.progress.save()
       // A copy never read here starts from its first page shown.
@@ -193,6 +227,11 @@ function Reader({ book }: { book: BrowserBook }) {
       const { publication } = opened
       positions = opened.positions
       entries = contentsEntries(opened.contents, publication)
+      filePositions = publication.readingOrder.items.map(() => 0)
+      for (const position of positions) {
+        const file = publication.readingOrder.findIndexWithHref(position.href.split('#')[0])
+        if (file >= 0) filePositions[file]++
+      }
       const saved = book.locator ? Locator.deserialize(JSON.parse(book.locator)) : undefined
       let start: Locator | undefined
       if (!saved) {
@@ -293,17 +332,23 @@ function Reader({ book }: { book: BrowserBook }) {
     report.current = placeChanged
 
     /**
-     * The chapter and pages showing, measured in the frame on screen: null before the first contents entry (a cover,
-     * say), undefined if it can't be measured (a frame still loading).
+     * The chapter and pages showing, measured in the frame on screen (`place` is null before the first contents entry,
+     * a cover, say), with the screen and how many positions make a page; undefined if it can't be measured (a frame
+     * still loading).
      */
-    function footerPlace(reader: EpubNavigator, current: Locator): ChapterPlace | null | undefined {
+    function footerPlace(reader: EpubNavigator, current: Locator) {
       const wnd = frameWindow(reader)
       const file = reader.publication.readingOrder.findIndexWithHref(current.href.split('#')[0])
       const screens = wnd && screensOf(wnd)
       if (!wnd || file < 0 || !screens) return undefined
       const key = [file, screens.screens, screens.perScreen, wnd.document.scrollingElement?.scrollWidth, wnd.innerWidth].join(':')
       if (layout?.key !== key) layout = { key, measured: measureFile(wnd, entries, file, screens.screens, screens.perScreen) }
-      return chapterPlace(entries, layout.measured, screens.screen * screens.perScreen, screens.perScreen)
+      return {
+        place: chapterPlace(entries, layout.measured, screens.screen * screens.perScreen, screens.perScreen),
+        file,
+        screen: screens.screen,
+        pagePositions: filePositions[file] / layout.measured.columns,
+      }
     }
 
     /** The position as far through the book as `progression` (0 to 1). */
@@ -401,6 +446,14 @@ function Reader({ book }: { book: BrowserBook }) {
     changeLook((last) => ({ fontSize: Math.round(Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, last.fontSize + by)) * 10) / 10 }))
   }
 
+  function changeFooter(item: FooterItem, change: Partial<FooterSettings[FooterItem]>) {
+    setFooterSettings((last) => {
+      const next = { ...last, [item]: { ...last[item], ...change } }
+      storeFooter(next)
+      return next
+    })
+  }
+
   function seekTo(progression: number) {
     if (!open) return
     const { positions, navigator } = open
@@ -408,6 +461,18 @@ function Reader({ book }: { book: BrowserBook }) {
   }
 
   const progression = locator?.locations?.totalProgression
+  // While dragging the seek bar, where letting go will go, without the chapter it's leaving.
+  const shownProgression = seeking ?? progression
+  const texts: Record<FooterItem, ReactNode> = {
+    chapter: seeking === null && (footer?.title ?? chapter),
+    pages: seeking === null && footer && pagesText(footer),
+    percent: shownProgression !== undefined && `${readPercent(shownProgression)}%`,
+    pagesLeft: seeking === null && footer && pagesLeftText(footer),
+    chapterTime:
+      seeking === null && footer && speed !== null && pagePositions !== null && `${durationText((footer.pages - footer.first + 1) * pagePositions * speed)} left in chapter`,
+    bookTime: open && speed !== null && shownProgression !== undefined && `${durationText((1 - shownProgression) * open.positions.length * speed)} left in book`,
+    clock: <Clock />,
+  }
 
   if (error) {
     return (
@@ -437,7 +502,7 @@ function Reader({ book }: { book: BrowserBook }) {
             </PopoverButton>
             {/* Beside the book rather than over a dimmed one, so each change shows as it's made. */}
             <PopoverPanel anchor="bottom end" className="reader-look">
-              <LookPanel look={look} changeLook={changeLook} changeSize={changeSize} />
+              <LookPanel look={look} changeLook={changeLook} changeSize={changeSize} footer={footerSettings} changeFooter={changeFooter} />
             </PopoverPanel>
           </Popover>
         </div>
@@ -507,34 +572,29 @@ function Reader({ book }: { book: BrowserBook }) {
         </button>
       </div>
 
+      {/* The footer with the controls, and in its place while they're hidden, the one always under the page. */}
       <footer className="reader-footer">
-        <input
-          type="range"
-          className="reader-seek"
-          min={0}
-          max={1000}
-          value={Math.round((seeking ?? progression ?? 0) * 1000)}
-          disabled={!open}
-          aria-label="Where you are in the book"
-          onChange={(e) => setSeeking(Number(e.target.value) / 1000)}
-          onPointerUp={(e) => {
-            if (seeking !== null) seekTo(seeking)
-            // Let go of it, so the arrow keys turn the page again rather than move the bar.
-            e.currentTarget.blur()
-          }}
-          onKeyUp={() => seeking !== null && seekTo(seeking)}
-        />
-        <span className="reader-place">
-          {/* While dragging, where letting go will go, without the chapter it's leaving. */}
-          {seeking !== null
-            ? `${readPercent(seeking)}%`
-            : [
-                progression !== undefined ? `${readPercent(progression)}%` : null,
-                footer ? `${footer.title} ${pagesText(footer)}` : chapter,
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-        </span>
+        <div className="reader-footer-controls">
+          <input
+            type="range"
+            className="reader-seek"
+            min={0}
+            max={1000}
+            value={Math.round((seeking ?? progression ?? 0) * 1000)}
+            disabled={!open}
+            aria-label="Where you are in the book"
+            onChange={(e) => setSeeking(Number(e.target.value) / 1000)}
+            onPointerUp={(e) => {
+              if (seeking !== null) seekTo(seeking)
+              // Let go of it, so the arrow keys turn the page again rather than move the bar.
+              e.currentTarget.blur()
+            }}
+            onKeyUp={() => seeking !== null && seekTo(seeking)}
+          />
+          {/* The percentage shows while dragging even if it's switched off, as it's where letting go will go. */}
+          <FooterRow texts={texts} shows={(item) => footerSettings[item].controls || (item === 'percent' && seeking !== null)} settings={footerSettings} />
+        </div>
+        <FooterRow texts={texts} shows={(item) => footerSettings[item].always} settings={footerSettings} className="reader-footer-always" />
       </footer>
 
       <Dialog open={contents} onClose={() => setContents(false)} className="release-notes">
@@ -579,21 +639,69 @@ function Reader({ book }: { book: BrowserBook }) {
   )
 }
 
+/** A footer's left, centre, and right, each with its items in order, e.g. "Chapter 3 (Page 2 / 9) · 12%". */
+function FooterRow({
+  texts,
+  shows,
+  settings,
+  className,
+}: {
+  texts: Record<FooterItem, ReactNode>
+  shows: (item: FooterItem) => boolean
+  settings: FooterSettings
+  className?: string
+}) {
+  return (
+    <div className={className ? `reader-footer-row ${className}` : 'reader-footer-row'}>
+      {(Object.keys(SLOT_LABELS) as FooterSlot[]).map((slot) => {
+        const items = (Object.keys(FOOTER_ITEMS) as FooterItem[]).filter((item) => settings[item].slot === slot && shows(item) && texts[item])
+        return (
+          <span key={slot} className={`reader-footer-${slot}`}>
+            {items.map((item, i) => (
+              <span key={item} className={item === 'chapter' ? 'reader-footer-chapter' : undefined}>
+                {/* The pages go straight after the chapter's title, as "Chapter 3 (Page 2 / 9)". */}
+                {i > 0 && (item === 'pages' && items[i - 1] === 'chapter' ? ' ' : ' · ')}
+                {texts[item]}
+              </span>
+            ))}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+/** The time, to the minute, in the browser's 12- or 24-hour style. */
+function Clock() {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const timer = window.setTimeout(() => setNow(new Date()), 60_000 - (Date.now() % 60_000))
+    return () => window.clearTimeout(timer)
+  }, [now])
+  return now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+}
+
+type Section = 'text' | 'layout' | 'footer'
+
 /**
- * The reader's settings: the theme, then the text and the layout, each folded away until it's wanted, one at a time
- * (both folded each time the panel opens).
+ * The reader's settings: the theme, then the text, the layout, and the footer, each folded away until it's wanted, one
+ * at a time (all folded each time the panel opens).
  */
 function LookPanel({
   look,
   changeLook,
   changeSize,
+  footer,
+  changeFooter,
 }: {
   look: Look
   changeLook: (change: Partial<Look>) => void
   changeSize: (by: number) => void
+  footer: FooterSettings
+  changeFooter: (item: FooterItem, change: Partial<FooterSettings[FooterItem]>) => void
 }) {
-  const [section, setSection] = useState<'text' | 'layout' | null>(null)
-  const toggle = (which: 'text' | 'layout') => setSection(section === which ? null : which)
+  const [section, setSection] = useState<Section | null>(null)
+  const toggle = (which: Section) => setSection(section === which ? null : which)
 
   return (
     <>
@@ -650,6 +758,32 @@ function LookPanel({
           </div>
         </div>
         <LookChoice label="Pages side by side" labels={PAGES_LABELS} value={look.pages} onChange={(pages) => changeLook({ pages })} className="reader-look-pages" />
+      </LookSection>
+      <LookSection title="Footer" open={section === 'footer'} onToggle={() => toggle('footer')}>
+        {/* Each item's name and footers, with where it goes under them. */}
+        <div className="reader-footer-settings">
+          <span />
+          <span className="reader-look-label">With controls</span>
+          <span className="reader-look-label">Always</span>
+          {(Object.keys(FOOTER_ITEMS) as FooterItem[]).map((item) => (
+            <Fragment key={item}>
+              <span>{FOOTER_ITEMS[item]}</span>
+              <input
+                type="checkbox"
+                aria-label={`${FOOTER_ITEMS[item]} with controls`}
+                checked={footer[item].controls}
+                onChange={(e) => changeFooter(item, { controls: e.target.checked })}
+              />
+              <input
+                type="checkbox"
+                aria-label={`${FOOTER_ITEMS[item]} always`}
+                checked={footer[item].always}
+                onChange={(e) => changeFooter(item, { always: e.target.checked })}
+              />
+              <OptionSwitch label={`Where ${FOOTER_ITEMS[item].toLowerCase()} goes`} labels={SLOT_LABELS} value={footer[item].slot} onChange={(slot) => changeFooter(item, { slot })} />
+            </Fragment>
+          ))}
+        </div>
       </LookSection>
     </>
   )

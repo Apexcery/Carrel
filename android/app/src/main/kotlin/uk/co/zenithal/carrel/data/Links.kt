@@ -11,6 +11,7 @@ sealed interface Destination {
     /** A book by the API path that loads it, as BookRoute. */
     data class Book(val path: String) : Destination
     data class Series(val hardcoverId: Int, val fromBook: Int?) : Destination
+    data class Author(val hardcoverId: Int) : Destination
     data object Genres : Destination
     data class Genre(val slug: String) : Destination
     /** The Search tab, searching for `text` when there is some. */
@@ -51,6 +52,7 @@ fun linkDestination(url: String, hosts: Set<String>): Destination? {
         parts.size == 3 && parts[0] == "books" && parts[1] == "openlibrary" && OPEN_LIBRARY_WORK.matches(parts[2]) -> Destination.Book("/books/openlibrary/${parts[2]}")
         parts.size == 3 && parts[0] == "series" && parts[1] == "hardcover" && DIGITS.matches(parts[2]) ->
             Destination.Series(parts[2].toInt(), query["book"]?.takeIf(DIGITS::matches)?.toInt())
+        parts.size == 3 && parts[0] == "authors" && parts[1] == "hardcover" && DIGITS.matches(parts[2]) -> Destination.Author(parts[2].toInt())
         parts == listOf("genres") -> Destination.Genres
         parts.size == 2 && parts[0] == "genres" && GENRE_SLUG.matches(parts[1]) -> Destination.Genre(parts[1])
         parts == listOf("search") -> Destination.Search(query["q"]?.trim()?.take(MAX_SEARCH)?.ifEmpty { null })

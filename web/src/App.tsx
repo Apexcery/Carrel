@@ -5,6 +5,7 @@ import { Layout } from './components/Layout'
 import { AccountSettings } from './pages/AccountSettings'
 import { AndroidPage } from './pages/AndroidPage'
 import { AppearanceSettings } from './pages/AppearanceSettings'
+import { AuthorPage } from './pages/AuthorPage'
 import { BookPage } from './pages/BookPage'
 import { BookResolver } from './pages/BookResolver'
 import { ChooseUsernamePage } from './pages/ChooseUsernamePage'
@@ -67,6 +68,7 @@ function App() {
         <Route path="books/hardcover/:sourceId" element={<BookResolver source="hardcover" />} />
         <Route path="books/openlibrary/:sourceId" element={<BookResolver source="openlibrary" />} />
         <Route path="series/hardcover/:hardcoverId" element={<SeriesPage />} />
+        <Route path="authors/hardcover/:hardcoverId" element={<AuthorPage />} />
         <Route path="genres" element={<GenresPage />} />
         <Route path="genres/:slug" element={<GenrePage />} />
         <Route path="privacy" element={<PrivacyPage />} />

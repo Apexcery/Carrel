@@ -4,8 +4,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Carrel.Api.Books;
 
 /// <summary>
-/// Hides covers taken down after a copyright notice (Book.CoverSuppressed) in search results, series listings, and
-/// suggestions.
+/// Hides covers taken down after a copyright notice (Book.CoverSuppressed) in search results, series listings, author
+/// pages, and suggestions, and authors' photos and bios taken down (Author.PhotoSuppressed, Author.BioSuppressed).
 /// Those come live from the book sources and are cached, so they're checked on every response rather than when stored.
 /// </summary>
 public class CoverSuppression(CarrelDbContext db)
@@ -51,6 +51,45 @@ public class CoverSuppression(CarrelDbContext db)
         SeriesBook[] Hide(SeriesBook[] books) =>
             books.Select(b => hidden.Contains(b.HardcoverId) ? b with { CoverUrl = null } : b).ToArray();
         return series with { Books = Hide(series.Books), OtherBooks = Hide(series.OtherBooks) };
+    }
+
+    public async Task<AuthorDetail> ApplyAsync(AuthorDetail author, CancellationToken ct)
+    {
+        var flags = await db.Authors
+            .Where(a => a.HardcoverId == author.HardcoverId)
+            .Select(a => new { a.PhotoSuppressed, a.BioSuppressed })
+            .FirstOrDefaultAsync(ct);
+        var ids = author.Series.SelectMany(s => s.Books).Concat(author.Standalones).Select(b => (long)b.HardcoverId).ToArray();
+        var hidden = await db.Books
+            .Where(b => b.CoverSuppressed && b.HardcoverId != null && ids.Contains(b.HardcoverId.Value))
+            .Select(b => b.HardcoverId!.Value)
+            .ToListAsync(ct);
+
+        BookSuggestion[] Hide(BookSuggestion[] books) =>
+            books.Select(b => hidden.Contains(b.HardcoverId) ? b with { CoverUrl = null } : b).ToArray();
+        return author with
+        {
+            PhotoUrl = flags is { PhotoSuppressed: true } ? null : author.PhotoUrl,
+            Bio = flags is { BioSuppressed: true } ? null : author.Bio,
+            Series = hidden.Count == 0 ? author.Series : author.Series.Select(s => s with { Books = Hide(s.Books) }).ToArray(),
+            Standalones = hidden.Count == 0 ? author.Standalones : Hide(author.Standalones),
+        };
+    }
+
+    public async Task<AuthorSearchResult[]> ApplyAsync(AuthorSearchResult[] authors, CancellationToken ct)
+    {
+        var ids = authors.Select(a => (long)a.HardcoverId).ToArray();
+        if (ids.Length == 0)
+        {
+            return authors;
+        }
+        var hidden = await db.Authors
+            .Where(a => a.PhotoSuppressed && a.HardcoverId != null && ids.Contains(a.HardcoverId.Value))
+            .Select(a => a.HardcoverId!.Value)
+            .ToListAsync(ct);
+        return hidden.Count == 0
+            ? authors
+            : authors.Select(a => hidden.Contains(a.HardcoverId) ? a with { PhotoUrl = null } : a).ToArray();
     }
 
     public async Task<BookSuggestion[]> ApplyAsync(BookSuggestion[] books, CancellationToken ct)

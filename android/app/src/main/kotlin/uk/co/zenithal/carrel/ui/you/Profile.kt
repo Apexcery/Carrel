@@ -43,6 +43,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.SubcomposeAsyncImage
 import kotlinx.coroutines.launch
@@ -110,7 +111,7 @@ private fun Header(profile: Profile, books: Int?, openSettings: () -> Unit) {
     val context = LocalContext.current
     val username = profile.username.orEmpty()
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-        Avatar(profile.avatarUrl, username)
+        Avatar(profile.avatarUrl, "@$username’s profile picture")
         Column(Modifier.weight(1f)) {
             Text("@$username", style = Carrel.type.displayMedium, color = colors.ink)
             val details = listOfNotNull(books?.let { "${formatCount(it)} ${if (it == 1) "book" else "books"}" }, if (profile.isPublic) "Public" else "Private")
@@ -130,12 +131,15 @@ private fun Header(profile: Profile, books: Int?, openSettings: () -> Unit) {
     }
 }
 
-/** The reader's round picture, which opens larger when tapped, or a silhouette without one. */
+/**
+ * A reader's (or an author's) round picture, which opens larger when tapped unless not `zoomable`, or a silhouette
+ * without one. `description` says whose it is.
+ */
 @Composable
-fun Avatar(url: String?, username: String) {
+fun Avatar(url: String?, description: String, diameter: Dp = 72.dp, zoomable: Boolean = true) {
     val colors = Carrel.colors
     var zoomed by remember { mutableStateOf(false) }
-    val frame = Modifier.size(72.dp).clip(CircleShape).background(colors.paperRaised)
+    val frame = Modifier.size(diameter).clip(CircleShape).background(colors.paperRaised)
     if (url == null) {
         Canvas(frame.border(1.dp, colors.rule, CircleShape)) {
             // The website's silhouette (a 24-unit square), a little lower so the shoulders meet the edge.
@@ -156,11 +160,11 @@ fun Avatar(url: String?, username: String) {
     }
     SubcomposeAsyncImage(
         model = url,
-        contentDescription = "@$username’s profile picture",
+        contentDescription = description,
         contentScale = ContentScale.Crop,
-        modifier = frame.clickable(onClickLabel = "View the picture larger", role = Role.Image) { zoomed = true },
+        modifier = if (zoomable) frame.clickable(onClickLabel = "View the picture larger", role = Role.Image) { zoomed = true } else frame,
     )
-    if (zoomed) ImageViewer(url, "@$username’s profile picture") { zoomed = false }
+    if (zoomed) ImageViewer(url, description) { zoomed = false }
 }
 
 /**

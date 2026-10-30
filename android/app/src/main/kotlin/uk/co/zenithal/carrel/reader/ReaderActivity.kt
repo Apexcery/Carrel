@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.res.Configuration
 import android.os.Bundle
+import android.text.format.DateFormat
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
@@ -14,6 +15,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.absolutePadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -42,6 +44,8 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.em
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -58,6 +62,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -69,11 +74,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
@@ -88,6 +96,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.time.Instant
 import java.time.OffsetDateTime
+import java.util.Date
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
@@ -125,6 +134,7 @@ import org.readium.r2.navigator.epub.css.ColCount
 import org.readium.r2.navigator.epub.css.Length
 import org.readium.r2.navigator.epub.css.RsProperties
 import org.readium.r2.shared.publication.services.locateProgression
+import org.readium.r2.shared.publication.services.positions
 import uk.co.zenithal.carrel.auth.Session
 import uk.co.zenithal.carrel.ui.library.Choices
 import uk.co.zenithal.carrel.ui.library.FieldLabel
@@ -414,6 +424,24 @@ private fun ReaderScreen(
     var keepPlace by remember { mutableStateOf<Locator?>(null) }
     // Unfolding a foldable, or turning the phone, changes the width.
     val columns = look.pages.columns(LocalConfiguration.current.screenWidthDp >= TWO_PAGES_WIDTH)
+    var footer by remember { mutableStateOf(prefs.footer) }
+    val speed = remember { ReadingSpeed(prefs) }
+    /** Seconds a position, once the reader's been timed (see ReadingSpeed). */
+    var secondsPerPosition by remember { mutableStateOf(speed.estimate) }
+    /** How many of Readium's positions each file in the reading order has, for the time left. */
+    var filePositions by remember { mutableStateOf<List<Int>?>(null) }
+    LaunchedEffect(Unit) {
+        val counts = IntArray(open.publication.readingOrder.size)
+        open.publication.positions().forEach { position -> open.publication.readingOrder.indexOfFirstWithHref(position.href)?.let { counts[it]++ } }
+        filePositions = counts.toList()
+    }
+    val context = LocalContext.current
+    val clock by produceState(timeNow(context)) {
+        while (true) {
+            delay(60_000 - System.currentTimeMillis() % 60_000)
+            value = timeNow(context)
+        }
+    }
 
     LaunchedEffect(controls) {
         showSystemBars(controls)
@@ -433,12 +461,26 @@ private fun ReaderScreen(
     LaunchedEffect(columns) { if (columns != openedWith) reopen() }
     LaunchedEffect(navigator) {
         val reader = navigator ?: return@LaunchedEffect
+        /** The screen the reader was last on, to tell a page turned forward from a jump. */
+        var lastTurn: PageTurn? = null
         reader.currentLocator.collect { current ->
             if (reopening()) return@collect
             locator = current
             laidOut = true
             open.locator = current
             val progression = current.locations.totalProgression
+            // Readium reports the page turn as it reports the place. Going back to the place after a change to the look
+            // isn't reading.
+            val turn = turns.value
+            val last = lastTurn
+            val forward = keepPlace == null && turn != null && last != null &&
+                ((turn.file == last.file && turn.screen == last.screen + 1) || (turn.file == last.file + 1 && turn.screen == 0))
+            lastTurn = turn
+            val positions = filePositions?.sum()
+            if (progression != null && positions != null) {
+                speed.arrived(progression, positions, forward)
+                secondsPerPosition = speed.estimate
+            }
             container.phoneBooks.savePosition(open.book.id, current.toJSON().toString(), progression)
             if (open.progress?.moved(progression) == true) container.scope.launch { open.progress.save() }
             // A copy never read here starts from its first page shown.
@@ -476,6 +518,27 @@ private fun ReaderScreen(
         val measured = layout?.takeIf { it.file == at.file && it.screens == at.screens } ?: return@LaunchedEffect
         place = chapterPlace(entries, measured, at.screen * perScreen, perScreen)
     }
+
+    val progression = locator?.locations?.totalProgression
+    // While dragging the seek bar, where letting go will go, without the chapter it's leaving.
+    val shownProgression = seeking ?: progression
+    val chapterPlace = place.takeIf { seeking == null }
+    val pagePositions = layout?.let { measured -> filePositions?.getOrNull(measured.file)?.let { it.toDouble() / measured.columns } }
+    val texts = mapOf(
+        FooterItem.Chapter to (place?.title ?: locator?.title).takeIf { seeking == null },
+        FooterItem.Pages to chapterPlace?.let(::pagesText),
+        FooterItem.Percent to shownProgression?.let { "${readPercent(it)}%" },
+        FooterItem.PagesLeft to chapterPlace?.let(::pagesLeftText),
+        FooterItem.ChapterTime to chapterPlace?.let { at ->
+            val seconds = secondsPerPosition ?: return@let null
+            pagePositions?.let { "${durationText((at.pages - at.first + 1) * it * seconds)} left in chapter" }
+        },
+        FooterItem.BookTime to shownProgression?.let { at ->
+            val seconds = secondsPerPosition ?: return@let null
+            filePositions?.let { "${durationText((1 - at) * it.sum() * seconds)} left in book" }
+        },
+        FooterItem.Clock to clock,
+    )
 
     fun close() {
         scope.launch { if (open.progress?.atEnd() == true) askingRead = true else leave(false) }
@@ -519,14 +582,9 @@ private fun ReaderScreen(
                     navigator = fragment
                 }
             }
-            // The chapter on the left (or only) page, and the pages showing. Always the same height, whatever the system
-            // bars are doing, or showing the controls would resize the book and move the page.
-            Row(Modifier.fillMaxWidth().height(FOOTER_HEIGHT).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                place?.let {
-                    Text(it.title, style = Carrel.type.mono, color = colors.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                    Text(" ${pagesText(it)}", style = Carrel.type.mono, color = colors.inkSoft, maxLines = 1)
-                }
-            }
+            // The footer always under the page. Always the same height, whatever the system bars are doing or it shows, or
+            // showing the controls would resize the book and move the page.
+            FooterRow(texts, footer, { footer.getValue(it).always }, Modifier.fillMaxWidth().height(FOOTER_HEIGHT).padding(horizontal = 16.dp))
         }
         val newer by open.newer.collectAsState()
         var dismissed by remember { mutableStateOf(false) }
@@ -589,7 +647,6 @@ private fun ReaderScreen(
             Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(colors.paperRaised).navigationBarsPadding()) {
                 HorizontalDivider(color = colors.rule)
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    val progression = locator?.locations?.totalProgression
                     val sliderColors = SliderDefaults.colors(thumbColor = colors.accent, activeTrackColor = colors.accent, inactiveTrackColor = colors.ruleStrong)
                     // A round knob on a thin track, like Carrel's progress bars, rather than Material's thick one.
                     Slider(
@@ -608,15 +665,8 @@ private fun ReaderScreen(
                         },
                         modifier = Modifier.semantics { contentDescription = "Where you are in the book" },
                     )
-                    Text(
-                        // While dragging, where letting go will go, without the chapter it's leaving.
-                        seeking?.let { "${readPercent(it)}%" }
-                            ?: listOfNotNull(progression?.let { "${readPercent(it)}%" }, place?.title ?: locator?.title).joinToString(" · "),
-                        style = Carrel.type.mono,
-                        color = colors.inkSoft,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    // The percentage shows while dragging even if it's switched off, as it's where letting go will go.
+                    FooterRow(texts, footer, { footer.getValue(it).controls || (it == FooterItem.Percent && seeking != null) }, Modifier.fillMaxWidth())
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         LinkButton("Contents", { contents = true }, color = colors.ink)
                         Spacer(Modifier.weight(1f))
@@ -722,6 +772,44 @@ private fun ReaderScreen(
                         Choices(Pages.entries.map { it to it.label }, look.pages, { change(look.copy(pages = it)) })
                     }
                 }
+                LookHeading("Footer", section == LookSection.Footer) { section = LookSection.Footer.takeUnless { section == it } }
+                if (section == LookSection.Footer) {
+                    // Each item's name and footers, with where it goes under them.
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(verticalAlignment = Alignment.Bottom) {
+                            Spacer(Modifier.weight(1f))
+                            for (name in listOf("With controls", "Always")) {
+                                Text(
+                                    name.uppercase(),
+                                    style = Carrel.type.mono.copy(letterSpacing = 0.1.em),
+                                    color = colors.inkSoft,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.width(FOOTER_SWITCH_WIDTH),
+                                )
+                            }
+                        }
+                        FooterItem.entries.forEach { item ->
+                            val setting = footer.getValue(item)
+                            fun set(changed: FooterSetting) {
+                                footer = footer + (item to changed)
+                                prefs.saveFooter(item, changed)
+                            }
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(item.label, style = Carrel.type.mono, color = colors.ink, modifier = Modifier.weight(1f))
+                                    FooterSwitch(setting.controls, "${item.label} with controls") { set(setting.copy(controls = it)) }
+                                    FooterSwitch(setting.always, "${item.label} always") { set(setting.copy(always = it)) }
+                                }
+                                Choices(
+                                    FooterSlot.entries.map { it to it.label },
+                                    setting.slot,
+                                    { set(setting.copy(slot = it)) },
+                                    Modifier.semantics { contentDescription = "Where ${item.label.lowercase()} goes" },
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -782,7 +870,83 @@ private const val REMEASURE_SCRIPT =
         "'calc(' + Android.getViewportWidth() + 'px / ' + window.devicePixelRatio + ')')"
 
 /** The look sheet's sections, which fold away. */
-private enum class LookSection { Text, Layout }
+private enum class LookSection { Text, Layout, Footer }
+
+/**
+ * A footer's left, centre, and right, each with its items in order, e.g. "Chapter 3 (Page 2 / 9) · 12%". The centre
+ * stays in the middle. When a side's items don't fit, the chapter's title is cut short first; then, if they still
+ * don't, the widest of the rest are cut short to the same width, as on the website.
+ */
+@Composable
+private fun FooterRow(texts: Map<FooterItem, String?>, footer: Map<FooterItem, FooterSetting>, shows: (FooterItem) -> Boolean, modifier: Modifier) {
+    val colors = Carrel.colors
+    @Composable
+    fun Slot(slot: FooterSlot, modifier: Modifier) {
+        val items = FooterItem.entries.filter { footer.getValue(it).slot == slot && shows(it) && texts[it] != null }
+        Layout(
+            content = {
+                items.forEachIndexed { i, item ->
+                    // The pages go straight after the chapter's title, as "Chapter 3 (Page 2 / 9)".
+                    val before = if (i == 0) "" else if (item == FooterItem.Pages && items[i - 1] == FooterItem.Chapter) " " else " · "
+                    Text(before + texts[item], style = Carrel.type.mono, color = colors.inkSoft, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                }
+            },
+            modifier = modifier,
+        ) { measurables, constraints ->
+            val wants = measurables.map { it.maxIntrinsicWidth(constraints.maxHeight) }
+            val chapter = items.indexOf(FooterItem.Chapter)
+            val others = wants.filterIndexed { i, _ -> i != chapter }
+            // The widest the others can be for all to fit: the narrower ones keep their width, and the rest share what's left.
+            var left = constraints.maxWidth
+            var widest = Int.MAX_VALUE
+            others.sorted().forEachIndexed { i, want ->
+                val share = left / (others.size - i)
+                if (want > share && widest == Int.MAX_VALUE) widest = share
+                left -= minOf(want, widest)
+            }
+            val widths = wants.mapIndexed { i, want -> if (i == chapter) minOf(want, left) else minOf(want, widest) }
+            val placeables = measurables.mapIndexed { i, it -> it.measure(constraints.copy(minWidth = 0, maxWidth = widths[i])) }
+            val width = placeables.sumOf { it.width }.coerceIn(constraints.minWidth, constraints.maxWidth)
+            val height = placeables.maxOfOrNull { it.height } ?: 0
+            layout(width, height) {
+                var x = if (slot == FooterSlot.Right) width - placeables.sumOf { it.width } else 0
+                placeables.forEach {
+                    it.placeRelative(x, 0)
+                    x += it.width
+                }
+            }
+        }
+    }
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Slot(FooterSlot.Left, Modifier.weight(1f))
+        Slot(FooterSlot.Centre, Modifier)
+        Slot(FooterSlot.Right, Modifier.weight(1f))
+    }
+}
+
+/** One of a footer item's switches in the look sheet, under its footer's name. */
+@Composable
+private fun FooterSwitch(checked: Boolean, label: String, onChange: (Boolean) -> Unit) {
+    val colors = Carrel.colors
+    Box(
+        Modifier
+            .width(FOOTER_SWITCH_WIDTH)
+            .toggleable(value = checked, role = Role.Checkbox, onValueChange = onChange)
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) {
+        Checkbox(
+            checked = checked,
+            onCheckedChange = null,
+            colors = CheckboxDefaults.colors(checkedColor = colors.accent, uncheckedColor = colors.ruleStrong, checkmarkColor = colors.onAccent),
+        )
+    }
+}
+
+/** The time, to the minute, in the phone's 12- or 24-hour style. */
+private fun timeNow(context: Context): String = DateFormat.getTimeFormat(context).format(Date())
+
+private val FOOTER_SWITCH_WIDTH = 88.dp
 
 /** A heading across the look sheet that shows or hides the settings under it. */
 @Composable

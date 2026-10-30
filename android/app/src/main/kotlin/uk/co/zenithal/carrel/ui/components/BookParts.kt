@@ -213,7 +213,8 @@ private val THIS_YEAR = java.time.Year.now().value
 
 /**
  * A titled row of suggested covers, swiped sideways, ending in the website's thick shelf edge; nothing when there are
- * none. Books not out yet are marked Upcoming, unless markUpcoming is false (on a shelf where they all are).
+ * none. Books not out yet are marked Upcoming, unless markUpcoming is false (on a shelf where they all are). Tapping
+ * the title calls onTitle, if given (the whole series, or the author's page).
  */
 @Composable
 fun SuggestionShelf(
@@ -222,11 +223,16 @@ fun SuggestionShelf(
     onOpen: (BookSuggestion) -> Unit,
     modifier: Modifier = Modifier,
     markUpcoming: Boolean = true,
+    onTitle: (() -> Unit)? = null,
 ) {
     if (books.isEmpty()) return
     val colors = Carrel.colors
     Column(modifier.fillMaxWidth().padding(top = 48.dp)) {
-        SectionTitle(title)
+        if (onTitle != null) {
+            SectionTitle("$title →", Modifier.clickable(role = Role.Button, onClick = onTitle))
+        } else {
+            SectionTitle(title)
+        }
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             modifier = Modifier

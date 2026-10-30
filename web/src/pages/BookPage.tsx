@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router'
 import { apiGet } from '../api'
 import { useSession } from '../auth'
+import { AuthorNames } from '../components/AuthorNames'
 import { Cover } from '../components/Cover'
 import { ErrorNotice } from '../components/ErrorNotice'
 import { GenreLinks } from '../components/GenreLinks'
@@ -11,7 +12,7 @@ import { LibraryPanel } from '../components/LibraryPanel'
 import { ReadInBrowser } from '../components/ReadInBrowser'
 import { SignInPrompt } from '../components/SignInPrompt'
 import { SuggestionShelf, useOwnedHardcoverIds } from '../components/SuggestionShelf'
-import { displaySubtitle, formatDate, formatDuration, listNames, otherCredits, seriesPosition } from '../format'
+import { displaySubtitle, formatDate, formatDuration, otherCredits, seriesPosition } from '../format'
 import { genreSlug } from '../genres'
 import { usePageTitle } from '../pageTitle'
 import type { BookDetail, BookSuggestion, Edition, RelatedBooks, SeriesEntry } from '../types'
@@ -35,7 +36,8 @@ export function BookPage() {
 
 function BookView({ book }: { book: BookDetail }) {
   const signedIn = Boolean(useSession())
-  const authors = book.authors.filter((a) => a.role === 'author').map((a) => a.name)
+  const credited = book.authors.filter((a) => a.role === 'author')
+  const authors = credited.map((a) => a.name)
   const subtitle = displaySubtitle(book.title, book.subtitle)
   const mainSeries = book.series[0]
   const seriesHref = (s: SeriesEntry) =>
@@ -63,7 +65,11 @@ function BookView({ book }: { book: BookDetail }) {
           )}
           <h1 className="book-title">{book.title}</h1>
           {subtitle && <p className="book-subtitle">{subtitle}</p>}
-          {authors.length > 0 && <p className="book-byline">by {listNames(authors)}</p>}
+          {credited.length > 0 && (
+            <p className="book-byline">
+              by <AuthorNames authors={credited} />
+            </p>
+          )}
           {otherCredits(book.authors).map((credit) => (
             <p key={credit} className="book-credit">
               {credit}
@@ -136,7 +142,12 @@ function RelatedSections({ bookId }: { bookId: number }) {
   return (
     <>
       {related.data.author && (
-        <SuggestionShelf title={`More by ${related.data.author}`} books={notOwned(related.data.byAuthor)} limit={RELATED_SHOWN} />
+        <SuggestionShelf
+          title={`More by ${related.data.author}`}
+          titleHref={related.data.authorHardcoverId ? `/authors/hardcover/${related.data.authorHardcoverId}` : undefined}
+          books={notOwned(related.data.byAuthor)}
+          limit={RELATED_SHOWN}
+        />
       )}
       <SuggestionShelf title="Readers might also like" books={notOwned(related.data.similar)} limit={RELATED_SHOWN} />
     </>

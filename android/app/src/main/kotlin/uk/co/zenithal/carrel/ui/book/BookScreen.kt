@@ -32,17 +32,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.core.net.toUri
 import uk.co.zenithal.carrel.data.BookDetail
 import uk.co.zenithal.carrel.data.BookSuggestion
+import uk.co.zenithal.carrel.data.Contributor
 import uk.co.zenithal.carrel.data.Edition
 import uk.co.zenithal.carrel.data.GenreLink
 import uk.co.zenithal.carrel.data.LIBRARY_PATH
@@ -53,7 +57,6 @@ import uk.co.zenithal.carrel.data.displaySubtitle
 import uk.co.zenithal.carrel.data.formatDate
 import uk.co.zenithal.carrel.data.genreLink
 import uk.co.zenithal.carrel.data.formatDuration
-import uk.co.zenithal.carrel.data.listNames
 import uk.co.zenithal.carrel.data.otherCredits
 import uk.co.zenithal.carrel.data.seriesPosition
 import uk.co.zenithal.carrel.data.toBookDetail
@@ -84,6 +87,7 @@ fun BookScreen(
     path: String,
     openBook: (path: String) -> Unit,
     openSeries: (hardcoverId: Int, fromBook: Int?) -> Unit,
+    openAuthor: (hardcoverId: Int) -> Unit,
     openGenre: (GenreLink) -> Unit,
     shelf: @Composable (BookDetail) -> Unit,
 ) {
@@ -101,11 +105,11 @@ fun BookScreen(
         Modifier.fillMaxSize().background(Carrel.colors.paper).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 24.dp),
     ) {
         when {
-            data != null -> BookView(data, openBook, openSeries, openGenre, shelf)
+            data != null -> BookView(data, openBook, openSeries, openAuthor, openGenre, shelf)
             saved != null -> {
                 Text("You’re offline, so this page is shorter than usual.", style = Carrel.type.mono, color = Carrel.colors.inkSoft)
                 Gap(20)
-                BookView(saved.toBookDetail(), openBook, openSeries, openGenre, shelf)
+                BookView(saved.toBookDetail(), openBook, openSeries, openAuthor, openGenre, shelf)
             }
             book.loaded.error != null -> ErrorNotice(book.loaded.error.message.orEmpty(), book.retry)
             else -> BookSkeleton()
@@ -119,11 +123,13 @@ private fun ColumnScope.BookView(
     book: BookDetail,
     openBook: (String) -> Unit,
     openSeries: (Int, Int?) -> Unit,
+    openAuthor: (Int) -> Unit,
     openGenre: (GenreLink) -> Unit,
     shelf: @Composable (BookDetail) -> Unit,
 ) {
     val colors = Carrel.colors
-    val authors = book.authors.filter { it.role == "author" }.map { it.name }
+    val credited = book.authors.filter { it.role == "author" }
+    val authors = credited.map { it.name }
     val subtitle = displaySubtitle(book.title, book.subtitle)
     val mainSeries = book.series.firstOrNull()
 
@@ -147,7 +153,7 @@ private fun ColumnScope.BookView(
         }
         Text(book.title, style = Carrel.type.displayLarge, color = colors.ink, modifier = Modifier.padding(top = 10.dp, bottom = 8.dp))
         subtitle?.let { Text(it, style = Carrel.type.body.copy(fontStyle = FontStyle.Italic), color = colors.inkSoft) }
-        if (authors.isNotEmpty()) Text("by ${listNames(authors)}", style = Carrel.type.body, color = colors.ink, modifier = Modifier.padding(top = 14.dp))
+        if (credited.isNotEmpty()) Text(byline(credited, openAuthor), style = Carrel.type.body, color = colors.ink, modifier = Modifier.padding(top = 14.dp))
         otherCredits(book.authors).forEach { Text(it, style = Carrel.type.body, color = colors.inkSoft) }
     }
 
@@ -189,18 +195,36 @@ private fun ColumnScope.BookView(
 
     if (book.editions.isNotEmpty()) Editions(book.editions)
 
-    Related(book.id, openBook)
+    Related(book.id, openBook, openAuthor)
+}
+
+/** "by A, B, and C", as listNames writes it, each name opening its author's page when Hardcover knows the author. */
+private fun byline(authors: List<Contributor>, openAuthor: (Int) -> Unit) = buildAnnotatedString {
+    val link = TextLinkStyles(SpanStyle(textDecoration = TextDecoration.Underline))
+    append("by ")
+    authors.forEachIndexed { index, author ->
+        if (index > 0) append(if (authors.size == 2) " and " else if (index == authors.lastIndex) ", and " else ", ")
+        val id = author.hardcoverId
+        if (id != null) {
+            withLink(LinkAnnotation.Clickable("author-$id", link) { openAuthor(id) }) { append(author.name) }
+        } else {
+            append(author.name)
+        }
+    }
 }
 
 /** More by the book's author and books like it, leaving out any the reader already has. Hidden if they fail to load. */
 @Composable
-private fun Related(bookId: Long, openBook: (String) -> Unit) {
+private fun Related(bookId: Long, openBook: (String) -> Unit, openAuthor: (Int) -> Unit) {
     val related = rememberLoaded("/books/$bookId/related", RelatedBooks.serializer()).loaded.data
     val owned = rememberOwnedHardcoverIds()
     if (related == null || owned == null) return
     fun notOwned(books: List<BookSuggestion>) = books.filter { it.hardcoverId.toLong() !in owned }.take(RELATED_SHOWN)
     val open = { b: BookSuggestion -> openBook("/books/hardcover/${b.hardcoverId}") }
-    related.author?.let { SuggestionShelf("More by $it", notOwned(related.byAuthor), open) }
+    related.author?.let { author ->
+        val authorId = related.authorHardcoverId
+        SuggestionShelf("More by $author", notOwned(related.byAuthor), open, onTitle = authorId?.let { { openAuthor(it) } })
+    }
     SuggestionShelf("Readers might also like", notOwned(related.similar), open)
 }
 

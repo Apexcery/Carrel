@@ -14,13 +14,14 @@ android {
         // supabase-kt needs Android 8.
         minSdk = 26
         targetSdk = 37
-        versionCode = 7
-        versionName = "0.6.1"
+        versionCode = 8
+        versionName = "0.7.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "WEBSITE_URL", "\"https://carrel.zenithal.co.uk\"")
     }
 
-    // The release key and its passwords live outside the repo, in ~/.gradle/gradle.properties (see the README).
+    // The release key and its passwords live outside the repo, in ~/.gradle/gradle.properties
+    // (see docs/development.md).
     val releaseStore = providers.gradleProperty("carrel.release.storeFile").orNull
     signingConfigs {
         if (releaseStore != null) {
@@ -42,7 +43,8 @@ android {
             buildConfigField("String", "SUPABASE_URL", "\"https://stbhesoohtliyltjxvsd.supabase.co\"")
             buildConfigField("String", "SUPABASE_KEY", "\"sb_publishable_krJi6cM_WB0J-UiuxqkGWA_ZdFFDfWy\"")
             buildConfigField("String", "API_URL", "\"http://localhost:5155\"")
-            // A test list of releases, served from the computer over `adb reverse tcp:8765 tcp:8765` (see the README).
+            // A test list of releases, served from the computer over `adb reverse tcp:8765 tcp:8765`
+            // (see docs/development.md).
             buildConfigField("String", "RELEASES_URL", "\"http://localhost:8765/releases.json\"")
         }
         release {
