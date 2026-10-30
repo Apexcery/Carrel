@@ -3953,6 +3953,33 @@ a.primary-button:hover {
   color: var(--ink-soft);
 }
 
+/* Each footer item's name with a switch under each footer, and the choice of where it goes on the line below. */
+.reader-footer-settings {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 6px 14px;
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+  color: var(--ink-soft);
+}
+
+.reader-footer-settings .reader-look-label,
+.reader-footer-settings input {
+  justify-self: center;
+  text-align: center;
+}
+
+.reader-footer-settings input {
+  margin: 0;
+}
+
+.reader-footer-settings .option-switch {
+  grid-column: 1 / -1;
+  justify-self: start;
+  margin-bottom: 8px;
+}
+
 /* Each font's name in its own face; checked like .option-switch. */
 .reader-fonts {
   display: grid;
@@ -4044,11 +4071,26 @@ a.primary-button:hover {
   cursor: default;
 }
 
+/* The footer with the controls, and the one always under the page in the same place, its line where theirs is. */
 .reader-footer {
   display: grid;
-  gap: 4px;
   padding: 8px 20px 12px;
   border-top: 1px solid var(--rule);
+  transition: border-color 200ms ease;
+}
+
+.reader-footer-controls,
+.reader-footer-always {
+  grid-area: 1 / 1;
+}
+
+.reader-footer-controls {
+  display: grid;
+  gap: 4px;
+}
+
+.reader-footer-always {
+  align-self: end;
 }
 
 .reader-seek {
@@ -4058,15 +4100,21 @@ a.primary-button:hover {
 
 /* Clicking the middle of the page hides the bars. Their space stays, so the book doesn't flow again. */
 .reader-bar,
-.reader-footer,
+.reader-footer-controls,
+.reader-footer-always,
 .reader-turn {
   transition: opacity 200ms ease, visibility 200ms ease;
 }
 
 .bars-hidden .reader-bar,
-.bars-hidden .reader-footer {
+.bars-hidden .reader-footer-controls,
+.reader:not(.bars-hidden) .reader-footer-always {
   opacity: 0;
   visibility: hidden;
+}
+
+.bars-hidden .reader-footer {
+  border-top-color: transparent;
 }
 
 /* The arrows fade too, but still turn the page. */
@@ -4074,13 +4122,40 @@ a.primary-button:hover {
   opacity: 0;
 }
 
-.reader-place {
+/* Left, centre, and right: the centre stays in the middle, and a long chapter title is cut short beside it. A line high
+   even with nothing in it, so switching items off doesn't resize the book. */
+.reader-footer-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 12px;
+  min-height: 1lh;
   font-family: var(--font-mono);
   font-size: var(--text-mono);
   color: var(--ink-soft);
+}
+
+.reader-footer-row > span {
+  display: flex;
+  min-width: 0;
+}
+
+/* When a side's items don't fit, the chapter's title is cut short first (it only grows into what the others leave);
+   then, if they still don't, the widest of the rest are cut short to the same width, and the narrower keep theirs. */
+.reader-footer-row > span > span {
+  flex: 1000 1 0;
+  min-width: 0;
+  max-width: max-content;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: pre;
+}
+
+.reader-footer-row > span > .reader-footer-chapter {
+  flex-grow: 1;
+}
+
+.reader-footer-right {
+  justify-content: flex-end;
 }
 
 .reader-contents {
