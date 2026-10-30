@@ -14,8 +14,8 @@ android {
         // supabase-kt needs Android 8.
         minSdk = 26
         targetSdk = 37
-        versionCode = 7
-        versionName = "0.6.1"
+        versionCode = 8
+        versionName = "0.7.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "WEBSITE_URL", "\"https://carrel.zenithal.co.uk\"")
     }
