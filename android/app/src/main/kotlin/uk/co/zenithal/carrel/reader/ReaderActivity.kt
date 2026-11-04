@@ -5,6 +5,7 @@ package uk.co.zenithal.carrel.reader
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.res.AssetManager
 import android.content.res.Configuration
 import android.os.Bundle
 import android.text.format.DateFormat
@@ -13,10 +14,15 @@ import android.view.ViewGroup
 import android.webkit.WebView
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.absolutePadding
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -39,13 +45,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.em
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -126,6 +132,7 @@ import uk.co.zenithal.carrel.edgeToEdge
 import uk.co.zenithal.carrel.ui.components.FormMessage
 import uk.co.zenithal.carrel.ui.components.LinkButton
 import uk.co.zenithal.carrel.ui.components.Tone
+import uk.co.zenithal.carrel.ui.theme.CarrelColors
 import uk.co.zenithal.carrel.ui.theme.CarrelTheme
 import uk.co.zenithal.carrel.ui.theme.Carrel
 import uk.co.zenithal.carrel.ui.theme.ThemeChoice
@@ -299,7 +306,7 @@ class ReaderActivity : FragmentActivity() {
                     ReaderScreen(open, prefs, lookNow, { changed ->
                         lookNow = changed
                         prefs.saveLook(changed)
-                    }, columns, turns, ::reopen, { reopening }, ::reload, ::showSystemBars, ::leave)
+                    }, { it.colors(darkNow, chosenAccent) }, columns, turns, ::reopen, { reopening }, ::reload, ::showSystemBars, ::leave)
                 }
             }
         }
@@ -387,6 +394,8 @@ private fun ReaderScreen(
     prefs: SharedPreferences,
     look: ReaderLook,
     changeLook: (ReaderLook) -> Unit,
+    /** Each theme's colours, for its swatch in the look sheet, whichever the reader is in. */
+    swatchColors: (ReaderTheme) -> CarrelColors,
     /** The pages side by side the reader was opened with; changing them opens it afresh (`reopen`). */
     openedWith: ColumnCount,
     /** Readium's page turns, for the chapter and pages in the footer. */
@@ -584,7 +593,7 @@ private fun ReaderScreen(
             }
             // The footer always under the page. Always the same height, whatever the system bars are doing or it shows, or
             // showing the controls would resize the book and move the page.
-            FooterRow(texts, footer, { footer.getValue(it).always }, Modifier.fillMaxWidth().height(FOOTER_HEIGHT).padding(horizontal = 16.dp))
+            FooterRow(texts, footer.getValue(Footer.Always), Modifier.fillMaxWidth().height(FOOTER_HEIGHT).padding(horizontal = 16.dp))
         }
         val newer by open.newer.collectAsState()
         var dismissed by remember { mutableStateOf(false) }
@@ -665,8 +674,7 @@ private fun ReaderScreen(
                         },
                         modifier = Modifier.semantics { contentDescription = "Where you are in the book" },
                     )
-                    // The percentage shows while dragging even if it's switched off, as it's where letting go will go.
-                    FooterRow(texts, footer, { footer.getValue(it).controls || (it == FooterItem.Percent && seeking != null) }, Modifier.fillMaxWidth())
+                    FooterRow(texts, seekingPlaces(footer, seeking != null), Modifier.fillMaxWidth())
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         LinkButton("Contents", { contents = true }, color = colors.ink)
                         Spacer(Modifier.weight(1f))
@@ -721,91 +729,74 @@ private fun ReaderScreen(
             // The book stays undimmed above the sheet, so each change shows as it's made.
             scrimColor = Color.Transparent,
         ) {
-            // The theme, then the text and the layout, each folded away until it's wanted, one at a time (both folded
-            // each time the sheet opens).
-            var section by remember { mutableStateOf<LookSection?>(null) }
+            // The theme, then tabs for the text, the page, and the footers (on Text each time the sheet opens).
+            var tab by remember { mutableStateOf(LookTab.Text) }
+            /** The footer being set up. */
+            var which by remember { mutableStateOf(Footer.Controls) }
             Column(
                 Modifier.verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 LookRow("Theme") {
-                    Choices(ReaderTheme.entries.map { it to it.label }, look.theme, { change(look.copy(theme = it)) })
+                    ThemeChoices(look.theme, swatchColors) { change(look.copy(theme = it)) }
                 }
-                LookHeading("Text", section == LookSection.Text) { section = LookSection.Text.takeUnless { section == it } }
-                if (section == LookSection.Text) {
-                    LookRow("Font") {
-                        Choices(ReaderFont.entries.map { it to it.label }, look.font, { change(look.copy(font = it)) })
-                    }
-                    LookRow("Size") {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                            LinkButton("A−", {
-                                change(look.copy(fontSize = (look.fontSize - FONT_STEP).coerceIn(MIN_FONT_SIZE, MAX_FONT_SIZE)))
-                            }, Modifier.semantics { contentDescription = "Smaller text" }, color = colors.ink)
-                            Text("${(look.fontSize * 100).roundToInt()}%", style = Carrel.type.mono, color = colors.ink)
-                            LinkButton("A+", {
-                                change(look.copy(fontSize = (look.fontSize + FONT_STEP).coerceIn(MIN_FONT_SIZE, MAX_FONT_SIZE)))
-                            }, Modifier.semantics { contentDescription = "Larger text" }, color = colors.ink)
+                LookTabs(tab) { tab = it }
+                when (tab) {
+                    LookTab.Text -> {
+                        LookRow("Font") {
+                            FontChoices(look.font) { change(look.copy(font = it)) }
+                        }
+                        LookRow("Size") {
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                SizeButton("A−", "Smaller text", look.fontSize > MIN_FONT_SIZE, Modifier.weight(1f)) {
+                                    change(look.copy(fontSize = (look.fontSize - FONT_STEP).coerceIn(MIN_FONT_SIZE, MAX_FONT_SIZE)))
+                                }
+                                Text("${(look.fontSize * 100).roundToInt()}%", style = Carrel.type.mono, color = colors.ink)
+                                SizeButton("A+", "Larger text", look.fontSize < MAX_FONT_SIZE, Modifier.weight(1f)) {
+                                    change(look.copy(fontSize = (look.fontSize + FONT_STEP).coerceIn(MIN_FONT_SIZE, MAX_FONT_SIZE)))
+                                }
+                            }
+                        }
+                        LookRow("Line spacing") {
+                            Choices(Step.entries.map { it to it.spacingLabel }, look.spacing, { change(look.copy(spacing = it)) }, fill = true)
                         }
                     }
-                }
-                LookHeading("Layout", section == LookSection.Layout) { section = LookSection.Layout.takeUnless { section == it } }
-                if (section == LookSection.Layout) {
-                    LookRow("Line spacing") {
-                        Choices(Step.entries.map { it to it.spacingLabel }, look.spacing, { change(look.copy(spacing = it)) })
+                    LookTab.Page -> {
+                        LookRow("Margins") {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Margin.entries.forEach { margin ->
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(margin.label, style = Carrel.type.mono, color = colors.inkSoft, modifier = Modifier.width(64.dp))
+                                        Choices(
+                                            Step.entries.map { it to it.marginLabel },
+                                            margin.of(look),
+                                            { change(margin.set(look, it)) },
+                                            Modifier.weight(1f).semantics { contentDescription = "${margin.label} margin" },
+                                            fill = true,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        LookRow("Pages side by side") {
+                            Choices(Pages.entries.map { it to it.label }, look.pages, { change(look.copy(pages = it)) }, fill = true)
+                        }
                     }
-                    LookRow("Margins") {
+                    LookTab.Footer -> {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Margin.entries.forEach { margin ->
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(margin.label, style = Carrel.type.mono, color = colors.inkSoft, modifier = Modifier.width(64.dp))
-                                    Choices(
-                                        Step.entries.map { it to it.marginLabel },
-                                        margin.of(look),
-                                        { change(margin.set(look, it)) },
-                                        Modifier.semantics { contentDescription = "${margin.label} margin" },
-                                    )
-                                }
-                            }
+                            Choices(Footer.entries.map { it to it.label }, which, { which = it }, fill = true)
+                            Text(which.note, style = Carrel.type.mono, color = colors.inkSoft)
                         }
-                    }
-                    LookRow("Pages side by side") {
-                        Choices(Pages.entries.map { it to it.label }, look.pages, { change(look.copy(pages = it)) })
-                    }
-                }
-                LookHeading("Footer", section == LookSection.Footer) { section = LookSection.Footer.takeUnless { section == it } }
-                if (section == LookSection.Footer) {
-                    // Each item's name and footers, with where it goes under them.
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(verticalAlignment = Alignment.Bottom) {
-                            Spacer(Modifier.weight(1f))
-                            for (name in listOf("With controls", "Always")) {
-                                Text(
-                                    name.uppercase(),
-                                    style = Carrel.type.mono.copy(letterSpacing = 0.1.em),
-                                    color = colors.inkSoft,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.width(FOOTER_SWITCH_WIDTH),
-                                )
-                            }
-                        }
-                        FooterItem.entries.forEach { item ->
-                            val setting = footer.getValue(item)
-                            fun set(changed: FooterSetting) {
-                                footer = footer + (item to changed)
-                                prefs.saveFooter(item, changed)
-                            }
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        // Each item's name, and where it goes in this footer.
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FooterItem.entries.forEach { item ->
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(item.label, style = Carrel.type.mono, color = colors.ink, modifier = Modifier.weight(1f))
-                                    FooterSwitch(setting.controls, "${item.label} with controls") { set(setting.copy(controls = it)) }
-                                    FooterSwitch(setting.always, "${item.label} always") { set(setting.copy(always = it)) }
+                                    Text(item.label, style = Carrel.type.mono, color = colors.ink, modifier = Modifier.weight(1f).padding(end = 12.dp))
+                                    PlaceChoices(footer.getValue(which).getValue(item), "${item.label} ${which.label.lowercase()}") { place ->
+                                        footer = footer + (which to (footer.getValue(which) + (item to place)))
+                                        prefs.saveFooter(which, item, place)
+                                    }
                                 }
-                                Choices(
-                                    FooterSlot.entries.map { it to it.label },
-                                    setting.slot,
-                                    { set(setting.copy(slot = it)) },
-                                    Modifier.semantics { contentDescription = "Where ${item.label.lowercase()} goes" },
-                                )
                             }
                         }
                     }
@@ -869,8 +860,8 @@ private const val REMEASURE_SCRIPT =
     "document.documentElement.style.setProperty('--RS__viewportWidth', " +
         "'calc(' + Android.getViewportWidth() + 'px / ' + window.devicePixelRatio + ')')"
 
-/** The look sheet's sections, which fold away. */
-private enum class LookSection { Text, Layout, Footer }
+/** The look sheet's tabs, under the theme. */
+private enum class LookTab(val label: String) { Text("Text"), Page("Page"), Footer("Footer") }
 
 /**
  * A footer's left, centre, and right, each with its items in order, e.g. "Chapter 3 (Page 2 / 9) · 12%". The centre
@@ -878,11 +869,11 @@ private enum class LookSection { Text, Layout, Footer }
  * don't, the widest of the rest are cut short to the same width, as on the website.
  */
 @Composable
-private fun FooterRow(texts: Map<FooterItem, String?>, footer: Map<FooterItem, FooterSetting>, shows: (FooterItem) -> Boolean, modifier: Modifier) {
+private fun FooterRow(texts: Map<FooterItem, String?>, places: Map<FooterItem, FooterPlace>, modifier: Modifier) {
     val colors = Carrel.colors
     @Composable
-    fun Slot(slot: FooterSlot, modifier: Modifier) {
-        val items = FooterItem.entries.filter { footer.getValue(it).slot == slot && shows(it) && texts[it] != null }
+    fun Slot(slot: FooterPlace, modifier: Modifier) {
+        val items = FooterItem.entries.filter { places.getValue(it) == slot && texts[it] != null }
         Layout(
             content = {
                 items.forEachIndexed { i, item ->
@@ -909,7 +900,7 @@ private fun FooterRow(texts: Map<FooterItem, String?>, footer: Map<FooterItem, F
             val width = placeables.sumOf { it.width }.coerceIn(constraints.minWidth, constraints.maxWidth)
             val height = placeables.maxOfOrNull { it.height } ?: 0
             layout(width, height) {
-                var x = if (slot == FooterSlot.Right) width - placeables.sumOf { it.width } else 0
+                var x = if (slot == FooterPlace.Right) width - placeables.sumOf { it.width } else 0
                 placeables.forEach {
                     it.placeRelative(x, 0)
                     x += it.width
@@ -918,52 +909,172 @@ private fun FooterRow(texts: Map<FooterItem, String?>, footer: Map<FooterItem, F
         }
     }
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Slot(FooterSlot.Left, Modifier.weight(1f))
-        Slot(FooterSlot.Centre, Modifier)
-        Slot(FooterSlot.Right, Modifier.weight(1f))
-    }
-}
-
-/** One of a footer item's switches in the look sheet, under its footer's name. */
-@Composable
-private fun FooterSwitch(checked: Boolean, label: String, onChange: (Boolean) -> Unit) {
-    val colors = Carrel.colors
-    Box(
-        Modifier
-            .width(FOOTER_SWITCH_WIDTH)
-            .toggleable(value = checked, role = Role.Checkbox, onValueChange = onChange)
-            .semantics { contentDescription = label },
-        contentAlignment = Alignment.Center,
-    ) {
-        Checkbox(
-            checked = checked,
-            onCheckedChange = null,
-            colors = CheckboxDefaults.colors(checkedColor = colors.accent, uncheckedColor = colors.ruleStrong, checkmarkColor = colors.onAccent),
-        )
+        Slot(FooterPlace.Left, Modifier.weight(1f))
+        Slot(FooterPlace.Centre, Modifier)
+        Slot(FooterPlace.Right, Modifier.weight(1f))
     }
 }
 
 /** The time, to the minute, in the phone's 12- or 24-hour style. */
 private fun timeNow(context: Context): String = DateFormat.getTimeFormat(context).format(Date())
 
-private val FOOTER_SWITCH_WIDTH = 88.dp
-
-/** A heading across the look sheet that shows or hides the settings under it. */
+/** Text, Page, and Footer, as Home's underlined tabs. */
 @Composable
-private fun LookHeading(title: String, open: Boolean, onToggle: () -> Unit) {
+private fun LookTabs(tab: LookTab, onChoose: (LookTab) -> Unit) {
     val colors = Carrel.colors
-    Column {
-        HorizontalDivider(color = colors.rule)
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clickable(role = Role.Button, onClick = onToggle)
-                .semantics { stateDescription = if (open) "Expanded" else "Collapsed" }
-                .padding(top = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(title.uppercase(), style = Carrel.type.mono.copy(letterSpacing = 0.1.em), color = colors.ink, modifier = Modifier.weight(1f))
-            Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = null, tint = colors.inkSoft, modifier = Modifier.rotate(if (open) 180f else 0f))
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .drawBehind { drawLine(colors.rule, Offset(0f, size.height - 0.5.dp.toPx()), Offset(size.width, size.height - 0.5.dp.toPx()), 1.dp.toPx()) },
+    ) {
+        LookTab.entries.forEachIndexed { index, option ->
+            val current = option == tab
+            Text(
+                option.label.uppercase(),
+                style = Carrel.type.mono.copy(letterSpacing = 0.1.em),
+                color = if (current) colors.ink else colors.inkSoft,
+                modifier = Modifier
+                    .selectable(selected = current, role = Role.Tab) { onChoose(option) }
+                    .drawBehind {
+                        if (current) drawLine(colors.accent, Offset(0f, size.height - 1.dp.toPx()), Offset(size.width, size.height - 1.dp.toPx()), 2.dp.toPx())
+                    }
+                    .padding(start = if (index == 0) 0.dp else 14.dp, end = 14.dp, top = 10.dp, bottom = 10.dp),
+            )
+        }
+    }
+}
+
+/** Each theme's name under a swatch of its own paper and ink, chosen like Choices. */
+@Composable
+private fun ThemeChoices(selected: ReaderTheme, swatchColors: (ReaderTheme) -> CarrelColors, onSelect: (ReaderTheme) -> Unit) {
+    val colors = Carrel.colors
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        ReaderTheme.entries.forEach { theme ->
+            val chosen = theme == selected
+            val swatch = swatchColors(theme)
+            Column(
+                Modifier
+                    .weight(1f)
+                    .border(1.dp, if (chosen) colors.accent else colors.ruleStrong, RoundedCornerShape(2.dp))
+                    .background(if (chosen) colors.accent else Color.Transparent, RoundedCornerShape(2.dp))
+                    .selectable(selected = chosen, role = Role.RadioButton) { onSelect(theme) }
+                    .padding(6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    "Aa",
+                    style = Carrel.type.body,
+                    color = swatch.ink,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clearAndSetSemantics {}
+                        .border(1.dp, swatch.ruleStrong, RoundedCornerShape(2.dp))
+                        .background(swatch.paper, RoundedCornerShape(2.dp))
+                        .padding(vertical = 4.dp),
+                )
+                Text(theme.label, style = Carrel.type.mono.copy(letterSpacing = 0.04.em), color = if (chosen) colors.onAccent else colors.inkSoft)
+            }
+        }
+    }
+}
+
+/** Each font's name in its own face, two to a row, chosen like Choices. */
+@Composable
+private fun FontChoices(selected: ReaderFont, onSelect: (ReaderFont) -> Unit) {
+    val colors = Carrel.colors
+    val assets = LocalContext.current.assets
+    val families = remember(assets) { ReaderFont.entries.associateWith { it.labelFamily(assets) } }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        ReaderFont.entries.chunked(2).forEach { row ->
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { font ->
+                    val chosen = font == selected
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .border(1.dp, if (chosen) colors.accent else colors.ruleStrong, RoundedCornerShape(2.dp))
+                            .background(if (chosen) colors.accent else Color.Transparent, RoundedCornerShape(2.dp))
+                            .selectable(selected = chosen, role = Role.RadioButton) { onSelect(font) }
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        Text(font.label, style = Carrel.type.body.copy(fontFamily = families[font] ?: Carrel.type.body.fontFamily), color = if (chosen) colors.onAccent else colors.ink)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The face a font's name is shown in, as the website does; the book's own in Carrel's Literata. OpenDyslexic's is cut
+ * down to the letters of its name (Android can't read the reader's WOFF2 files), and renamed inside, as its licence
+ * keeps the name OpenDyslexic for the font as published.
+ */
+private fun ReaderFont.labelFamily(assets: AssetManager): FontFamily? = when (this) {
+    ReaderFont.Book, ReaderFont.Literata -> null
+    ReaderFont.Serif -> FontFamily.Serif
+    ReaderFont.Sans -> FontFamily.SansSerif
+    ReaderFont.Atkinson -> FontFamily(Font("fonts/atkinson_hyperlegible.ttf", assets))
+    ReaderFont.OpenDyslexic -> FontFamily(Font("fonts/reader_label.ttf", assets))
+}
+
+/** A− or A+, either side of the text's size. */
+@Composable
+private fun SizeButton(text: String, label: String, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val colors = Carrel.colors
+    Text(
+        text,
+        style = Carrel.type.mono,
+        color = if (enabled) colors.ink else colors.inkFaint,
+        textAlign = TextAlign.Center,
+        modifier = modifier
+            .border(1.dp, colors.ruleStrong, RoundedCornerShape(2.dp))
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = label }
+            .padding(vertical = 10.dp),
+    )
+}
+
+/** Where a footer item goes: off, or left, centre, or right, drawn as alignment icons; chosen like Choices. */
+@Composable
+private fun PlaceChoices(selected: FooterPlace, label: String, onSelect: (FooterPlace) -> Unit) {
+    val colors = Carrel.colors
+    Row(Modifier.semantics { contentDescription = label }, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        FooterPlace.entries.forEach { place ->
+            val chosen = place == selected
+            val tint = if (chosen) colors.onAccent else colors.inkSoft
+            Box(
+                Modifier
+                    .size(width = 40.dp, height = 36.dp)
+                    .border(1.dp, if (chosen) colors.accent else colors.ruleStrong, RoundedCornerShape(2.dp))
+                    .background(if (chosen) colors.accent else Color.Transparent, RoundedCornerShape(2.dp))
+                    .selectable(selected = chosen, role = Role.RadioButton) { onSelect(place) }
+                    .semantics { contentDescription = place.label },
+                contentAlignment = Alignment.Center,
+            ) {
+                if (place == FooterPlace.Off) Text("–", style = Carrel.type.mono, color = tint) else AlignIcon(place, tint)
+            }
+        }
+    }
+}
+
+/** Three lines of different lengths, lined up on the left, the centre, or the right. */
+@Composable
+private fun AlignIcon(place: FooterPlace, color: Color) {
+    Canvas(Modifier.size(width = 16.dp, height = 12.dp)) {
+        val unit = size.width / 16
+        listOf(14f, 8f, 11f).forEachIndexed { i, length ->
+            val x = when (place) {
+                FooterPlace.Right -> 15 - length
+                FooterPlace.Centre -> (16 - length) / 2
+                else -> 1f
+            }
+            val y = (2 + i * 4) * unit
+            drawLine(color, Offset(x * unit, y), Offset((x + length) * unit, y), 1.5f * unit, StrokeCap.Round)
         }
     }
 }

@@ -1,7 +1,10 @@
 /* Carrel: a library catalogue card. Paper and ink, one accent, a typewriter for the details.
    Colours are tokens only: themes switch via html[data-theme], accents via html[data-accent]. */
 
-:root {
+/* The eReader's swatch for Carrel's own theme takes the site's light and dark colours here, whichever theme the reader
+   is in (see .reader-theme-swatch). */
+:root,
+.reader-theme-swatch[data-reader-theme='site'] {
   /* One serif family throughout: Literata, designed for reading ebooks. Titles use the same family; its optical
      size axis (font-optical-sizing: auto) gives large text the finer display cut automatically. */
   --font-display: 'Literata Variable', 'Georgia', serif;
@@ -39,7 +42,8 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
+  :root:not([data-theme='light']),
+  :root:not([data-theme='light']) .reader-theme-swatch[data-reader-theme='site'] {
     --paper: #16120e;
     --paper-raised: #201a14;
     --ink: #ece4d4;
@@ -58,7 +62,8 @@
   }
 }
 
-:root[data-theme='dark'] {
+:root[data-theme='dark'],
+:root[data-theme='dark'] .reader-theme-swatch[data-reader-theme='site'] {
   --paper: #16120e;
   --paper-raised: #201a14;
   --ink: #ece4d4;
@@ -96,8 +101,10 @@
 }
 
 /* The eReader's own colours, chosen in its settings, for the book and everything around it. After the light and
-   dark themes, so they win whichever the site is in. Keep in step with the app (ui/theme/Colors.kt). */
-:root[data-reader-theme='sepia'] {
+   dark themes, so they win whichever the site is in. Keep in step with the app (ui/theme/Colors.kt). Each also colours
+   its swatch in the eReader's settings. */
+:root[data-reader-theme='sepia'],
+.reader-theme-swatch[data-reader-theme='sepia'] {
   --paper: #efe4cc;
   --paper-raised: #f6eedb;
   --ink: #3a2e20;
@@ -116,7 +123,8 @@
   color-scheme: light;
 }
 
-:root[data-reader-theme='night'] {
+:root[data-reader-theme='night'],
+.reader-theme-swatch[data-reader-theme='night'] {
   --paper: #1f2023;
   --paper-raised: #292a2e;
   --ink: #d8d5ce;
@@ -136,7 +144,8 @@
 }
 
 /* Black all over, for OLED screens: no grain, and grey ink rather than white. */
-:root[data-reader-theme='black'] {
+:root[data-reader-theme='black'],
+.reader-theme-swatch[data-reader-theme='black'] {
   --paper: #000000;
   --paper-raised: #0e0e0e;
   --ink: #c9c5bc;
@@ -3988,31 +3997,48 @@ a.primary-button:hover {
   outline: none;
 }
 
-/* Text and Layout: a heading across the panel that folds its settings away. */
-.reader-look-section {
+/* Text, Page, and Footer, underlined like the library's tabs. */
+.reader-look-tabs {
   display: grid;
-  gap: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--rule);
+  gap: 16px;
 }
 
-.reader-look-heading {
+.reader-look-tablist {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  padding: 0;
+  gap: 24px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.reader-look-tab {
+  padding: 0 0 10px;
   border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
   background: none;
-  color: var(--ink);
   font-family: var(--font-mono);
   font-size: var(--text-mono);
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  color: var(--ink-soft);
   cursor: pointer;
 }
 
-.reader-look-heading:hover {
+.reader-look-tab:hover {
   color: var(--accent);
+}
+
+.reader-look-tab[aria-selected='true'] {
+  border-bottom-color: var(--accent);
+  color: var(--ink);
+}
+
+.reader-look-tab:focus {
+  outline: none;
+}
+
+.reader-look-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .reader-look-body {
@@ -4034,57 +4060,114 @@ a.primary-button:hover {
   color: var(--ink-soft);
 }
 
-.reader-size {
-  display: flex;
-  align-items: baseline;
-  gap: 18px;
+.reader-look-note {
   font-family: var(--font-mono);
   font-size: var(--text-mono);
+  color: var(--ink-soft);
+}
+
+/* Every row of choices spans the panel, its options sharing the width equally, so their edges all line up. */
+.reader-look .option-switch {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  width: 100%;
+}
+
+.reader-look .option-switch button {
+  padding-inline: 0.4em;
+}
+
+/* Each theme's name under a swatch of its own paper and ink. */
+.reader-themes button {
+  display: grid;
+  gap: 6px;
+  padding-block: 8px;
+}
+
+.reader-theme-swatch {
+  padding: 0.15em 0;
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* A− and A+ either side of the size, as buttons. */
+.reader-size {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+}
+
+.reader-size button {
+  padding: 0.45em;
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  background: none;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+  cursor: pointer;
+}
+
+.reader-size button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.reader-size button:disabled {
+  color: var(--ink-faint);
+  cursor: default;
 }
 
 /* A row of choices for each margin, beside its name. */
 .reader-margins {
   display: grid;
-  grid-template-columns: auto auto;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  justify-content: start;
   gap: 6px 14px;
+  width: 100%;
   font-family: var(--font-mono);
   font-size: var(--text-mono);
   color: var(--ink-soft);
 }
 
-/* Each footer item's name with a switch under each footer, and the choice of where it goes on the line below. */
+/* Each footer item's name beside where it goes. */
 .reader-footer-settings {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 6px 14px;
+  gap: 8px 14px;
   font-family: var(--font-mono);
   font-size: var(--text-mono);
-  color: var(--ink-soft);
+  color: var(--ink);
 }
 
-.reader-footer-settings .reader-look-label,
-.reader-footer-settings input {
-  justify-self: center;
-  text-align: center;
+.reader-look .reader-places {
+  grid-auto-columns: 2.6em;
+  width: auto;
 }
 
-.reader-footer-settings input {
-  margin: 0;
+.reader-places button {
+  display: grid;
+  place-items: center;
+  padding-block: 0.45em;
 }
 
-.reader-footer-settings .option-switch {
-  grid-column: 1 / -1;
-  justify-self: start;
-  margin-bottom: 8px;
-}
-
-/* Each font's name in its own face; checked like .option-switch. */
+/* Each font's name in its own face; checked like .option-switch. A column widens for a name that can't wrap (the wide
+   OpenDyslexic, on a phone). */
 .reader-fonts {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(min-content, 1fr));
+  grid-auto-rows: 1fr;
   gap: 6px;
   width: 100%;
 }
@@ -4104,6 +4187,13 @@ a.primary-button:hover {
 .reader-fonts button[aria-checked='true'] {
   background: var(--ink);
   color: var(--paper);
+}
+
+/* Too narrow for two names side by side. */
+@media (max-width: 359px) {
+  .reader-fonts {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .reader-notice {
