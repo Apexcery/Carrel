@@ -29,6 +29,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -128,7 +129,8 @@ fun ProgressBar(percent: Double?, modifier: Modifier = Modifier) {
 
 /**
  * One choice from a few, as bordered mono labels with the chosen one filled: reading status, progress unit, and the
- * shelf view. They wrap onto more lines on a narrow screen.
+ * shelf view. They wrap onto more lines on a narrow screen, unless they share the row's width (`fill`), as in the
+ * reader's settings, so rows of them line up.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -138,6 +140,7 @@ fun <T> Choices(
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    fill: Boolean = false,
 ) {
     val colors = Carrel.colors
     FlowRow(modifier.alpha(if (enabled) 1f else 0.6f), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -147,7 +150,9 @@ fun <T> Choices(
                 label,
                 style = Carrel.type.mono.copy(letterSpacing = 0.04.em),
                 color = if (chosen) colors.onAccent else colors.inkSoft,
+                textAlign = if (fill) TextAlign.Center else null,
                 modifier = Modifier
+                    .then(if (fill) Modifier.weight(1f) else Modifier)
                     .border(1.dp, if (chosen) colors.accent else colors.ruleStrong, RoundedCornerShape(2.dp))
                     .background(if (chosen) colors.accent else Color.Transparent, RoundedCornerShape(2.dp))
                     .selectable(selected = chosen, enabled = enabled, role = Role.RadioButton) { onSelect(value) }

@@ -1,5 +1,18 @@
-import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from 'react'
-import { Dialog, DialogBackdrop, DialogPanel, DialogTitle, Popover, PopoverButton, PopoverPanel } from '@headlessui/react'
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  Dialog,
+  DialogBackdrop,
+  DialogPanel,
+  DialogTitle,
+  Popover,
+  PopoverButton,
+  PopoverPanel,
+  Tab,
+  TabGroup,
+  TabList,
+  TabPanel,
+  TabPanels,
+} from '@headlessui/react'
 import { EpubNavigator, EpubPreferences, FrameManager, type EpubNavigatorListeners } from '@readium/navigator'
 import { Locator, LocatorLocations, ReadingProgression, type Publication } from '@readium/shared'
 import {
@@ -35,16 +48,22 @@ import {
   type Look,
   type Margin,
   type ReaderFont,
+  type ReaderTheme,
 } from './look'
 import {
   durationText,
   FOOTER_ITEMS,
+  FOOTERS,
+  PLACE_LABELS,
   pagesLeftText,
   ReadingSpeed,
   SLOT_LABELS,
   storedFooter,
   storeFooter,
+  type Footer,
   type FooterItem,
+  type FooterPlace,
+  type FooterPlaces,
   type FooterSettings,
   type FooterSlot,
 } from './footer'
@@ -446,9 +465,9 @@ function Reader({ book }: { book: BrowserBook }) {
     changeLook((last) => ({ fontSize: Math.round(Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, last.fontSize + by)) * 10) / 10 }))
   }
 
-  function changeFooter(item: FooterItem, change: Partial<FooterSettings[FooterItem]>) {
+  function changeFooter(footer: Footer, item: FooterItem, place: FooterPlace) {
     setFooterSettings((last) => {
-      const next = { ...last, [item]: { ...last[item], ...change } }
+      const next = { ...last, [footer]: { ...last[footer], [item]: place } }
       storeFooter(next)
       return next
     })
@@ -591,10 +610,9 @@ function Reader({ book }: { book: BrowserBook }) {
             }}
             onKeyUp={() => seeking !== null && seekTo(seeking)}
           />
-          {/* The percentage shows while dragging even if it's switched off, as it's where letting go will go. */}
-          <FooterRow texts={texts} shows={(item) => footerSettings[item].controls || (item === 'percent' && seeking !== null)} settings={footerSettings} />
+          <FooterRow texts={texts} places={seekingPlaces(footerSettings, seeking !== null)} />
         </div>
-        <FooterRow texts={texts} shows={(item) => footerSettings[item].always} settings={footerSettings} className="reader-footer-always" />
+        <FooterRow texts={texts} places={footerSettings.always} className="reader-footer-always" />
       </footer>
 
       <Dialog open={contents} onClose={() => setContents(false)} className="release-notes">
@@ -639,22 +657,22 @@ function Reader({ book }: { book: BrowserBook }) {
   )
 }
 
+/**
+ * The places in the footer with the controls. The percentage shows while dragging the seek bar even if it's off there,
+ * as it's where letting go will go: where the other footer has it, or on the right.
+ */
+function seekingPlaces(settings: FooterSettings, seeking: boolean): FooterPlaces {
+  const { controls, always } = settings
+  if (!seeking || controls.percent !== 'off') return controls
+  return { ...controls, percent: always.percent === 'off' ? 'right' : always.percent }
+}
+
 /** A footer's left, centre, and right, each with its items in order, e.g. "Chapter 3 (Page 2 / 9) · 12%". */
-function FooterRow({
-  texts,
-  shows,
-  settings,
-  className,
-}: {
-  texts: Record<FooterItem, ReactNode>
-  shows: (item: FooterItem) => boolean
-  settings: FooterSettings
-  className?: string
-}) {
+function FooterRow({ texts, places, className }: { texts: Record<FooterItem, ReactNode>; places: FooterPlaces; className?: string }) {
   return (
     <div className={className ? `reader-footer-row ${className}` : 'reader-footer-row'}>
       {(Object.keys(SLOT_LABELS) as FooterSlot[]).map((slot) => {
-        const items = (Object.keys(FOOTER_ITEMS) as FooterItem[]).filter((item) => settings[item].slot === slot && shows(item) && texts[item])
+        const items = (Object.keys(FOOTER_ITEMS) as FooterItem[]).filter((item) => places[item] === slot && texts[item])
         return (
           <span key={slot} className={`reader-footer-${slot}`}>
             {items.map((item, i) => (
@@ -681,11 +699,18 @@ function Clock() {
   return now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 }
 
-type Section = 'text' | 'layout' | 'footer'
+/** The tabs under the theme. */
+const LOOK_TABS = ['Text', 'Page', 'Footer']
+
+/** When each footer shows, under the choice of which to set up. */
+const FOOTER_NOTES: Record<Footer, string> = {
+  controls: 'Shown with the controls, under the seek bar.',
+  always: 'Shown under the page while the controls are hidden.',
+}
 
 /**
- * The reader's settings: the theme, then the text, the layout, and the footer, each folded away until it's wanted, one
- * at a time (all folded each time the panel opens).
+ * The reader's settings: the theme, then tabs for the text, the page, and the footers (on Text each time the panel
+ * opens).
  */
 function LookPanel({
   look,
@@ -698,114 +723,174 @@ function LookPanel({
   changeLook: (change: Partial<Look>) => void
   changeSize: (by: number) => void
   footer: FooterSettings
-  changeFooter: (item: FooterItem, change: Partial<FooterSettings[FooterItem]>) => void
+  changeFooter: (footer: Footer, item: FooterItem, place: FooterPlace) => void
 }) {
-  const [section, setSection] = useState<Section | null>(null)
-  const toggle = (which: Section) => setSection(section === which ? null : which)
+  /** The footer being set up. */
+  const [which, setWhich] = useState<Footer>('controls')
 
   return (
     <>
-      <LookChoice label="Theme" labels={THEME_LABELS} value={look.theme} onChange={(theme) => changeLook({ theme })} />
-      <LookSection title="Text" open={section === 'text'} onToggle={() => toggle('text')}>
-        <div className="reader-look-row">
-          <span className="reader-look-label" id="reader-font-label">
-            Font
-          </span>
-          <div className="reader-fonts" role="radiogroup" aria-labelledby="reader-font-label">
-            {(Object.keys(FONTS) as ReaderFont[]).map((font) => (
-              <button
-                key={font}
-                type="button"
-                role="radio"
-                aria-checked={look.font === font}
-                style={{ fontFamily: FONTS[font].family ?? undefined }}
-                onClick={() => changeLook({ font })}
-              >
-                {FONTS[font].label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="reader-look-row">
-          <span className="reader-look-label">Size</span>
-          <div className="reader-size">
-            <button type="button" className="link-button" aria-label="Smaller text" disabled={look.fontSize <= MIN_FONT_SIZE} onClick={() => changeSize(-FONT_STEP)}>
-              A−
+      <div className="reader-look-row">
+        <span className="reader-look-label" id="reader-theme-label">
+          Theme
+        </span>
+        <div className="option-switch reader-themes" role="radiogroup" aria-labelledby="reader-theme-label">
+          {(Object.keys(THEME_LABELS) as ReaderTheme[]).map((theme) => (
+            <button key={theme} type="button" role="radio" aria-checked={look.theme === theme} onClick={() => changeLook({ theme })}>
+              {/* data-reader-theme gives the swatch that theme's paper and ink, whichever the reader is in. */}
+              <span className="reader-theme-swatch" data-reader-theme={theme} aria-hidden="true">
+                Aa
+              </span>
+              {THEME_LABELS[theme]}
             </button>
-            <span>{Math.round(look.fontSize * 100)}%</span>
-            <button type="button" className="link-button" aria-label="Larger text" disabled={look.fontSize >= MAX_FONT_SIZE} onClick={() => changeSize(FONT_STEP)}>
-              A+
-            </button>
-          </div>
-        </div>
-      </LookSection>
-      <LookSection title="Layout" open={section === 'layout'} onToggle={() => toggle('layout')}>
-        <LookChoice label="Line spacing" labels={SPACING_LABELS} value={look.spacing} onChange={(spacing) => changeLook({ spacing })} />
-        <div className="reader-look-row">
-          <span className="reader-look-label">Margins</span>
-          <div className="reader-margins">
-            {(Object.keys(MARGINS) as Margin[]).map((margin) => (
-              <Fragment key={margin}>
-                <span>{MARGINS[margin]}</span>
-                <OptionSwitch
-                  label={`${MARGINS[margin]} margin`}
-                  labels={MARGIN_LABELS}
-                  value={look[margin]}
-                  onChange={(step) => changeLook({ [margin]: step })}
-                />
-              </Fragment>
-            ))}
-          </div>
-        </div>
-        <LookChoice label="Pages side by side" labels={PAGES_LABELS} value={look.pages} onChange={(pages) => changeLook({ pages })} className="reader-look-pages" />
-      </LookSection>
-      <LookSection title="Footer" open={section === 'footer'} onToggle={() => toggle('footer')}>
-        {/* Each item's name and footers, with where it goes under them. */}
-        <div className="reader-footer-settings">
-          <span />
-          <span className="reader-look-label">With controls</span>
-          <span className="reader-look-label">Always</span>
-          {(Object.keys(FOOTER_ITEMS) as FooterItem[]).map((item) => (
-            <Fragment key={item}>
-              <span>{FOOTER_ITEMS[item]}</span>
-              <input
-                type="checkbox"
-                aria-label={`${FOOTER_ITEMS[item]} with controls`}
-                checked={footer[item].controls}
-                onChange={(e) => changeFooter(item, { controls: e.target.checked })}
-              />
-              <input
-                type="checkbox"
-                aria-label={`${FOOTER_ITEMS[item]} always`}
-                checked={footer[item].always}
-                onChange={(e) => changeFooter(item, { always: e.target.checked })}
-              />
-              <OptionSwitch label={`Where ${FOOTER_ITEMS[item].toLowerCase()} goes`} labels={SLOT_LABELS} value={footer[item].slot} onChange={(slot) => changeFooter(item, { slot })} />
-            </Fragment>
           ))}
         </div>
-      </LookSection>
+      </div>
+      <TabGroup className="reader-look-tabs">
+        <TabList className="reader-look-tablist">
+          {LOOK_TABS.map((tab) => (
+            <Tab key={tab} className="reader-look-tab">
+              {tab}
+            </Tab>
+          ))}
+        </TabList>
+        <TabPanels>
+          <TabPanel className="reader-look-body">
+            <TextSettings look={look} changeLook={changeLook} changeSize={changeSize} />
+          </TabPanel>
+          <TabPanel className="reader-look-body">
+            <PageSettings look={look} changeLook={changeLook} />
+          </TabPanel>
+          <TabPanel className="reader-look-body">
+            <div className="reader-look-row">
+              <OptionSwitch label="Footer" labels={FOOTERS} value={which} onChange={setWhich} />
+              <span className="reader-look-note">{FOOTER_NOTES[which]}</span>
+            </div>
+            {/* Each item's name, and where it goes in this footer. */}
+            <div className="reader-footer-settings">
+              {(Object.keys(FOOTER_ITEMS) as FooterItem[]).map((item) => (
+                <Fragment key={item}>
+                  <span>{FOOTER_ITEMS[item]}</span>
+                  <PlaceSwitch
+                    label={`${FOOTER_ITEMS[item]} ${FOOTERS[which].toLowerCase()}`}
+                    value={footer[which][item]}
+                    onChange={(place) => changeFooter(which, item, place)}
+                  />
+                </Fragment>
+              ))}
+            </div>
+          </TabPanel>
+        </TabPanels>
+      </TabGroup>
     </>
   )
 }
 
-/** A heading in the reader's settings that shows or hides the settings under it. */
-function LookSection({ title, open, onToggle, children }: { title: string; open: boolean; onToggle: () => void; children: ReactNode }) {
-  const id = useId()
+/** The Text tab: the font, its size, and the line spacing. */
+function TextSettings({
+  look,
+  changeLook,
+  changeSize,
+}: {
+  look: Look
+  changeLook: (change: Partial<Look>) => void
+  changeSize: (by: number) => void
+}) {
   return (
-    <section className="reader-look-section">
-      <button type="button" className="reader-look-heading" aria-expanded={open} aria-controls={id} onClick={onToggle}>
-        {title}
-        <span className="disclosure-arrow" aria-hidden="true">
-          ▾
+    <>
+      <div className="reader-look-row">
+        <span className="reader-look-label" id="reader-font-label">
+          Font
         </span>
-      </button>
-      {open && (
-        <div id={id} className="reader-look-body">
-          {children}
+        <div className="reader-fonts" role="radiogroup" aria-labelledby="reader-font-label">
+          {(Object.keys(FONTS) as ReaderFont[]).map((font) => (
+            <button
+              key={font}
+              type="button"
+              role="radio"
+              aria-checked={look.font === font}
+              style={{ fontFamily: FONTS[font].family ?? undefined }}
+              onClick={() => changeLook({ font })}
+            >
+              {FONTS[font].label}
+            </button>
+          ))}
         </div>
-      )}
-    </section>
+      </div>
+      <div className="reader-look-row">
+        <span className="reader-look-label" id="reader-size-label">
+          Size
+        </span>
+        <div className="reader-size" role="group" aria-labelledby="reader-size-label">
+          <button type="button" aria-label="Smaller text" disabled={look.fontSize <= MIN_FONT_SIZE} onClick={() => changeSize(-FONT_STEP)}>
+            A−
+          </button>
+          <span>{Math.round(look.fontSize * 100)}%</span>
+          <button type="button" aria-label="Larger text" disabled={look.fontSize >= MAX_FONT_SIZE} onClick={() => changeSize(FONT_STEP)}>
+            A+
+          </button>
+        </div>
+      </div>
+      <LookChoice label="Line spacing" labels={SPACING_LABELS} value={look.spacing} onChange={(spacing) => changeLook({ spacing })} />
+    </>
+  )
+}
+
+/** The Page tab: the margins, and pages side by side. */
+function PageSettings({ look, changeLook }: { look: Look; changeLook: (change: Partial<Look>) => void }) {
+  return (
+    <>
+      <div className="reader-look-row">
+        <span className="reader-look-label">Margins</span>
+        <div className="reader-margins">
+          {(Object.keys(MARGINS) as Margin[]).map((margin) => (
+            <Fragment key={margin}>
+              <span>{MARGINS[margin]}</span>
+              <OptionSwitch
+                label={`${MARGINS[margin]} margin`}
+                labels={MARGIN_LABELS}
+                value={look[margin]}
+                onChange={(step) => changeLook({ [margin]: step })}
+              />
+            </Fragment>
+          ))}
+        </div>
+      </div>
+      <LookChoice label="Pages side by side" labels={PAGES_LABELS} value={look.pages} onChange={(pages) => changeLook({ pages })} className="reader-look-pages" />
+    </>
+  )
+}
+
+/** Where a footer item goes: off, or left, centre, or right, drawn as alignment icons. */
+function PlaceSwitch({ label, value, onChange }: { label: string; value: FooterPlace; onChange: (place: FooterPlace) => void }) {
+  return (
+    <div className="option-switch reader-places" role="radiogroup" aria-label={label}>
+      {(Object.keys(PLACE_LABELS) as FooterPlace[]).map((place) => (
+        <button
+          key={place}
+          type="button"
+          role="radio"
+          aria-checked={value === place}
+          aria-label={PLACE_LABELS[place]}
+          title={PLACE_LABELS[place]}
+          onClick={() => onChange(place)}
+        >
+          {place === 'off' ? '–' : <AlignIcon slot={place} />}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/** Three lines of different lengths, lined up on the left, the centre, or the right. */
+function AlignIcon({ slot }: { slot: FooterSlot }) {
+  return (
+    <svg viewBox="0 0 16 12" width="16" height="12" aria-hidden="true">
+      {[14, 8, 11].map((width, i) => {
+        const x = slot === 'left' ? 1 : slot === 'right' ? 15 - width : (16 - width) / 2
+        return <line key={i} x1={x} x2={x + width} y1={2 + i * 4} y2={2 + i * 4} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      })}
+    </svg>
   )
 }
 

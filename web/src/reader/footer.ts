@@ -7,17 +7,15 @@ export type FooterItem = 'chapter' | 'pages' | 'percent' | 'pagesLeft' | 'chapte
 
 export type FooterSlot = 'left' | 'centre' | 'right'
 
-/**
- * Where an item goes, and which footers show it: the one with the controls (under the seek bar), and the one always
- * under the page while the controls are hidden.
- */
-export interface FooterSetting {
-  slot: FooterSlot
-  controls: boolean
-  always: boolean
-}
+/** The footers: the one with the controls (under the seek bar), and the one always under the page while they're hidden. */
+export type Footer = 'controls' | 'always'
 
-export type FooterSettings = Record<FooterItem, FooterSetting>
+/** Where an item goes in a footer, or off to leave it out. */
+export type FooterPlace = FooterSlot | 'off'
+
+export type FooterPlaces = Record<FooterItem, FooterPlace>
+
+export type FooterSettings = Record<Footer, FooterPlaces>
 
 export const FOOTER_ITEMS: Record<FooterItem, string> = {
   chapter: 'Chapter',
@@ -31,37 +29,43 @@ export const FOOTER_ITEMS: Record<FooterItem, string> = {
 
 export const SLOT_LABELS: Record<FooterSlot, string> = { left: 'Left', centre: 'Centre', right: 'Right' }
 
+export const PLACE_LABELS: Record<FooterPlace, string> = { off: 'Off', ...SLOT_LABELS }
+
+export const FOOTERS: Record<Footer, string> = { controls: 'With controls', always: 'While reading' }
+
 const DEFAULT_FOOTER: FooterSettings = {
-  chapter: { slot: 'left', controls: true, always: true },
-  pages: { slot: 'left', controls: true, always: true },
-  percent: { slot: 'right', controls: true, always: false },
-  pagesLeft: { slot: 'left', controls: false, always: false },
-  chapterTime: { slot: 'left', controls: false, always: false },
-  bookTime: { slot: 'right', controls: false, always: false },
-  clock: { slot: 'centre', controls: true, always: true },
+  controls: { chapter: 'left', pages: 'left', percent: 'right', pagesLeft: 'off', chapterTime: 'off', bookTime: 'off', clock: 'centre' },
+  always: { chapter: 'left', pages: 'left', percent: 'off', pagesLeft: 'off', chapterTime: 'off', bookTime: 'off', clock: 'centre' },
 }
 
 const FOOTER_KEY = 'carrel-reader-footer'
 const SPEED_KEY = 'carrel-reader-speed'
 
 export function storedFooter(): FooterSettings {
-  let saved: Partial<Record<FooterItem, Partial<FooterSetting>>> = {}
+  let saved: Record<string, Record<string, unknown> | undefined> = {}
   try {
     saved = JSON.parse(localStorage.getItem(FOOTER_KEY) ?? '{}') ?? {}
   } catch {
     // The defaults.
   }
-  const settings = {} as FooterSettings
-  for (const item of Object.keys(FOOTER_ITEMS) as FooterItem[]) {
-    const fallback = DEFAULT_FOOTER[item]
-    const given = saved[item] ?? {}
-    settings[item] = {
-      slot: typeof given.slot === 'string' && Object.hasOwn(SLOT_LABELS, given.slot) ? given.slot : fallback.slot,
-      controls: typeof given.controls === 'boolean' ? given.controls : fallback.controls,
-      always: typeof given.always === 'boolean' ? given.always : fallback.always,
+  // Saved before each footer had its own places, as each item's slot and a switch for each footer.
+  const old = !('controls' in saved) && !('always' in saved)
+  const settings = { controls: {}, always: {} } as FooterSettings
+  for (const footer of Object.keys(FOOTERS) as Footer[]) {
+    for (const item of Object.keys(FOOTER_ITEMS) as FooterItem[]) {
+      let place: unknown = saved[footer]?.[item]
+      if (old) {
+        const { slot, [footer]: shown } = saved[item] ?? {}
+        place = typeof shown === 'boolean' && isSlot(slot) ? (shown ? slot : 'off') : undefined
+      }
+      settings[footer][item] = typeof place === 'string' && Object.hasOwn(PLACE_LABELS, place) ? (place as FooterPlace) : DEFAULT_FOOTER[footer][item]
     }
   }
   return settings
+}
+
+function isSlot(value: unknown): value is FooterSlot {
+  return typeof value === 'string' && Object.hasOwn(SLOT_LABELS, value)
 }
 
 export function storeFooter(settings: FooterSettings) {
