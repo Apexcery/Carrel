@@ -8,37 +8,80 @@ import kotlin.math.roundToInt
  * What the reader's footers show, and how fast the reader reads, kept on the phone apart from the look (changing them
  * doesn't lay the book out again); the website's eReader has the same settings (reader/footer.ts).
  */
-internal enum class FooterItem(val label: String, val default: FooterSetting) {
-    Chapter("Chapter", FooterSetting(FooterSlot.Left, controls = true, always = true)),
-    Pages("Chapter pages", FooterSetting(FooterSlot.Left, controls = true, always = true)),
-    Percent("Percentage read", FooterSetting(FooterSlot.Right, controls = true, always = false)),
-    PagesLeft("Pages left in chapter", FooterSetting(FooterSlot.Left, controls = false, always = false)),
-    ChapterTime("Time left in chapter", FooterSetting(FooterSlot.Left, controls = false, always = false)),
-    BookTime("Time left in book", FooterSetting(FooterSlot.Right, controls = false, always = false)),
-    Clock("Current time",FooterSetting(FooterSlot.Centre, controls = true, always = true)),
+internal enum class FooterItem(val label: String, private val withControls: FooterPlace, private val always: FooterPlace) {
+    Chapter("Chapter", FooterPlace.Left, FooterPlace.Left),
+    Pages("Chapter pages", FooterPlace.Left, FooterPlace.Left),
+    Percent("Percentage read", FooterPlace.Right, FooterPlace.Off),
+    PagesLeft("Pages left in chapter", FooterPlace.Off, FooterPlace.Off),
+    ChapterTime("Time left in chapter", FooterPlace.Off, FooterPlace.Off),
+    BookTime("Time left in book", FooterPlace.Off, FooterPlace.Off),
+    Clock("Current time", FooterPlace.Centre, FooterPlace.Centre);
+
+    fun default(footer: Footer) = if (footer == Footer.Controls) withControls else always
 }
 
-internal enum class FooterSlot(val label: String) { Left("Left"), Centre("Centre"), Right("Right") }
-
 /**
- * Where an item goes, and which footers show it: the one with the controls (under the seek bar), and the one always
- * under the page.
+ * The footers: the one with the controls (under the seek bar), and the one always under the page while they're hidden
+ * ("While reading"). Their names are in the saved settings' keys.
  */
-internal data class FooterSetting(val slot: FooterSlot, val controls: Boolean, val always: Boolean)
+internal enum class Footer(val label: String, val note: String) {
+    Controls("With controls", "Shown with the controls, under the seek bar."),
+    Always("While reading", "Shown under the page while the controls are hidden."),
+}
 
-internal val SharedPreferences.footer
-    get() = FooterItem.entries.associateWith { item ->
-        FooterSetting(
-            slot = FooterSlot.entries.firstOrNull { it.name == getString("footer${item.name}Slot", null) } ?: item.default.slot,
-            controls = getBoolean("footer${item.name}Controls", item.default.controls),
-            always = getBoolean("footer${item.name}Always", item.default.always),
-        )
+/** Where an item goes in a footer, or off to leave it out. */
+internal enum class FooterPlace(val label: String) {
+    Off("Off"), Left("Left"), Centre("Centre"), Right("Right");
+
+    companion object {
+        val slots = listOf(Left, Centre, Right)
+    }
+}
+
+/** Where each item goes in each footer. */
+internal typealias FooterPlaces = Map<Footer, Map<FooterItem, FooterPlace>>
+
+internal val SharedPreferences.footer: FooterPlaces
+    get() = Footer.entries.associateWith { footer ->
+        FooterItem.entries.associateWith { item ->
+            val shown = "footer${item.name}${footer.name}"
+            savedPlace(
+                item,
+                footer,
+                getString("${shown}Place", null),
+                getString("footer${item.name}Slot", null),
+                if (contains(shown)) getBoolean(shown, false) else null,
+            )
+        }
     }
 
-internal fun SharedPreferences.saveFooter(item: FooterItem, setting: FooterSetting) = edit {
-    putString("footer${item.name}Slot", setting.slot.name)
-    putBoolean("footer${item.name}Controls", setting.controls)
-    putBoolean("footer${item.name}Always", setting.always)
+internal fun SharedPreferences.saveFooter(footer: Footer, item: FooterItem, place: FooterPlace) = edit {
+    putString("footer${item.name}${footer.name}Place", place.name)
+}
+
+/**
+ * Where an item goes in a footer, from what's saved: its place, or from before each footer had its own places, the
+ * item's slot and whether this footer showed it.
+ */
+internal fun savedPlace(item: FooterItem, footer: Footer, place: String?, oldSlot: String?, oldShown: Boolean?): FooterPlace {
+    FooterPlace.entries.firstOrNull { it.name == place }?.let { return it }
+    val slot = FooterPlace.slots.firstOrNull { it.name == oldSlot }
+    return when {
+        oldShown == null || slot == null -> item.default(footer)
+        oldShown -> slot
+        else -> FooterPlace.Off
+    }
+}
+
+/**
+ * The places in the footer with the controls. The percentage shows while dragging the seek bar even if it's off there,
+ * as it's where letting go will go: where the other footer has it, or on the right.
+ */
+internal fun seekingPlaces(places: FooterPlaces, seeking: Boolean): Map<FooterItem, FooterPlace> {
+    val controls = places.getValue(Footer.Controls)
+    if (!seeking || controls.getValue(FooterItem.Percent) != FooterPlace.Off) return controls
+    val always = places.getValue(Footer.Always).getValue(FooterItem.Percent)
+    return controls + (FooterItem.Percent to if (always == FooterPlace.Off) FooterPlace.Right else always)
 }
 
 /**
