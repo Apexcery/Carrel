@@ -23,6 +23,7 @@ class LinksTest {
         assertEquals(Destination.Reader("Some_Reader"), link("/@Some_Reader"))
         assertEquals(Destination.ReaderShelf("reader", ReadingStatus.WantToRead), link("/@reader/shelves/want-to-read"))
         assertEquals(Destination.OwnShelf(ReadingStatus.Read), link("/shelves/read"))
+        assertEquals(Destination.ReaderCustomShelf("reader", 12), link("/@reader/shelves/custom/12"))
     }
 
     @Test
@@ -40,6 +41,7 @@ class LinksTest {
         assertNull(link("/authors/hardcover/1%2F..%2Faccount"))
         assertNull(link("/@a"))
         assertNull(link("/@reader/shelves/favourites"))
+        assertNull(link("/@reader/shelves/custom/favourites"))
         assertNull(link("/genres/Science%20Fiction"))
         assertNull(linkDestination("https://example.com/books/12", hosts))
         assertNull(linkDestination("javascript:alert(1)", hosts))

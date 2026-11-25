@@ -49,10 +49,37 @@ public class LibraryExport(CarrelDbContext db)
             .AsSplitQuery()
             .OrderByDescending(e => e.AddedAt)
             .ToListAsync(ct);
+        // The custom shelves each book is on, A–Z.
+        var shelves = (await db.CustomShelfEntries
+                .Where(e => e.Shelf.UserId == userId)
+                .Select(e => new { e.BookId, e.Shelf.Name })
+                .ToListAsync(ct))
+            .GroupBy(e => e.BookId)
+            .ToDictionary(g => g.Key, g => g.Select(e => e.Name).Order(StringComparer.OrdinalIgnoreCase).ToList());
+        List<string> ShelvesOf(long bookId) => shelves.GetValueOrDefault(bookId) ?? [];
 
         if (format == ExportFormat.Carrel)
         {
-            return CarrelCsv.Write(entries.Select(CarrelRecord).Prepend(CarrelCsv.Columns));
+            // Then, so nothing is lost, books on custom shelves but not in the library (rows with no status), and shelves
+            // with no books (rows with only a shelf). Goodreads' format has no room for either, as every row is a status.
+            var shelvedOnly = await db.Books
+                .Where(b => db.CustomShelfEntries.Any(e => e.BookId == b.Id && e.Shelf.UserId == userId)
+                            && !db.LibraryEntries.Any(e => e.BookId == b.Id && e.UserId == userId))
+                .Include(b => b.Authors).ThenInclude(ba => ba.Author)
+                .Include(b => b.Series).ThenInclude(bs => bs.Series)
+                .Include(b => b.Editions)
+                .AsSplitQuery()
+                .OrderBy(b => b.Title)
+                .ToListAsync(ct);
+            var emptyShelves = await db.CustomShelves
+                .Where(s => s.UserId == userId && !s.Entries.Any())
+                .OrderBy(s => s.Name)
+                .Select(s => s.Name)
+                .ToListAsync(ct);
+            return CarrelCsv.Write(entries.Select(e => CarrelRecord(e, ShelvesOf(e.BookId)))
+                .Concat(shelvedOnly.Select(b => CarrelShelvedRecord(b, ShelvesOf(b.Id))))
+                .Concat(emptyShelves.Select(CarrelEmptyShelfRecord))
+                .Prepend(CarrelCsv.Columns));
         }
         // Goodreads ids from the reader's Goodreads imports let Goodreads and StoryGraph match those books exactly.
         var goodreadsIds = (await db.ImportItems
@@ -61,10 +88,22 @@ public class LibraryExport(CarrelDbContext db)
                 .ToListAsync(ct))
             .DistinctBy(i => i.BookId)
             .ToDictionary(i => i.BookId, i => i.GoodreadsId);
-        return CarrelCsv.Write(entries.Select(e => GoodreadsRecord(e, goodreadsIds.GetValueOrDefault(e.BookId))).Prepend(GoodreadsColumns));
+        return CarrelCsv.Write(entries.Select(e => GoodreadsRecord(e, goodreadsIds.GetValueOrDefault(e.BookId), ShelvesOf(e.BookId)))
+            .Prepend(GoodreadsColumns));
     }
 
-    private static string?[] GoodreadsRecord(LibraryEntry entry, string? goodreadsId)
+    /// <summary>
+    /// Goodreads' Bookshelves column: every shelf but read, comma-separated, so custom shelves' names lose any commas.
+    /// Goodreads turns the names into its own (book-club); Carrel takes them back as they are.
+    /// </summary>
+    public static string? GoodreadsBookshelves(ReadingStatus status, IEnumerable<string> customShelves)
+    {
+        var names = customShelves.Select(n => n.Replace(',', ' ').Trim()).Where(n => n.Length > 0);
+        var all = (status == ReadingStatus.Read ? names : names.Prepend(GoodreadsShelves[status])).ToList();
+        return all.Count == 0 ? null : string.Join(", ", all);
+    }
+
+    private static string?[] GoodreadsRecord(LibraryEntry entry, string? goodreadsId, List<string> customShelves)
     {
         var book = entry.Book;
         var authors = Authors(book);
@@ -96,8 +135,7 @@ public class LibraryExport(CarrelDbContext db)
             // Goodreads keeps one finish date: the latest.
             entry.Reads.Max(r => r.FinishedOn)?.ToString(GoodreadsDate, CultureInfo.InvariantCulture),
             entry.AddedAt.UtcDateTime.ToString(GoodreadsDate, CultureInfo.InvariantCulture),
-            // Goodreads lists every shelf but read here.
-            entry.Status == ReadingStatus.Read ? null : shelf,
+            GoodreadsBookshelves(entry.Status, customShelves),
             null,
             shelf,
             null,
@@ -109,7 +147,7 @@ public class LibraryExport(CarrelDbContext db)
         ];
     }
 
-    private static string?[] CarrelRecord(LibraryEntry entry)
+    private static string?[] CarrelRecord(LibraryEntry entry, List<string> customShelves)
     {
         var book = entry.Book;
         var series = book.Series.OrderByDescending(bs => bs.IsFeatured).ThenBy(bs => bs.Position ?? decimal.MaxValue).FirstOrDefault();
@@ -136,15 +174,43 @@ public class LibraryExport(CarrelDbContext db)
                 .OrderByDescending(r => r.FinishedDateUnknown)
                 .ThenBy(r => r.FinishedOn ?? DateOnly.MaxValue)
                 .ThenBy(r => r.StartedOn)),
+            string.Join($"{CarrelCsv.ShelfSeparator} ", customShelves),
         ];
+    }
+
+    /// <summary>A book on custom shelves but not in the library: enough to match it, no status, and its shelves.</summary>
+    private static string?[] CarrelShelvedRecord(Book book, List<string> customShelves)
+    {
+        var series = book.Series.OrderByDescending(bs => bs.IsFeatured).ThenBy(bs => bs.Position ?? decimal.MaxValue).FirstOrDefault();
+        var edition = FirstIsbnEdition(book);
+        string?[] record = new string?[CarrelCsv.Columns.Length];
+        record[0] = book.Title;
+        record[1] = string.Join($"{CarrelCsv.AuthorSeparator} ", Authors(book));
+        record[2] = series?.Series.Name;
+        record[3] = series?.Position?.ToString(CultureInfo.InvariantCulture);
+        record[4] = edition?.Isbn13;
+        record[5] = edition?.Isbn10;
+        record[6] = book.HardcoverId?.ToString(CultureInfo.InvariantCulture);
+        record[^1] = string.Join($"{CarrelCsv.ShelfSeparator} ", customShelves);
+        return record;
+    }
+
+    /// <summary>A custom shelf with no books: a row with no book, only the shelf's name.</summary>
+    private static string?[] CarrelEmptyShelfRecord(string name)
+    {
+        string?[] record = new string?[CarrelCsv.Columns.Length];
+        record[^1] = name;
+        return record;
     }
 
     private static List<string> Authors(Book book) =>
         book.Authors.Where(ba => ba.Role == "author").OrderBy(ba => ba.Position).Select(ba => ba.Author.Name).ToList();
 
     /// <summary>The reader's edition, else the first with an ISBN, which is what importers match on.</summary>
-    private static Edition? IsbnEdition(LibraryEntry entry) =>
-        entry.Edition ?? entry.Book.Editions.OrderBy(e => e.Id).FirstOrDefault(e => e.Isbn13 is not null || e.Isbn10 is not null);
+    private static Edition? IsbnEdition(LibraryEntry entry) => entry.Edition ?? FirstIsbnEdition(entry.Book);
+
+    private static Edition? FirstIsbnEdition(Book book) =>
+        book.Editions.OrderBy(e => e.Id).FirstOrDefault(e => e.Isbn13 is not null || e.Isbn10 is not null);
 
     /// <summary>The first edition with a page count, as shelves show it, when the ISBN edition has none.</summary>
     private static int? PageCount(LibraryEntry entry) =>

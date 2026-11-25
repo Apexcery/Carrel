@@ -5,6 +5,19 @@ import java.util.Locale
 
 // Ported from web/src/shelves.ts; keep the two in step.
 
+/**
+ * A book on a shelf: a library item, or a custom shelf's book, with its library entry if it's in the library (null if
+ * not) and when it was put on the shelf.
+ */
+interface ShelfItem {
+    val book: LibraryBook
+    val entry: LibraryEntry?
+    val shelvedAt: String?
+}
+
+/** A book on a custom shelf. */
+data class CustomShelfItem(override val book: LibraryBook, override val entry: LibraryEntry?, override val shelvedAt: String) : ShelfItem
+
 enum class SortKind { Text, Number, Date }
 
 enum class SortDirection { Ascending, Descending }
@@ -12,30 +25,32 @@ enum class SortDirection { Ascending, Descending }
 enum class SortKey(
     val label: String,
     val kind: SortKind,
-    /** Only offered on these shelves; null for all of them. */
+    /** Only offered on these shelves (so not on custom ones, whose books can have any status); null for all of them. */
     val shelves: Set<ReadingStatus>?,
-    val value: (LibraryItem) -> Comparable<*>?,
+    val value: (ShelfItem) -> Comparable<*>?,
 ) {
-    Added("Date added", SortKind.Date, null, { it.entry.addedAt }),
+    // To the library, or on a custom shelf, to the shelf.
+    Added("Date added", SortKind.Date, null, { it.shelvedAt ?: it.entry?.addedAt }),
     // Any save stamps it, but for a book being read that's nearly always a progress update or starting it.
-    Updated("Last updated", SortKind.Date, setOf(ReadingStatus.Reading, ReadingStatus.Paused), { it.entry.updatedAt }),
+    Updated("Last updated", SortKind.Date, setOf(ReadingStatus.Reading, ReadingStatus.Paused), { it.entry?.updatedAt }),
     Finished("Date finished", SortKind.Date, setOf(ReadingStatus.Read, ReadingStatus.DidNotFinish), ::lastFinished),
-    Progress("Progress", SortKind.Number, setOf(ReadingStatus.Reading, ReadingStatus.Paused), { it.entry.progressPercent }),
+    Progress("Progress", SortKind.Number, setOf(ReadingStatus.Reading, ReadingStatus.Paused), { it.entry?.progressPercent }),
     Title("Title", SortKind.Text, null, { it.book.title }),
     Author("Author", SortKind.Text, null, { surname(it.book.authors.firstOrNull()) }),
-    Rating("Your rating", SortKind.Number, null, { it.entry.rating }),
+    Rating("Your rating", SortKind.Number, null, { it.entry?.rating }),
     Hardcover("Hardcover rating", SortKind.Number, null, { it.book.hardcoverRating }),
     Popularity("Popularity", SortKind.Number, null, { it.book.hardcoverRatingsCount }),
     Published("Year published", SortKind.Number, null, { it.book.firstPublishedYear }),
 }
 
-fun sortOptions(status: ReadingStatus): List<SortKey> = SortKey.entries.filter { it.shelves == null || status in it.shelves }
+/** A status shelf's sorts, or a custom shelf's (null). */
+fun sortOptions(status: ReadingStatus?): List<SortKey> = SortKey.entries.filter { it.shelves == null || status in it.shelves }
 
 /**
  * Read by when it was finished; Reading and Paused by when the book was last updated, so the latest progress comes
- * first; the rest by when the book was added.
+ * first; the rest, and custom shelves (null), by when the book was added.
  */
-fun defaultSort(status: ReadingStatus): SortKey = when (status) {
+fun defaultSort(status: ReadingStatus?): SortKey = when (status) {
     ReadingStatus.Read -> SortKey.Finished
     ReadingStatus.Reading, ReadingStatus.Paused -> SortKey.Updated
     else -> SortKey.Added
@@ -55,7 +70,7 @@ fun directionLabel(key: SortKey, direction: SortDirection): String {
 }
 
 /** Sorts by the given key; books without a value go last in either direction, then ties go by title. */
-fun sortItems(items: List<LibraryItem>, key: SortKey, direction: SortDirection): List<LibraryItem> {
+fun <T : ShelfItem> sortItems(items: List<T>, key: SortKey, direction: SortDirection): List<T> {
     val sign = if (direction == SortDirection.Ascending) 1 else -1
     return items.sortedWith { a, b ->
         val x = key.value(a)?.takeIf { it != "" }
@@ -72,7 +87,7 @@ fun sortItems(items: List<LibraryItem>, key: SortKey, direction: SortDirection):
 }
 
 /** Keeps books whose title, author, or series contains every word of the query. */
-fun filterItems(items: List<LibraryItem>, query: String): List<LibraryItem> {
+fun <T : ShelfItem> filterItems(items: List<T>, query: String): List<T> {
     val terms = query.lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
     if (terms.isEmpty()) return items
     return items.filter { item ->
@@ -87,8 +102,23 @@ fun shelfItems(library: List<LibraryItem>, status: ReadingStatus): List<LibraryI
     return sortItems(library.filter { it.entry.status == status }, key, naturalDirection(key))
 }
 
+/** A custom shelf's books, unsorted, each with the reader's entry for it from `library` when it's in it. */
+fun onCustomShelf(library: List<LibraryItem>, shelf: CustomShelf): List<CustomShelfItem> {
+    val inLibrary = library.associateBy { it.book.id }
+    return shelf.books.map { shelved ->
+        val item = inLibrary[shelved.book.id]
+        CustomShelfItem(item?.book ?: shelved.book, item?.entry, shelved.addedAt)
+    }
+}
+
+/** A custom shelf's books in its default order. */
+fun customShelfItems(library: List<LibraryItem>, shelf: CustomShelf): List<CustomShelfItem> {
+    val key = defaultSort(null)
+    return sortItems(onCustomShelf(library, shelf), key, naturalDirection(key))
+}
+
 /** The latest date the book was finished, if any. */
-fun lastFinished(item: LibraryItem): String? = item.entry.reads.mapNotNull { it.finishedOn }.maxOrNull()
+fun lastFinished(item: ShelfItem): String? = item.entry?.reads?.mapNotNull { it.finishedOn }?.maxOrNull()
 
 private fun surname(name: String?): String? = name?.trim()?.split(Regex("\\s+"))?.last()
 

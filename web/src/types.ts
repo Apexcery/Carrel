@@ -241,13 +241,33 @@ export interface Profile {
   goals: ReadingGoal[]
 }
 
-/** A reader's profile page: their username, reading goals, and whole library. */
+/**
+ * A shelf the reader named themselves; a book can be on any number of them, in the library or not. Only public ones
+ * show on the profile.
+ */
+export interface CustomShelf {
+  id: number
+  name: string
+  isPublic: boolean
+  /** Most recently shelved first. */
+  books: ShelvedBook[]
+}
+
+/** A book on a custom shelf, and when it was put there. */
+export interface ShelvedBook {
+  book: LibraryItem['book']
+  addedAt: string
+}
+
+/** A reader's profile page: their username, reading goals, whole library, and custom shelves. */
 export interface Reader {
   username: string
   isPublic: boolean
   avatarUrl: string | null
   goals: ReadingGoal[]
   library: LibraryItem[]
+  /** Another reader's public shelves; all of the signed-in reader's own. */
+  shelves: CustomShelf[]
 }
 
 export interface UsernameAvailability {

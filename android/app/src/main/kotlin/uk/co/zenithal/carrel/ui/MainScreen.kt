@@ -64,8 +64,10 @@ import uk.co.zenithal.carrel.ui.browse.GenresScreen
 import uk.co.zenithal.carrel.ui.browse.SeriesScreen
 import uk.co.zenithal.carrel.ui.home.HomeScreen
 import uk.co.zenithal.carrel.ui.you.ProfileSection
+import uk.co.zenithal.carrel.ui.you.ReaderCustomShelfScreen
 import uk.co.zenithal.carrel.ui.you.ReaderScreen
 import uk.co.zenithal.carrel.ui.you.ReaderShelfScreen
+import uk.co.zenithal.carrel.ui.library.CustomShelfScreen
 import uk.co.zenithal.carrel.ui.library.LibraryScreen
 import uk.co.zenithal.carrel.ui.reading.AddBookScreen
 import uk.co.zenithal.carrel.ui.reading.CatalogueScreen
@@ -111,6 +113,8 @@ import kotlin.reflect.KClass
 @Serializable data object GenresRoute
 /** One of the reader's shelves, by its slug (want-to-read), not the enum, for the same reason as SignInRoute. */
 @Serializable data class ShelfRoute(val slug: String)
+/** One of the reader's custom shelves, by id. */
+@Serializable data class CustomShelfRoute(val id: Long)
 @Serializable data object SettingsRoute
 @Serializable data object AccountSettingsRoute
 @Serializable data object ImportExportRoute
@@ -118,6 +122,7 @@ import kotlin.reflect.KClass
 /** Another reader's profile, and one of their shelves (by slug, as ShelfRoute). */
 @Serializable data class ReaderRoute(val username: String)
 @Serializable data class ReaderShelfRoute(val username: String, val slug: String)
+@Serializable data class ReaderCustomShelfRoute(val username: String, val id: Long)
 /** A shared book's ISBN, looked up, then the book opens; or a search for `fallback` when no book has it. */
 @Serializable data class FindBookRoute(val isbn: String, val fallback: String)
 /** Reading in Carrel (the Home button): first carrying on with the last book, with `resume`. */
@@ -182,6 +187,8 @@ fun MainScreen(nav: NavHostController, session: Session, profile: Profile?, dest
             is Destination.Reader -> if (own(destination.username)) openTab(nav, YouRoute) else nav.navigate(ReaderRoute(destination.username))
             is Destination.ReaderShelf ->
                 if (own(destination.username)) nav.navigate(ShelfRoute(destination.status.slug)) else nav.navigate(ReaderShelfRoute(destination.username, destination.status.slug))
+            is Destination.ReaderCustomShelf ->
+                if (own(destination.username)) nav.navigate(CustomShelfRoute(destination.id)) else nav.navigate(ReaderCustomShelfRoute(destination.username, destination.id))
             is Destination.OwnShelf -> if (profile != null) nav.navigate(ShelfRoute(destination.status.slug)) else openTab(nav, LibraryRoute)
             // Added from another app, it then shows among the reader's books.
             is Destination.AddBook -> {
@@ -248,20 +255,29 @@ fun MainScreen(nav: NavHostController, session: Session, profile: Profile?, dest
                         )
                     }
                 } else {
-                    LibraryScreen(openBook) { status -> nav.navigate(ShelfRoute(status.slug)) }
+                    LibraryScreen(openBook, { status -> nav.navigate(ShelfRoute(status.slug)) }) { id -> nav.navigate(CustomShelfRoute(id)) }
                 }
             }
             composable<ShelfRoute> { backStackEntry ->
                 val status = ReadingStatus.fromSlug(backStackEntry.toRoute<ShelfRoute>().slug)
-                if (profile != null && status != null) ShelfScreen(status, "Your library", rememberLoaded(LIBRARY_PATH, LibrarySerializer), openBook)
+                if (profile != null && status != null) ShelfScreen(status.label, status, "Your library", rememberLoaded(LIBRARY_PATH, LibrarySerializer), openBook)
+            }
+            composable<CustomShelfRoute> { backStackEntry ->
+                if (profile != null) CustomShelfScreen(backStackEntry.toRoute<CustomShelfRoute>().id, openBook) { nav.popBackStack() }
             }
             composable<ReaderRoute> { backStackEntry ->
                 val username = backStackEntry.toRoute<ReaderRoute>().username
-                ReaderScreen(username, openBook) { status -> nav.navigate(ReaderShelfRoute(username, status.slug)) }
+                ReaderScreen(username, openBook, { status -> nav.navigate(ReaderShelfRoute(username, status.slug)) }) { id ->
+                    nav.navigate(ReaderCustomShelfRoute(username, id))
+                }
             }
             composable<ReaderShelfRoute> { backStackEntry ->
                 val route = backStackEntry.toRoute<ReaderShelfRoute>()
                 ReadingStatus.fromSlug(route.slug)?.let { ReaderShelfScreen(route.username, it, openBook) }
+            }
+            composable<ReaderCustomShelfRoute> { backStackEntry ->
+                val route = backStackEntry.toRoute<ReaderCustomShelfRoute>()
+                ReaderCustomShelfScreen(route.username, route.id, openBook)
             }
             composable<FindBookRoute> { backStackEntry ->
                 val route = backStackEntry.toRoute<FindBookRoute>()

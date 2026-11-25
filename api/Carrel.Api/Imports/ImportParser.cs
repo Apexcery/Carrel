@@ -8,7 +8,11 @@ namespace Carrel.Api.Imports;
 /// <summary>Thrown when an upload can't be imported; the message is shown to the reader.</summary>
 public class ImportFileException(string message) : Exception(message);
 
-/// <summary>One export row, mapped to Carrel's terms. The fields after Reads only come from Carrel's own exports.</summary>
+/// <summary>
+/// One export row, mapped to Carrel's terms. The fields after Reads only come from Carrel's own exports, but for
+/// Shelves (custom shelves, by name), which Goodreads exports have too. A ShelveOnly row (see ImportItem) only puts the
+/// book on its shelves.
+/// </summary>
 public record ParsedRow(
     string Title,
     string[] Authors,
@@ -25,7 +29,9 @@ public record ParsedRow(
     DateTimeOffset? AddedAt = null,
     ProgressUnit? ProgressUnit = null,
     decimal? ProgressValue = null,
-    decimal? ProgressPercent = null);
+    decimal? ProgressPercent = null,
+    string[]? Shelves = null,
+    bool ShelveOnly = false);
 
 /// <summary>Reads Goodreads, StoryGraph, and Carrel CSV exports, telling them apart by their columns.</summary>
 public static class ImportParser
@@ -37,8 +43,14 @@ public static class ImportParser
     // Goodreads exports custom exclusive shelves under the reader's own names.
     private static readonly string[] DidNotFinishShelves = ["did-not-finish", "dnf", "abandoned", "gave-up", "unfinished"];
     private static readonly string[] PausedShelves = ["paused", "on-hold", "on-pause"];
+    /// <summary>Goodreads' own exclusive shelves, which are reading statuses rather than custom shelves.</summary>
+    private static readonly string[] StatusShelves = ["to-read", "currently-reading", "read"];
 
-    public static (ImportSource Source, List<ParsedRow> Rows) Parse(string text)
+    /// <summary>
+    /// The export's source and rows, and (from Carrel's own exports) the names of custom shelves with no books, each
+    /// written as a row with no title and only its name under Shelves.
+    /// </summary>
+    public static (ImportSource Source, List<ParsedRow> Rows, string[] EmptyShelves) Parse(string text)
     {
         var records = ReadCsv(text);
         if (records.Count == 0)
@@ -56,11 +68,17 @@ public static class ImportParser
         }
 
         var rows = new List<ParsedRow>();
+        var emptyShelves = new List<string>();
         foreach (var record in records.Skip(1))
         {
             var fields = header.Select((name, i) => (name, value: i < record.Length ? record[i].Trim() : ""))
                 .GroupBy(f => f.name)
                 .ToDictionary(g => g.Key, g => g.First().value);
+            if (source == ImportSource.Carrel && fields.GetValueOrDefault("Title", "").Length == 0)
+            {
+                emptyShelves.AddRange(CarrelShelves(fields));
+                continue;
+            }
             var row = source switch
             {
                 ImportSource.Goodreads => FromGoodreads(fields),
@@ -72,11 +90,11 @@ public static class ImportParser
                 rows.Add(row);
             }
         }
-        if (rows.Count == 0)
+        if (rows.Count == 0 && emptyShelves.Count == 0)
         {
             throw new ImportFileException("That export doesn’t have any books in it.");
         }
-        return (source, rows);
+        return (source, rows, ShelfNames(emptyShelves));
     }
 
     private static ParsedRow? FromGoodreads(Dictionary<string, string> f)
@@ -118,8 +136,25 @@ public static class ImportParser
             status,
             rating,
             ParseDate(f.GetValueOrDefault("Date Added")),
-            BuildReads(status, dated, ReadCount(f.GetValueOrDefault("Read Count"))));
+            BuildReads(status, dated, ReadCount(f.GetValueOrDefault("Read Count"))),
+            Shelves: GoodreadsShelves(f.GetValueOrDefault("Bookshelves", "")));
     }
+
+    /// <summary>
+    /// The custom shelves in Goodreads' Bookshelves column (comma-separated), leaving out its status shelves and the
+    /// custom shelves read as a status (did not finish, paused). Any other custom exclusive shelf (library-books) is
+    /// kept as a custom shelf, since it isn't a status here.
+    /// </summary>
+    public static string[] GoodreadsShelves(string bookshelves) =>
+        ShelfNames(SplitNames(bookshelves)
+            .Where(name => !StatusShelves.Concat(DidNotFinishShelves).Concat(PausedShelves).Contains(name, StringComparer.OrdinalIgnoreCase)));
+
+    /// <summary>Names that fit a custom shelf, each once ignoring case.</summary>
+    private static string[] ShelfNames(IEnumerable<string> names) =>
+        names.Select(n => n.Trim())
+            .Where(n => n.Length is > 0 and <= CustomShelf.MaxNameLength)
+            .DistinctBy(n => n.ToLowerInvariant())
+            .ToArray();
 
     private static ParsedRow? FromStoryGraph(Dictionary<string, string> f)
     {
@@ -173,7 +208,10 @@ public static class ImportParser
             BuildReads(status, dated, ReadCount(f.GetValueOrDefault("Read Count"))));
     }
 
-    /// <summary>Carrel's own export: everything as the reader had it, including reads as they were and progress.</summary>
+    /// <summary>
+    /// Carrel's own export: everything as the reader had it, including reads as they were and progress. A row with no
+    /// status but some shelves is a book on those shelves that isn't in the library.
+    /// </summary>
     private static ParsedRow? FromCarrel(Dictionary<string, string> f)
     {
         var title = f.GetValueOrDefault("Title", "");
@@ -181,6 +219,7 @@ public static class ImportParser
         {
             return null;
         }
+        var shelves = CarrelShelves(f);
         var statusText = f.GetValueOrDefault("Status", "").ToLowerInvariant();
         var status = CarrelCsv.Statuses.Where(s => s.Value == statusText).Select(s => s.Key).DefaultIfEmpty(ReadingStatus.WantToRead).First();
         var rating = Number(f.GetValueOrDefault("Rating")) is { } stars && stars is >= 0.5m and <= 5 && stars * 2 == decimal.Truncate(stars * 2)
@@ -216,8 +255,14 @@ public static class ImportParser
             added,
             unit,
             value,
-            percent);
+            percent,
+            shelves,
+            // Without shelves, a row with no status is a want-to-read book, as before.
+            statusText.Length == 0 && shelves.Length > 0);
     }
+
+    private static string[] CarrelShelves(Dictionary<string, string> f) =>
+        ShelfNames(f.GetValueOrDefault("Shelves", "").Split(CarrelCsv.ShelfSeparator));
 
     private static decimal? Number(string? text) =>
         decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var number) ? number : null;

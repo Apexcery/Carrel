@@ -5,13 +5,14 @@ import { apiGet } from '../api'
 import { useSession } from '../auth'
 import { ErrorNotice } from '../components/ErrorNotice'
 import { GenreLinks } from '../components/GenreLinks'
-import { ReadingStrip, ShelfStrip, ShelfTitle } from '../components/LibraryShelves'
+import { CustomShelfTitle, ReadingStrip, ShelfStrip, ShelfTitle } from '../components/LibraryShelves'
 import { SignInPrompt } from '../components/SignInPrompt'
 import { SuggestionShelf, SuggestionShelfSkeleton, useOwnedHardcoverIds } from '../components/SuggestionShelf'
+import { useCustomShelves } from '../customShelves'
 import { useGenreIndex } from '../genres'
 import { usePageTitle } from '../pageTitle'
 import { useProfile } from '../profile'
-import { shelfItems } from '../shelves'
+import { customShelfItems, shelfItems } from '../shelves'
 import type {
   BookSuggestion,
   DiscoverShelves,
@@ -316,6 +317,8 @@ function LibrarySkeleton() {
 
 function Library() {
   const library = useQuery({ queryKey: ['library'], queryFn: () => apiGet<LibraryItem[]>('/library') })
+  // Shelves with books follow the status shelves once they've loaded; they're left out if they fail.
+  const shelves = useCustomShelves()
   // Signed in, so the profile has loaded (see App).
   const username = useProfile().data!.username!
 
@@ -363,6 +366,21 @@ function Library() {
             <section key={status} className="shelf">
               <ShelfStrip
                 heading={<ShelfTitle username={username} status={status} count={items.length} level="h3" />}
+                items={items}
+                limit={SHELF_BOOKS}
+              />
+            </section>
+          )
+        )
+      })}
+
+      {shelves.data?.map((shelf) => {
+        const items = customShelfItems(library.data, shelf)
+        return (
+          items.length > 0 && (
+            <section key={shelf.id} className="shelf">
+              <ShelfStrip
+                heading={<CustomShelfTitle username={username} shelf={shelf} count={items.length} level="h3" />}
                 items={items}
                 limit={SHELF_BOOKS}
               />

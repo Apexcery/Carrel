@@ -38,11 +38,13 @@ import uk.co.zenithal.carrel.LocalContainer
 import uk.co.zenithal.carrel.auth.authMessage
 import uk.co.zenithal.carrel.auth.passwordProblem
 import uk.co.zenithal.carrel.data.ApiException
+import uk.co.zenithal.carrel.data.CustomShelvesSerializer
 import uk.co.zenithal.carrel.data.LIBRARY_PATH
 import uk.co.zenithal.carrel.data.LibrarySerializer
 import uk.co.zenithal.carrel.data.PROFILE_PATH
 import uk.co.zenithal.carrel.data.PasswordConfirmation
 import uk.co.zenithal.carrel.data.Profile
+import uk.co.zenithal.carrel.data.SHELVES_PATH
 import uk.co.zenithal.carrel.data.SaveProfileRequest
 import uk.co.zenithal.carrel.ui.auth.usernameStatus
 import uk.co.zenithal.carrel.ui.components.Field
@@ -355,6 +357,7 @@ private fun DeleteLibraryRow() {
         // Shelves, suggestions, the year's books, and imports were all built from the library.
         container.store.markStale()
         container.store.save(LIBRARY_PATH, emptyList(), LibrarySerializer)
+        container.store.save(SHELVES_PATH, emptyList(), CustomShelvesSerializer)
         deleted = true
         editing = false
     }
@@ -374,7 +377,7 @@ private fun DeleteLibraryRow() {
         danger = true,
     ) {
         Warning(
-            "This deletes every book in your library, along with your ratings, progress, reading history, and imports. " +
+            "This deletes every book in your library, along with your ratings, progress, reading history, custom shelves, and imports. " +
                 "Your account and username stay. It can’t be undone.",
         )
         PasswordField(password, { password = it }, ::submit)

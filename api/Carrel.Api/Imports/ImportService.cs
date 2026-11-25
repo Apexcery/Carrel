@@ -17,7 +17,9 @@ public class ImportService(CarrelDbContext db, BookService books, IImportQueue q
         {
             throw new ImportFileException("An import is already running. Wait for it to finish before starting another.");
         }
-        var (source, rows) = ImportParser.Parse(csv.TrimStart('﻿'));
+        var (source, rows, emptyShelves) = ImportParser.Parse(csv.TrimStart('﻿'));
+        // Shelves with no books have nothing to match, so they're made (if missing) along with the import.
+        await ImportWriter.ShelvesAsync(db, userId, emptyShelves, ct);
 
         var import = new LibraryImport
         {
@@ -50,6 +52,8 @@ public class ImportService(CarrelDbContext db, BookService books, IImportQueue q
             ProgressUnit = row.ProgressUnit,
             ProgressValue = row.ProgressValue,
             ProgressPercent = row.ProgressPercent,
+            Shelves = row.Shelves ?? [],
+            ShelveOnly = row.ShelveOnly,
         }));
         db.LibraryImports.Add(import);
         await db.SaveChangesAsync(ct);
@@ -190,10 +194,20 @@ public class ImportService(CarrelDbContext db, BookService books, IImportQueue q
             return false;
         }
 
-        if (item is { CreatedEntry: true, BookId: { } wrongBookId } && wrongBookId != book.Id
-            && !await db.ImportItems.AnyAsync(i => i.ImportId == importId && i.Id != itemId && i.BookId == wrongBookId && i.CreatedEntry, ct))
+        var wrongEntry = item is { CreatedEntry: true, BookId: { } wrongId } && wrongId != book.Id
+            && !await db.ImportItems.AnyAsync(i => i.ImportId == importId && i.Id != itemId && i.BookId == wrongId && i.CreatedEntry, ct);
+        if (wrongEntry)
         {
-            await db.LibraryEntries.Where(e => e.UserId == userId && e.BookId == wrongBookId).ExecuteDeleteAsync(ct);
+            await db.LibraryEntries.Where(e => e.UserId == userId && e.BookId == item.BookId).ExecuteDeleteAsync(ct);
+        }
+        // Whether or not the row made the entry (or any), it put the wrong book on its shelves.
+        if (item.BookId is { } wrongBookId && wrongBookId != book.Id && item.Shelves.Length > 0)
+        {
+            // Off the shelves the row put it on; the right book goes on them instead.
+            var shelves = item.Shelves.Select(s => s.ToLowerInvariant()).ToList();
+            await db.CustomShelfEntries
+                .Where(e => e.BookId == wrongBookId && e.Shelf.UserId == userId && shelves.Contains(e.Shelf.Name.ToLower()))
+                .ExecuteDeleteAsync(ct);
         }
         item.Match = ImportMatch.Chosen;
         item.BookId = book.Id;

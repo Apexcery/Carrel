@@ -184,8 +184,9 @@ public class LibraryService(CarrelDbContext db)
         changedAt is { } at && at < now ? at : now;
 
     /// <summary>
-    /// Deletes every entry in the user's library (their reads go with them) and their imports, keeping the account. False,
-    /// deleting nothing, while an import is running, since it would carry on adding books.
+    /// Deletes every entry in the user's library (their reads go with them), their custom shelves (and the books on
+    /// them), and their imports, keeping the account. False, deleting nothing, while an import is running, since it
+    /// would carry on adding books.
     /// </summary>
     public async Task<bool> DeleteAllAsync(Guid userId, CancellationToken ct)
     {
@@ -196,6 +197,7 @@ public class LibraryService(CarrelDbContext db)
         }
         await db.LibraryImports.Where(i => i.UserId == userId).ExecuteDeleteAsync(ct);
         await db.LibraryEntries.Where(e => e.UserId == userId).ExecuteDeleteAsync(ct);
+        await db.CustomShelves.Where(s => s.UserId == userId).ExecuteDeleteAsync(ct);
         await transaction.CommitAsync(ct);
         return true;
     }
@@ -314,7 +316,8 @@ public class LibraryService(CarrelDbContext db)
             .Select(r => new ReadDto(r.Id, r.StartedOn, r.FinishedOn, r.FinishedDateUnknown))
             .ToArray());
 
-    private static LibraryBookDto ToBook(Book book, Edition? edition)
+    /// <summary>Needs the book's authors, series, and editions loaded. Custom shelves use it too.</summary>
+    internal static LibraryBookDto ToBook(Book book, Edition? edition)
     {
         var series = book.Series
             .OrderByDescending(bs => bs.IsFeatured)

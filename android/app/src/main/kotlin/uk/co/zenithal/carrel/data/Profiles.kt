@@ -20,7 +20,10 @@ data class Profile(
 @Serializable
 data class ReadingGoal(val year: Int, val books: Int)
 
-/** Any reader's public profile, with their whole library (GET /readers/{username}); a private one is not found. */
+/**
+ * Any reader's public profile, with their whole library and public custom shelves (GET /readers/{username}); a private
+ * one is not found.
+ */
 @Serializable
 data class Reader(
     val username: String,
@@ -28,6 +31,8 @@ data class Reader(
     val avatarUrl: String?,
     val goals: List<ReadingGoal>,
     val library: List<LibraryItem>,
+    // A default, so a copy saved before shelves came still reads.
+    val shelves: List<CustomShelf> = emptyList(),
 )
 
 @Serializable
