@@ -1,4 +1,7 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { apiGet } from '../api'
+import { useSession } from '../auth'
 import { ErrorNotice } from '../components/ErrorNotice'
 import { GenreLinks } from '../components/GenreLinks'
 import { useGenreIndex } from '../genres'
@@ -8,9 +11,19 @@ import type { GenreIndex, GenreLink } from '../types'
 /** Search results shown at most; a few letters can match hundreds of genres. */
 const MATCHES_SHOWN = 40
 
-/** The genres listed for browsing, at /genres, with a search across every genre Carrel knows of. */
+/**
+ * The genres listed for browsing, at /genres, with a search across every genre Carrel knows of. Signed in, the
+ * reader's own top genres come first.
+ */
 export function GenresPage() {
   const genres = useGenreIndex()
+  const signedIn = Boolean(useSession())
+  // Under 'library', so it follows changes to the reader's shelves.
+  const yours = useQuery({
+    queryKey: ['library', 'top-genres'],
+    queryFn: () => apiGet<GenreLink[]>('/library/top-genres'),
+    enabled: signedIn,
+  })
   const [query, setQuery] = useState('')
   usePageTitle('Genres')
 
@@ -18,13 +31,15 @@ export function GenresPage() {
     return <ErrorNotice error={genres.error} onRetry={() => genres.refetch()} />
   }
   const matches = genres.data && query.trim() ? findGenres(genres.data, query.trim()) : null
+  // Signed in, wait for the reader's own genres too, so they don't push the lists down on arriving.
+  const ready = Boolean(genres.data) && (!signedIn || !yours.isPending)
   return (
-    <section aria-busy={!genres.data}>
+    <section aria-busy={!ready}>
       <header className="series-header">
         <p className="kicker">Browse</p>
         <h1 className="series-title">Genres</h1>
       </header>
-      {genres.data && (
+      {ready && genres.data && (
         <>
           <label className="genre-search">
             <span className="visually-hidden">Find a genre</span>
@@ -38,6 +53,7 @@ export function GenresPage() {
             )
           ) : (
             <>
+              {signedIn && yours.data && yours.data.length > 0 && <GenreGroup title="Your genres" genres={yours.data} />}
               <GenreGroup title="Fiction" genres={genres.data.fiction} />
               <GenreGroup title="Nonfiction" genres={genres.data.nonfiction} />
             </>

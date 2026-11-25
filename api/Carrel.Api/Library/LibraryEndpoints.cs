@@ -25,6 +25,10 @@ public static class LibraryEndpoints
                 service.GetTopGenrePicksAsync(UserId(user), ct))
             .RequireRateLimiting(BookEndpoints.BookSourcesRateLimit);
 
+        // From the reader's own books and the day-cached list of genres, so it doesn't count as a book lookup.
+        library.MapGet("/top-genres", (ClaimsPrincipal user, RecommendationService service, CancellationToken ct) =>
+            service.GetTopGenreLinksAsync(UserId(user), ct));
+
         // ?format=goodreads (Goodreads' columns) or carrel (everything). The website names the downloaded file.
         library.MapGet("/export", async (string? format, ClaimsPrincipal user, LibraryExport export, CancellationToken ct) =>
             format?.ToLowerInvariant() switch

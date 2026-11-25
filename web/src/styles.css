@@ -377,7 +377,8 @@ a.primary-button:hover {
    .home-shelves and .profile-shelves). Other pages are mostly text, kept to a comfortable line length. */
 @media (min-width: 1840px) {
   .shell:has(.home-layout),
-  .shell:has(.profile-layout) {
+  .shell:has(.profile-layout),
+  .shell:has(.genre-page) {
     max-width: 1800px;
   }
 }
@@ -2274,6 +2275,44 @@ a.primary-button:hover {
   width: 92px;
 }
 
+/* A genre's page: its shelves, with the related genres in a column beside them, as the home page has the library. */
+.genre-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  gap: 56px;
+  align-items: start;
+}
+
+/* Sized by the layout; its shelves sit two to a row when both fit (see .home-shelves), and an opened one takes the
+   whole row. */
+.genre-main {
+  container-type: inline-size;
+}
+
+.genre-main .home-shelves > .shelf-open {
+  grid-column: 1 / -1;
+}
+
+/* Level with the first shelf. */
+.genre-related {
+  margin-top: 48px;
+  padding-left: 32px;
+  border-left: 1px solid var(--rule);
+}
+
+/* A shelf opened up to show all its books, on a genre's page: rows of covers in place of one that scrolls. */
+.shelf-strip.shelf-strip-open {
+  flex-wrap: wrap;
+  row-gap: 24px;
+  width: auto;
+}
+
+/* Show all (or Show fewer), under the shelf at its end. */
+.shelf-toggle {
+  display: block;
+  margin-left: auto;
+}
+
 /* Reading cards as a shelf, on the profile: two to a view, sized from the shelf's width (the gap is .shelf-strip's),
    all as tall as the tallest, and centred top to bottom when the shelf beside them is taller. One to a view on a
    narrow shelf, where two would squeeze their titles. */
@@ -3668,6 +3707,19 @@ a.primary-button:hover {
   }
 
   .profile-year {
+    padding-left: 0;
+    padding-top: 28px;
+    border-left: 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .genre-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+  }
+
+  .genre-related {
+    margin-top: 0;
     padding-left: 0;
     padding-top: 28px;
     border-left: 0;

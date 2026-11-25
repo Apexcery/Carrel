@@ -141,13 +141,18 @@ data class GenreLink(val name: String, val slug: String)
 @Serializable
 data class GenreIndex(val fiction: List<GenreLink>, val nonfiction: List<GenreLink>, val other: List<GenreLink>)
 
-/** A genre's page: its most read books, its best rated, and its popular new releases. */
+/**
+ * A genre's page: its most read books, its best rated, its popular new releases, and its most anticipated coming soon,
+ * with the genres that come up most on those books. Those two default to none for a copy saved before they were added.
+ */
 @Serializable
 data class GenreShelves(
     val name: String,
     val popular: List<BookSuggestion>,
     val topRated: List<BookSuggestion>,
     val newReleases: List<BookSuggestion>,
+    val comingSoon: List<BookSuggestion> = emptyList(),
+    val related: List<GenreLink> = emptyList(),
 )
 
 /** Popular books in the reader's top genre; genre is null until their books have one. */
@@ -176,3 +181,4 @@ data class OwnedBookIds(val hardcoverId: Long?)
 
 const val LIBRARY_PATH = "/library"
 const val GENRES_PATH = "/genres"
+const val TOP_GENRES_PATH = "/library/top-genres"

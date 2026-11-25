@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import { apiGet } from '../api'
@@ -15,26 +15,33 @@ const NONE = new Set<number>()
 /**
  * A titled row of suggested book covers, or nothing when there are none to show. Books not out yet are marked
  * Upcoming, unless markUpcoming is false (on a shelf where they all are). The title links to titleHref, if given.
+ * Given openLimit, a Show all button under the shelf opens it up into rows of up to that many books.
  */
 export function SuggestionShelf({
   title,
   titleHref,
   books,
   limit,
+  openLimit,
   markUpcoming = true,
 }: {
   title: string
   titleHref?: string
   books: BookSuggestion[]
   limit: number
+  openLimit?: number
   markUpcoming?: boolean
 }) {
+  const [open, setOpen] = useState(false)
   if (books.length === 0) {
     return null
   }
+  const canOpen = openLimit !== undefined && books.length > limit
+  const shown = open && openLimit !== undefined ? openLimit : limit
   return (
-    <section className="book-section">
+    <section className={open ? 'book-section shelf-open' : 'book-section'}>
       <ShelfRow
+        stripClassName={open ? 'shelf-strip-open' : undefined}
         heading={
           <h2 className="section-title">
             {titleHref ? (
@@ -47,7 +54,7 @@ export function SuggestionShelf({
           </h2>
         }
       >
-        {books.slice(0, limit).map((book) => {
+        {books.slice(0, shown).map((book) => {
           const upcoming = markUpcoming && book.releaseYear !== null && book.releaseYear > THIS_YEAR
           return (
             <li key={book.hardcoverId}>
@@ -66,6 +73,11 @@ export function SuggestionShelf({
           )
         })}
       </ShelfRow>
+      {canOpen && (
+        <button type="button" className="link-button shelf-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
+          {open ? 'Show fewer' : 'Show all'}
+        </button>
+      )}
     </section>
   )
 }
