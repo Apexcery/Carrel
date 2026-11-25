@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -214,8 +215,10 @@ private val THIS_YEAR = java.time.Year.now().value
 /**
  * A titled row of suggested covers, swiped sideways, ending in the website's thick shelf edge; nothing when there are
  * none. Books not out yet are marked Upcoming, unless markUpcoming is false (on a shelf where they all are). Tapping
- * the title calls onTitle, if given (the whole series, or the author's page).
+ * the title calls onTitle, if given (the whole series, or the author's page). Given a limit, it shows that many, with
+ * Show all under the shelf to open it up into rows of every book.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SuggestionShelf(
     title: String,
@@ -224,36 +227,45 @@ fun SuggestionShelf(
     modifier: Modifier = Modifier,
     markUpcoming: Boolean = true,
     onTitle: (() -> Unit)? = null,
+    limit: Int? = null,
 ) {
     if (books.isEmpty()) return
     val colors = Carrel.colors
+    var open by rememberSaveable { mutableStateOf(false) }
     Column(modifier.fillMaxWidth().padding(top = 48.dp)) {
         if (onTitle != null) {
             SectionTitle("$title →", Modifier.clickable(role = Role.Button, onClick = onTitle))
         } else {
             SectionTitle(title)
         }
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            modifier = Modifier
-                .padding(top = 18.dp)
-                .fillMaxWidth()
-                .shelfEdge(colors.ruleStrong),
-        ) {
-            items(books, key = { it.hardcoverId }) { book ->
-                val upcoming = markUpcoming && book.releaseYear != null && book.releaseYear > THIS_YEAR
-                Column(
-                    Modifier
-                        .width(92.dp)
-                        .clickable(onClickLabel = "Open", role = Role.Button) { onOpen(book) }
-                        .semantics { contentDescription = describe(book) + if (upcoming) ". Upcoming" else "" },
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Cover(book.coverUrl, book.title, book.authors.firstOrNull(), 92.dp)
-                    if (upcoming) Badge("Upcoming")
-                }
+        val shelf = Modifier.padding(top = 18.dp).fillMaxWidth().shelfEdge(colors.ruleStrong)
+        if (open) {
+            FlowRow(shelf, horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                books.forEach { ShelfBook(it, markUpcoming, onOpen) }
+            }
+        } else {
+            LazyRow(shelf, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                items(if (limit != null) books.take(limit) else books, key = { it.hardcoverId }) { ShelfBook(it, markUpcoming, onOpen) }
             }
         }
+        if (limit != null && books.size > limit) {
+            LinkButton(if (open) "Show fewer" else "Show all", { open = !open }, Modifier.align(Alignment.End))
+        }
+    }
+}
+
+@Composable
+private fun ShelfBook(book: BookSuggestion, markUpcoming: Boolean, onOpen: (BookSuggestion) -> Unit) {
+    val upcoming = markUpcoming && book.releaseYear != null && book.releaseYear > THIS_YEAR
+    Column(
+        Modifier
+            .width(92.dp)
+            .clickable(onClickLabel = "Open", role = Role.Button) { onOpen(book) }
+            .semantics { contentDescription = describe(book) + if (upcoming) ". Upcoming" else "" },
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Cover(book.coverUrl, book.title, book.authors.firstOrNull(), 92.dp)
+        if (upcoming) Badge("Upcoming")
     }
 }
 

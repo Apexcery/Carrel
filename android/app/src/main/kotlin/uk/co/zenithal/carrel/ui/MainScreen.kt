@@ -247,7 +247,7 @@ fun MainScreen(nav: NavHostController, session: Session, profile: Profile?, dest
                 AuthorScreen(backStackEntry.toRoute<AuthorRoute>().hardcoverId, openBook) { id -> openSeries(id, null) }
             }
             composable<GenreRoute> { backStackEntry ->
-                GenreScreen(backStackEntry.toRoute<GenreRoute>().slug, openBook)
+                GenreScreen(backStackEntry.toRoute<GenreRoute>().slug, openBook, openGenre)
             }
             composable<GenresRoute> {
                 GenresScreen(openGenre)

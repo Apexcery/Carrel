@@ -113,8 +113,17 @@ public record GenreLink(string Name, string Slug);
 /// </summary>
 public record GenreIndex(GenreLink[] Fiction, GenreLink[] Nonfiction, GenreLink[] Other);
 
-/// <summary>A genre's page: its most read books, its best rated, and its popular new releases.</summary>
-public record GenreShelves(string Name, BookSuggestion[] Popular, BookSuggestion[] TopRated, BookSuggestion[] NewReleases);
+/// <summary>
+/// A genre's page: its most read books, its best rated, its popular new releases, and its most anticipated coming soon,
+/// with the genres that come up most on those books.
+/// </summary>
+public record GenreShelves(
+    string Name,
+    BookSuggestion[] Popular,
+    BookSuggestion[] TopRated,
+    BookSuggestion[] NewReleases,
+    BookSuggestion[] ComingSoon,
+    GenreLink[] Related);
 
 public record ContributorDto(long Id, long? HardcoverId, string Name, string Role);
 

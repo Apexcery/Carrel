@@ -166,6 +166,9 @@ export interface GenreShelves {
   popular: BookSuggestion[]
   topRated: BookSuggestion[]
   newReleases: BookSuggestion[]
+  comingSoon: BookSuggestion[]
+  /** The genres that come up most on the shelves' books. */
+  related: GenreLink[]
 }
 
 /** The Discover shelves on the home page, the same for every reader. */

@@ -49,10 +49,18 @@ public class RecommendationService(
     // A genre's top rated: books with at least this many ratings, fewer than Discover asks for, since it's one genre.
     private const int GenreTopRatedMinRatings = 200;
 
+    // A genre's related genres: the main genres of its shelves' books, at most RelatedGenres of them, each on at least
+    // MinRelatedBooks of those books.
+    private const int RelatedGenres = 8;
+    private const int MinRelatedBooks = 3;
+
     // Genres found by searching: those on at least this many books across Hardcover (about 500 of them, so 6 requests a
     // day), up to GenrePages pages of 100.
     private const int MinGenreBooks = 100;
     private const int GenrePages = 10;
+
+    // The reader's top genres listed on the genres page.
+    private const int TopGenreLinks = 10;
 
     // Umbrella genres that say little about what a reader likes, left out when choosing their top genre.
     private static readonly HashSet<string> BroadGenres = new(StringComparer.OrdinalIgnoreCase)
@@ -127,8 +135,8 @@ public class RecommendationService(
             await suppression.ApplyAsync(shelves.TopRated, ct));
     }
 
-    private static BookSuggestion[] Shelf(IEnumerable<HardcoverListedBook> books, bool earliestInSeries = true) =>
-        OnePerSeries(books, earliestInSeries).Take(ShelfSize).Select(ToSuggestion).ToArray();
+    private static BookSuggestion[] Shelf(IEnumerable<HardcoverListedBook> books, bool earliestInSeries = true, int size = ShelfSize) =>
+        OnePerSeries(books, earliestInSeries).Take(size).Select(ToSuggestion).ToArray();
 
     /// <summary>
     /// Popular books in the genre that comes up most among the books the reader has read or is reading. No genre (and
@@ -163,6 +171,23 @@ public class RecommendationService(
             picks.Add(new TopGenrePicks(genre, readerBooks, await suppression.ApplyAsync(books, ct)));
         }
         return picks.ToArray();
+    }
+
+    /// <summary>
+    /// The reader's top genres, for the genres page, named as the genres page lists them where it does (a stored book
+    /// can say "Science fiction"); empty if none of the books they've read or are reading has one.
+    /// </summary>
+    public async Task<GenreLink[]> GetTopGenreLinksAsync(Guid userId, CancellationToken ct)
+    {
+        var index = await GetGenreIndexAsync(ct);
+        var listed = Genres.Listed.Concat(index.Other).ToDictionary(g => g.Slug);
+        return (await GetTopGenresAsync(userId, ct))
+            .Select(g => Genres.ToLink(g.Genre))
+            .Where(g => g.Slug.Length > 0)
+            .DistinctBy(g => g.Slug)
+            .Take(TopGenreLinks)
+            .Select(g => listed.GetValueOrDefault(g.Slug, g))
+            .ToArray();
     }
 
     /// <summary>
@@ -261,8 +286,10 @@ public class RecommendationService(
     }
 
     /// <summary>
-    /// A genre page's shelves, the same for everyone: the genre's most read books, its best rated, and the most read of
-    /// those out in the last few months. Each counts only books with the genre among their main ones.
+    /// A genre page's shelves, the same for everyone: the genre's most read books, its best rated, the most read of
+    /// those out in the last few months, and the most anticipated of those out in the next few. Each counts only books
+    /// with the genre among their main ones, and holds more than the page first shows. With them, the genres that come
+    /// up most on those books.
     /// </summary>
     public async Task<GenreShelves> GetGenreShelvesAsync(string genre, CancellationToken ct)
     {
@@ -270,21 +297,29 @@ public class RecommendationService(
         if (!cache.TryGetValue(key, out GenreShelves? shelves) || shelves is null)
         {
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
-            // Popular and new releases are both ordered by readers, so they share a request; top rated is by rating.
+            // Popular, new releases, and coming soon are ordered by readers (for books not out yet, readers who want to
+            // read them), so they share a request; top rated is by rating.
             var byReaders = await hardcover.ListBooksAsync(
             [
                 CatalogueFilter(InGenre(genre)),
                 CatalogueFilter(InGenre(genre, new() { ["release_date"] = new { _gte = today.AddDays(-NewReleaseDays), _lte = today } })),
+                CatalogueFilter(InGenre(genre, new() { ["release_date"] = new { _gt = today, _lte = today.AddDays(ComingSoonDays) } })),
             ], GenreFetchSize, ct);
             var topRated = (await hardcover.ListBooksAsync(
                 [CatalogueFilter(InGenre(genre, new() { ["ratings_count"] = new { _gte = GenreTopRatedMinRatings } }))],
                 GenreFetchSize, ct, "{rating: desc}"))[0];
 
+            var popular = MainlyIn(byReaders[0], genre).ToList();
+            var best = MainlyIn(topRated, genre).ToList();
+            var newReleases = MainlyIn(byReaders[1], genre).ToList();
+            var comingSoon = MainlyIn(byReaders[2], genre).ToList();
             shelves = new GenreShelves(
                 genre,
-                Shelf(MainlyIn(byReaders[0], genre)),
-                Shelf(MainlyIn(topRated, genre), earliestInSeries: false),
-                Shelf(MainlyIn(byReaders[1], genre)));
+                Shelf(popular, size: ListSize),
+                Shelf(best, earliestInSeries: false, size: ListSize),
+                Shelf(newReleases, size: ListSize),
+                Shelf(comingSoon, size: ListSize),
+                RelatedGenresOf(genre, [.. popular, .. best, .. newReleases, .. comingSoon], await GetGenreIndexAsync(ct)));
             cache.Set(key, shelves, new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = DiscoverCacheDuration });
         }
         return shelves with
@@ -292,7 +327,29 @@ public class RecommendationService(
             Popular = await suppression.ApplyAsync(shelves.Popular, ct),
             TopRated = await suppression.ApplyAsync(shelves.TopRated, ct),
             NewReleases = await suppression.ApplyAsync(shelves.NewReleases, ct),
+            ComingSoon = await suppression.ApplyAsync(shelves.ComingSoon, ct),
         };
+    }
+
+    /// <summary>
+    /// The genres other than this one most often among the books' main genres, leaving out the broad ones and any without
+    /// a page of their own (those not listed or found by searching).
+    /// </summary>
+    private static GenreLink[] RelatedGenresOf(string genre, List<HardcoverListedBook> books, GenreIndex index)
+    {
+        var pages = Genres.Listed.Concat(index.Other).ToDictionary(g => g.Slug);
+        var own = Genres.Slug(genre);
+        return books
+            .DistinctBy(b => b.Id)
+            .SelectMany(b => (b.Genres ?? []).Take(GenreTopTags).Select(t => Genres.Slug(t.Tag)).Distinct())
+            .Where(slug => slug != own && pages.ContainsKey(slug) && !BroadGenres.Contains(pages[slug].Name))
+            .GroupBy(slug => slug)
+            .Where(g => g.Count() >= MinRelatedBooks)
+            .OrderByDescending(g => g.Count())
+            .ThenBy(g => g.Key, StringComparer.Ordinal)
+            .Take(RelatedGenres)
+            .Select(g => pages[g.Key])
+            .ToArray();
     }
 
     /// <summary>
