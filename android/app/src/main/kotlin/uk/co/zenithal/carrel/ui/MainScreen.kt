@@ -118,7 +118,7 @@ import kotlin.reflect.KClass
 /** Another reader's profile, and one of their shelves (by slug, as ShelfRoute). */
 @Serializable data class ReaderRoute(val username: String)
 @Serializable data class ReaderShelfRoute(val username: String, val slug: String)
-/** A shared book's ISBN, looked up, then the book opens; or a search for `fallback` when no book has it. */
+/** A shared or scanned book's ISBN, looked up, then the book opens; or a search for `fallback` (if any) when no book has it. */
 @Serializable data class FindBookRoute(val isbn: String, val fallback: String)
 /** Reading in Carrel (the Home button): first carrying on with the last book, with `resume`. */
 @Serializable data class ReadingRoute(val resume: Boolean = false)
@@ -211,7 +211,15 @@ fun MainScreen(nav: NavHostController, session: Session, profile: Profile?, dest
                 HomeScreen(signedIn = profile != null, openBook) { nav.navigate(ReadingRoute(resume = true)) }
             }
             composable<SearchRoute> {
-                SearchScreen(openBook, openSeries, openAuthor, openGenre, { nav.navigate(GenresRoute) }, searchFor) { searchFor = null }
+                SearchScreen(
+                    openBook,
+                    openSeries,
+                    openAuthor,
+                    openGenre,
+                    { nav.navigate(GenresRoute) },
+                    { isbn -> nav.navigate(FindBookRoute(isbn, fallback = "")) },
+                    searchFor,
+                ) { searchFor = null }
             }
             composable<BookRoute> { backStackEntry ->
                 val route = backStackEntry.toRoute<BookRoute>()
