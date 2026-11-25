@@ -115,6 +115,8 @@ dependencies {
     implementation(libs.readium.streamer)
     implementation(libs.readium.navigator)
     implementation(libs.readium.opds)
+    // Scanning a book's barcode: Google Play services' own scanner, so Carrel needs no camera permission.
+    implementation(libs.play.services.code.scanner)
     // Online libraries' own client, with their logins, kept apart from the Carrel API's.
     implementation(libs.okhttp)
     coreLibraryDesugaring(libs.desugar.jdk.libs)
