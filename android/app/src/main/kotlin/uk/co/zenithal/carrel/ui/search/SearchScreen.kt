@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -22,14 +24,23 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Text
+import androidx.compose.material3.TooltipAnchorPosition
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -45,19 +56,29 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
+import kotlinx.serialization.builtins.ListSerializer
 import uk.co.zenithal.carrel.LocalContainer
 import uk.co.zenithal.carrel.auth.Session
+import uk.co.zenithal.carrel.data.ApiException
 import uk.co.zenithal.carrel.data.AuthorSearchResult
 import uk.co.zenithal.carrel.data.BookSearchResult
 import uk.co.zenithal.carrel.data.GENRES_PATH
 import uk.co.zenithal.carrel.data.GenreIndex
 import uk.co.zenithal.carrel.data.GenreLink
+import uk.co.zenithal.carrel.data.LIBRARY_PATH
+import uk.co.zenithal.carrel.data.LibrarySerializer
+import uk.co.zenithal.carrel.data.PickGroup
+import uk.co.zenithal.carrel.data.ReadingStatus
+import uk.co.zenithal.carrel.data.TopGenrePicks
 import uk.co.zenithal.carrel.data.displaySubtitle
 import uk.co.zenithal.carrel.data.formatCount
 import uk.co.zenithal.carrel.data.listNames
+import uk.co.zenithal.carrel.data.randomPick
 import uk.co.zenithal.carrel.data.seriesPosition
 import uk.co.zenithal.carrel.ui.components.Cover
 import uk.co.zenithal.carrel.ui.components.ErrorNotice
+import uk.co.zenithal.carrel.ui.components.FormMessage
 import uk.co.zenithal.carrel.ui.components.Gap
 import uk.co.zenithal.carrel.ui.components.GenreLinks
 import uk.co.zenithal.carrel.ui.components.HardcoverRating
@@ -66,8 +87,10 @@ import uk.co.zenithal.carrel.ui.components.LinkButton
 import uk.co.zenithal.carrel.ui.components.SectionTitle
 import uk.co.zenithal.carrel.ui.components.SkeletonLine
 import uk.co.zenithal.carrel.ui.rememberLoaded
+import uk.co.zenithal.carrel.ui.rememberOwnedHardcoverIds
 import uk.co.zenithal.carrel.ui.theme.Carrel
 import uk.co.zenithal.carrel.ui.you.Avatar
+import kotlin.random.Random
 
 /**
  * The Search tab: a search box, then results as the website lists them. Before searching, the reader's recent
@@ -94,6 +117,34 @@ fun SearchScreen(
     var recentVersion by remember { mutableStateOf(0) }
     val recent = remember(userId, recentVersion, model.query) { container.recentSearches.get(userId) }
     val list = rememberLazyListState()
+    // The dice in the search box opens a random book from the popular ones in the reader's top genres, a genre more
+    // likely the more of their books have it, leaving out books they have. Their top genres come from the books they've
+    // read or are reading, so it's hidden until they have one.
+    val library = rememberLoaded(if (userId.isNotEmpty()) LIBRARY_PATH else null, LibrarySerializer).loaded.data
+    val owned = rememberOwnedHardcoverIds()
+    val canPick = owned != null && library?.any { it.entry.status == ReadingStatus.Read || it.entry.status == ReadingStatus.Reading } == true
+    val scope = rememberCoroutineScope()
+    var topPicks by remember { mutableStateOf<List<TopGenrePicks>?>(null) }
+    var pickNote by remember { mutableStateOf<String?>(null) }
+
+    fun pickRandomBook() {
+        pickNote = null
+        scope.launch {
+            val picks = topPicks ?: try {
+                container.api.get("/library/genre-picks/top", ListSerializer(TopGenrePicks.serializer())).also { topPicks = it }
+            } catch (e: ApiException) {
+                pickNote = e.message
+                return@launch
+            }
+            val book = randomPick(picks.map { PickGroup(it.books, it.readerBooks) }, owned.orEmpty(), lastRandomPick, Random.nextDouble())
+            if (book == null) {
+                pickNote = "You have every book it could pick already."
+            } else {
+                lastRandomPick = book.hardcoverId
+                openBook("/books/hardcover/${book.hardcoverId}")
+            }
+        }
+    }
 
     fun search(q: String) {
         if (q.isBlank()) return
@@ -124,7 +175,9 @@ fun SearchScreen(
                     if (it.isBlank()) model.clear()
                 },
                 onSearch = { search(text) },
+                onRandomBook = if (canPick) ::pickRandomBook else null,
             )
+            pickNote?.let { FormMessage(it, modifier = Modifier.padding(top = 10.dp)) }
         }
         val query = model.query
         if (query == null) {
@@ -162,7 +215,7 @@ fun SearchScreen(
 
 /** The website's header search box: the field and an accent Search button, joined. */
 @Composable
-private fun SearchBox(text: String, onTextChange: (String) -> Unit, onSearch: () -> Unit) {
+private fun SearchBox(text: String, onTextChange: (String) -> Unit, onSearch: () -> Unit, onRandomBook: (() -> Unit)?) {
     val colors = Carrel.colors
     Row(Modifier.fillMaxWidth().height(46.dp)) {
         Box(
@@ -185,8 +238,10 @@ private fun SearchBox(text: String, onTextChange: (String) -> Unit, onSearch: ()
                 cursorBrush = SolidColor(colors.accent),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { onSearch() }),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(end = if (onRandomBook != null) 32.dp else 0.dp),
             )
+            // In its own Box, since TooltipBox doesn't pass the alignment on to this Box.
+            if (onRandomBook != null) Box(Modifier.align(Alignment.CenterEnd).offset(x = 8.dp)) { RandomBookButton(onRandomBook) }
         }
         Box(
             Modifier
@@ -197,6 +252,27 @@ private fun SearchBox(text: String, onTextChange: (String) -> Unit, onSearch: ()
             contentAlignment = Alignment.Center,
         ) {
             Text("SEARCH", style = Carrel.type.monoMedium.copy(letterSpacing = 0.08.em), color = colors.onAccent)
+        }
+    }
+}
+
+private const val RANDOM_BOOK = "Pick a random book"
+
+/** The book the dice opened last, so the next press opens a different one. Kept while the app runs. */
+private var lastRandomPick: Int? = null
+
+/** The dice in the search box, named on a long press. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RandomBookButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
+        tooltip = { PlainTooltip { Text(RANDOM_BOOK) } },
+        state = rememberTooltipState(),
+        modifier = modifier,
+    ) {
+        IconButton(onClick) {
+            Icon(DiceIcon, contentDescription = RANDOM_BOOK, tint = Carrel.colors.inkFaint, modifier = Modifier.size(20.dp))
         }
     }
 }

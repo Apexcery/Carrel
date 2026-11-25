@@ -138,6 +138,13 @@ export interface GenrePicks {
   books: BookSuggestion[]
 }
 
+/** Popular books in one of the reader's top genres, and how many of the books they've read or are reading have it. */
+export interface TopGenrePicks {
+  genre: string
+  readerBooks: number
+  books: BookSuggestion[]
+}
+
 export interface GenreLink {
   name: string
   slug: string

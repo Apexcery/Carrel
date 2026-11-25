@@ -102,6 +102,9 @@ public record DiscoverShelves(
 /// <summary>Popular books in the reader's top genre; Genre is null until their books have one.</summary>
 public record GenrePicks(string? Genre, BookSuggestion[] Books);
 
+/// <summary>Popular books in one of the reader's top genres, and how many of the books they've read or are reading have it.</summary>
+public record TopGenrePicks(string Genre, int ReaderBooks, BookSuggestion[] Books);
+
 public record GenreLink(string Name, string Slug);
 
 /// <summary>

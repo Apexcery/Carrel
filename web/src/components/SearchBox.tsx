@@ -3,6 +3,7 @@ import { Combobox, ComboboxInput, ComboboxOption, ComboboxOptions } from '@headl
 import { useNavigate } from 'react-router'
 import { useSession } from '../auth'
 import { clearRecentSearches, getRecentSearches } from '../recentSearches'
+import { RandomBookButton } from './RandomBookButton'
 
 const CLEAR = Symbol('clear')
 type Choice = string | typeof CLEAR
@@ -95,6 +96,7 @@ export function SearchBox({ initialQuery }: { initialQuery: string }) {
           </ComboboxOptions>
         )}
       </Combobox>
+      <RandomBookButton />
       <button type="submit">Search</button>
     </form>
   )
