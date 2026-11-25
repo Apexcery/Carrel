@@ -1,5 +1,7 @@
 package uk.co.zenithal.carrel.data
 
+import kotlin.math.sqrt
+
 // Ported from web/src/pages/HomePage.tsx; keep the two in step.
 
 /** The lowest rating that counts as liking a book. */
@@ -68,3 +70,37 @@ private fun averageRating(books: List<LibraryItem>) = books.mapNotNull { it.entr
 fun nextInSeries(series: SeriesDetail, position: Double, owned: Set<Long>): SeriesBook? =
     series.books.filter { (it.position ?: return@filter false) > position }.minByOrNull { it.position!! }
         ?.takeIf { it.hardcoverId.toLong() !in owned }
+
+/** Books the search box's dice can pick, and how likely they are to be picked. */
+data class PickGroup(val books: List<BookSuggestion>, val weight: Int = 1)
+
+/** The groups without books in the reader's library, each book in the first group with it, and no empty groups. */
+fun pickable(groups: List<PickGroup>, owned: Set<Long>): List<PickGroup> {
+    val seen = mutableSetOf<Int>()
+    return groups
+        .map { group -> group.copy(books = group.books.filter { it.hardcoverId.toLong() !in owned && seen.add(it.hardcoverId) }) }
+        .filter { it.books.isNotEmpty() }
+}
+
+/**
+ * The pickable book `seed` (from 0 up to 1) lands on, as the website's randomPick (randomPick.ts) chooses it, leaving out the one
+ * picked last while there are others: where it falls among the groups, each as wide as the square root of its weight
+ * (so a reader's favourite genre doesn't crowd out the rest), picks the group, and where it falls within that group the
+ * book. Null when none are pickable.
+ */
+fun randomPick(groups: List<PickGroup>, owned: Set<Long>, previous: Int?, seed: Double): BookSuggestion? {
+    val eligible = pickable(groups, owned)
+    val others = eligible
+        .map { group -> group.copy(books = group.books.filter { it.hardcoverId != previous }) }
+        .filter { it.books.isNotEmpty() }
+    val pool = others.ifEmpty { eligible }
+    var at = seed * pool.sumOf { sqrt(it.weight.toDouble()) }
+    for (group in pool) {
+        val width = sqrt(group.weight.toDouble())
+        if (at < width || group === pool.last()) {
+            return group.books[(at / width * group.books.size).toInt().coerceAtMost(group.books.size - 1)]
+        }
+        at -= width
+    }
+    return null
+}
