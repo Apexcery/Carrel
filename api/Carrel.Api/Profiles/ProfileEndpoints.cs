@@ -18,8 +18,9 @@ public record SaveProfileRequest(string Username, bool? IsPublic = null);
 
 public record SaveGoalRequest(int Books);
 
-/// <summary>A reader's profile page: their username, picture, reading goals, and whole library.</summary>
-public record ReaderDto(string Username, bool IsPublic, string? AvatarUrl, ReadingGoalDto[] Goals, LibraryItemDto[] Library);
+/// <summary>A reader's profile page: their username, picture, reading goals, whole library, and public custom shelves.</summary>
+public record ReaderDto(string Username, bool IsPublic, string? AvatarUrl, ReadingGoalDto[] Goals, LibraryItemDto[] Library,
+    CustomShelfDto[] Shelves);
 
 public record UsernameAvailability(bool Available, string? Reason);
 
@@ -227,7 +228,8 @@ public static partial class ProfileEndpoints
                     return Results.NotFound();
                 }
                 return Results.Ok(new ReaderDto(profile.Username, profile.IsPublic, pictures.PublicUrl(profile.AvatarPath),
-                    await GoalsAsync(profile.UserId, db, ct), await library.ListAsync(profile.UserId, ct)));
+                    await GoalsAsync(profile.UserId, db, ct), await library.ListAsync(profile.UserId, ct),
+                    await CustomShelfEndpoints.PublicAsync(profile.UserId, db, ct)));
             })
             .AllowAnonymous()
             .RequireRateLimiting(ReadersRateLimit);

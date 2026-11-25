@@ -19,6 +19,8 @@ public class CarrelDbContext(DbContextOptions<CarrelDbContext> options) : DbCont
     public DbSet<ReadingPosition> ReadingPositions => Set<ReadingPosition>();
     public DbSet<LibraryImport> LibraryImports => Set<LibraryImport>();
     public DbSet<ImportItem> ImportItems => Set<ImportItem>();
+    public DbSet<CustomShelf> CustomShelves => Set<CustomShelf>();
+    public DbSet<CustomShelfEntry> CustomShelfEntries => Set<CustomShelfEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -126,6 +128,25 @@ public class CarrelDbContext(DbContextOptions<CarrelDbContext> options) : DbCont
             goal.Property(g => g.UpdatedAt).HasDefaultValueSql("now()");
         });
 
+        modelBuilder.Entity<CustomShelf>(shelf =>
+        {
+            // user_id references auth.users, and names are unique per reader ignoring case (an index on user_id and
+            // lower(name), which also finds a reader's shelves); both are added in the migration.
+            shelf.ToTable(t => t.HasCheckConstraint("ck_custom_shelves_name", $"char_length(name) between 1 and {CustomShelf.MaxNameLength}"));
+            shelf.Property(s => s.CreatedAt).HasDefaultValueSql("now()");
+            shelf.Property(s => s.UpdatedAt).HasDefaultValueSql("now()");
+        });
+
+        modelBuilder.Entity<CustomShelfEntry>(entry =>
+        {
+            entry.HasKey(e => new { e.ShelfId, e.BookId });
+            entry.HasIndex(e => e.BookId);
+            entry.Property(e => e.AddedAt).HasDefaultValueSql("now()");
+            entry.HasOne(e => e.Shelf).WithMany(s => s.Entries).OnDelete(DeleteBehavior.Cascade);
+            // A book can't be deleted while it's on a shelf, like library entries.
+            entry.HasOne(e => e.Book).WithMany().OnDelete(DeleteBehavior.Restrict);
+        });
+
         modelBuilder.Entity<ReadingPosition>(position =>
         {
             position.HasKey(p => p.LibraryEntryId);
@@ -179,6 +200,9 @@ public class CarrelDbContext(DbContextOptions<CarrelDbContext> options) : DbCont
             item.Property(i => i.ProgressUnit).HasConversion<SnakeCaseEnumConverter<ProgressUnit>>();
             item.Property(i => i.ProgressPercent).HasPrecision(5, 2);
             item.OwnsMany(i => i.Reads, reads => reads.ToJson());
+            // Rows from before the columns have no shelves, and are library rows.
+            item.Property(i => i.Shelves).HasDefaultValueSql("'{}'");
+            item.Property(i => i.ShelveOnly).HasDefaultValue(false);
             item.HasIndex(i => new { i.ImportId, i.Row }).IsUnique();
             item.HasIndex(i => i.BookId);
             item.HasOne(i => i.Import).WithMany(i => i.Items).OnDelete(DeleteBehavior.Cascade);

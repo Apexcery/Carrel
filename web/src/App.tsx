@@ -23,7 +23,7 @@ import { SearchPage } from './pages/SearchPage'
 import { SeriesPage } from './pages/SeriesPage'
 import { SetPasswordPage } from './pages/SetPasswordPage'
 import { SettingsPage } from './pages/SettingsPage'
-import { OwnShelfRedirect, ShelfPage } from './pages/ShelfPage'
+import { CustomShelfPage, OwnShelfRedirect, ShelfPage } from './pages/ShelfPage'
 import { SignInPage } from './pages/SignInPage'
 import { useProfile } from './profile'
 import { signInPath } from './signIn'
@@ -92,6 +92,7 @@ function App() {
         {/* Profiles are at /@username; a route can't match part of a segment, so the pages check for the @. */}
         <Route path=":handle" element={<ProfilePage />} />
         <Route path=":handle/shelves/:slug" element={<ShelfPage />} />
+        <Route path=":handle/shelves/custom/:id" element={<CustomShelfPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

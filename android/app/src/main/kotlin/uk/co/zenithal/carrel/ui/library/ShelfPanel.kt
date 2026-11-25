@@ -75,8 +75,9 @@ private val STATUSES = ReadingStatus.entries.map { it to it.label }
 private val UNITS = listOf(ProgressUnit.Page to "pages", ProgressUnit.Percent to "%", ProgressUnit.Seconds to "time (h:mm)")
 
 /**
- * The signed-in reader's shelf entry for a book, as the website's panel. Status and rating save as soon as they change;
- * progress, edition, and reading history are edited together in a sheet behind "Edit" and saved with one button.
+ * The signed-in reader's shelf entry for a book, as the website's panel. Status, rating, and custom shelves save as soon
+ * as they change; progress, edition, and reading history are edited together in a sheet behind "Edit" and saved with
+ * one button.
  * The entry comes from the saved library, so it shows with no signal; changes need one. Marking the book as read
  * opens the finished sheet, which can open the next in the series (`openBook`); `finished` opens it straight away, for
  * a book marked as read in the reader.
@@ -129,6 +130,8 @@ fun ShelfPanel(book: BookDetail, openBook: (path: String) -> Unit, finished: Boo
                 }
             }
         }, enabled = !busy)
+        // In the library or not.
+        CustomShelfPicker(book)
         if (entry != null) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 FieldLabel("Your rating")

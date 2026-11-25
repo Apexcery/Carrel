@@ -3,12 +3,12 @@ import { Link, useParams } from 'react-router'
 import { Avatar } from '../components/Avatar'
 import { ErrorNotice } from '../components/ErrorNotice'
 import { ImageViewer } from '../components/ImageViewer'
-import { ReadingStrip, ShelfStrip, ShelfTitle } from '../components/LibraryShelves'
+import { CustomShelfTitle, ReadingStrip, ShelfStrip, ShelfTitle } from '../components/LibraryShelves'
 import { ReadingGoalPanel } from '../components/ReadingGoal'
 import { YearInBooks } from '../components/YearInBooks'
 import { usePageTitle } from '../pageTitle'
 import { useReader } from '../readers'
-import { shelfItems } from '../shelves'
+import { customShelfItems, shelfItems } from '../shelves'
 import type { ReadingStatus } from '../types'
 import { NOT_FOUND_TITLE, NotFoundPage } from './NotFoundPage'
 
@@ -20,8 +20,8 @@ const SHELF_BOOKS = 12
 const READ_SHELF_BOOKS = 24
 
 /**
- * A reader's profile at /@username: every shelf and their year so far. Anyone can see a public profile; a private one
- * only its reader.
+ * A reader's profile at /@username: every shelf and their year so far. Anyone can see a public profile (and its public
+ * custom shelves); a private one only its reader.
  */
 export function ProfilePage() {
   const handle = useParams().handle ?? ''
@@ -60,7 +60,8 @@ export function ProfilePage() {
           </div>
         </header>
 
-        {library.length === 0 ? (
+        {/* Custom shelves can hold books that aren't in the library. */}
+        {library.length === 0 && reader.shelves.every((shelf) => shelf.books.length === 0) ? (
           isOwn ? (
             <p className="muted">
               Nothing on your shelves yet. Books you add to your library will appear here, or{' '}
@@ -88,6 +89,23 @@ export function ProfilePage() {
                     <ReadingStrip heading={heading} items={items} />
                   ) : (
                     <ShelfStrip heading={heading} items={items} limit={status === 'read' ? READ_SHELF_BOOKS : SHELF_BOOKS} />
+                  )}
+                </section>
+              )
+            })}
+            {/* Others only get the reader's public shelves; their own private ones are marked. */}
+            {reader.shelves.map((shelf) => {
+              const items = customShelfItems(library, shelf)
+              const heading = <CustomShelfTitle username={reader.username} shelf={shelf} count={items.length} level="h2" />
+              return (
+                <section key={shelf.id} className="shelf shelf-custom">
+                  {items.length === 0 ? (
+                    <>
+                      {heading}
+                      <p className="muted">Nothing on this shelf yet.</p>
+                    </>
+                  ) : (
+                    <ShelfStrip heading={heading} items={items} limit={SHELF_BOOKS} />
                   )}
                 </section>
               )

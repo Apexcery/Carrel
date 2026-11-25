@@ -70,6 +70,15 @@ public class ImportItem
     /// <summary>Reads to record, oldest first (JSON).</summary>
     public List<ImportedRead> Reads { get; set; } = [];
 
+    /// <summary>Custom shelves to put the book on, by name; made (private) for any the reader doesn't have yet.</summary>
+    public string[] Shelves { get; set; } = [];
+
+    /// <summary>
+    /// Only to put on <see cref="Shelves"/>, with no library entry: a Carrel export's row with no status, for a book on
+    /// custom shelves but not in the library. Its <see cref="Status"/> means nothing.
+    /// </summary>
+    public bool ShelveOnly { get; set; }
+
     public ImportMatch Match { get; set; }
 
     /// <summary>

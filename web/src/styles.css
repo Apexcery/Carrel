@@ -1619,6 +1619,60 @@ a.primary-button:hover {
   margin-left: auto;
 }
 
+/* The reader's custom shelves: each a switch, filled with the accent while the book is on it. */
+.custom-shelves {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-width: 0;
+}
+
+.shelf-chip {
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  background: none;
+  padding: 0.35em 0.75em;
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.shelf-chip:hover:not(:disabled):not([aria-pressed='true']) {
+  color: var(--accent);
+}
+
+.shelf-chip[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.shelf-chip:disabled {
+  cursor: progress;
+}
+
+/* Naming a new shelf (book page) or renaming one (its page). */
+.shelf-name-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.shelf-name-form input {
+  width: 14em;
+  max-width: 100%;
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  background: var(--paper);
+  padding: 0.35em 0.6em;
+  font-size: var(--text-body);
+}
+
 /* Edition picker (Headless UI combobox; the options list is portalled to the body). */
 .edition-picker {
   display: flex;
@@ -2262,6 +2316,11 @@ a.primary-button:hover {
   .profile-shelves .shelf-did_not_finish {
     order: 2;
   }
+
+  /* The reader's own shelves come after all of those. */
+  .profile-shelves .shelf-custom {
+    order: 3;
+  }
 }
 
 /* The grid spaces them instead. */
@@ -2342,6 +2401,23 @@ a.primary-button:hover {
 }
 
 /* ---------- Shelf page ---------- */
+
+/* A custom shelf's own reader: whether it's public, and ways to change it, under the count. */
+.custom-shelf-settings {
+  margin-top: 14px;
+}
+
+.custom-shelf-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 18px;
+}
+
+/* Beside a custom shelf's title: only its reader sees a private one. */
+.shelf-private {
+  color: var(--ink-faint);
+}
 
 .shelf-toolbar {
   display: flex;

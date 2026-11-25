@@ -87,7 +87,9 @@ data class ReadInput(val id: Long?, val startedOn: String?, val finishedOn: Stri
 
 /** A library entry with enough of its book to show on a shelf. */
 @Serializable
-data class LibraryItem(val entry: LibraryEntry, val book: LibraryBook)
+data class LibraryItem(override val entry: LibraryEntry, override val book: LibraryBook) : ShelfItem {
+    override val shelvedAt: String? get() = null
+}
 
 @Serializable
 data class LibraryBook(

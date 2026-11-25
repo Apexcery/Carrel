@@ -233,6 +233,7 @@ app.MapGet("/me", (ClaimsPrincipal user) => new
 
 app.MapBookEndpoints();
 app.MapLibraryEndpoints();
+app.MapCustomShelfEndpoints();
 app.MapProfileEndpoints();
 app.MapAccountEndpoints();
 app.MapImportEndpoints(importQueue.UsesCloudTasks);

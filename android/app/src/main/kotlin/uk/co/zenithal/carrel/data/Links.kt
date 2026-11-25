@@ -21,6 +21,8 @@ sealed interface Destination {
     data object Library : Destination
     data class Reader(val username: String) : Destination
     data class ReaderShelf(val username: String, val status: ReadingStatus) : Destination
+    /** A reader's custom shelf, /@reader/shelves/custom/12. */
+    data class ReaderCustomShelf(val username: String, val id: Long) : Destination
     /** The signed-in reader's shelf at its old address, /shelves/read. */
     data class OwnShelf(val status: ReadingStatus) : Destination
     /** An EPUB opened with, or shared to, Carrel, to add to the phone. */
@@ -62,6 +64,8 @@ fun linkDestination(url: String, hosts: Set<String>): Destination? {
             when {
                 parts.size == 1 -> Destination.Reader(username)
                 parts.size == 3 && parts[1] == "shelves" -> ReadingStatus.fromSlug(parts[2])?.let { Destination.ReaderShelf(username, it) }
+                parts.size == 4 && parts[1] == "shelves" && parts[2] == "custom" && DIGITS.matches(parts[3]) ->
+                    Destination.ReaderCustomShelf(username, parts[3].toLong())
                 else -> null
             }
         }

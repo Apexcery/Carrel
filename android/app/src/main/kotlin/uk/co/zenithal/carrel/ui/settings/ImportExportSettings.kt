@@ -421,7 +421,7 @@ private fun ImportResults(status: ImportStatus, openBook: (String) -> Unit, onCh
     ) { ReviewRow(status.id, it, openBook, changed) }
     ReviewSection(
         "Check these",
-        "These were matched by title and author rather than an ISBN, so they may be a different book. They’re in your library already.",
+        "These were matched by title and author rather than an ISBN, so they may be a different book. They’re already in your library, or on your shelves.",
         items.filter { it.match == ImportMatch.ByTitle },
     ) { ReviewRow(status.id, it, openBook, changed) }
 }

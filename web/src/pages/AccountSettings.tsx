@@ -550,7 +550,8 @@ function DeleteLibraryRow() {
     >
       <form className="settings-form" onSubmit={submit}>
         <p className="setting-warning">
-          This deletes every book in your library, along with your ratings, progress, reading history, and imports. Your
+          This deletes every book in your library, along with your ratings, progress, reading history, custom shelves,
+          and imports. Your
           account and username stay. It can’t be undone.
         </p>
         <input type="email" autoComplete="username" value={user?.email ?? ''} readOnly hidden />
