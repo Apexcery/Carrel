@@ -136,38 +136,81 @@ public class RecommendationService(
     /// </summary>
     public async Task<GenrePicks> GetGenrePicksAsync(Guid userId, CancellationToken ct)
     {
-        var names = await db.LibraryEntries
-            .Where(e => e.UserId == userId && (e.Status == ReadingStatus.Read || e.Status == ReadingStatus.Reading))
-            .SelectMany(e => e.Book.Genres.Select(bg => bg.Genre.Name))
-            .ToListAsync(ct);
-        var genre = names
-            .Where(name => !BroadGenres.Contains(name))
-            .GroupBy(name => name, StringComparer.OrdinalIgnoreCase)
-            .OrderByDescending(g => g.Count())
-            .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
-            .Select(g => g.Key)
-            .FirstOrDefault();
+        var genre = (await GetTopGenresAsync(userId, ct)).FirstOrDefault().Genre;
         if (genre is null)
         {
             return new GenrePicks(null, []);
         }
+        var books = (await GetPopularInGenresAsync([genre], ct))[0];
+        return new GenrePicks(genre, await suppression.ApplyAsync(books, ct));
+    }
 
-        // Shared by every reader with the same top genre.
-        var key = $"genre:{genre.ToLowerInvariant()}";
-        if (!cache.TryGetValue(key, out BookSuggestion[]? books) || books is null)
+    /// <summary>
+    /// Popular books in each of the reader's top genres, with how many of their books have it, for picking one at
+    /// random: as many genres as fit in one Hardcover request. Empty if none of their books has a genre yet.
+    /// </summary>
+    public async Task<TopGenrePicks[]> GetTopGenrePicksAsync(Guid userId, CancellationToken ct)
+    {
+        var genres = (await GetTopGenresAsync(userId, ct)).Take(HardcoverClient.MaxQueriesPerRequest).ToList();
+        if (genres.Count == 0)
+        {
+            return [];
+        }
+        var lists = await GetPopularInGenresAsync(genres.Select(g => g.Genre).ToList(), ct);
+        var picks = new List<TopGenrePicks>();
+        foreach (var ((genre, readerBooks), books) in genres.Zip(lists))
+        {
+            picks.Add(new TopGenrePicks(genre, readerBooks, await suppression.ApplyAsync(books, ct)));
+        }
+        return picks.ToArray();
+    }
+
+    /// <summary>
+    /// The genres of the books the reader has read or is reading, with how many of those books have each, the most
+    /// common first, leaving out the broad ones.
+    /// </summary>
+    private async Task<List<(string Genre, int ReaderBooks)>> GetTopGenresAsync(Guid userId, CancellationToken ct)
+    {
+        var names = await db.LibraryEntries
+            .Where(e => e.UserId == userId && (e.Status == ReadingStatus.Read || e.Status == ReadingStatus.Reading))
+            .SelectMany(e => e.Book.Genres.Select(bg => bg.Genre.Name))
+            .ToListAsync(ct);
+        return names
+            .Where(name => !BroadGenres.Contains(name))
+            .GroupBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(g => g.Count())
+            .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(g => (g.Key, g.Count()))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Popular books in each genre, shared by every reader. Those not cached are fetched together, in one request, so
+    /// give at most MaxQueriesPerRequest genres. A genre has no books if Hardcover can't be reached.
+    /// </summary>
+    private async Task<BookSuggestion[][]> GetPopularInGenresAsync(IReadOnlyList<string> genres, CancellationToken ct)
+    {
+        static string Key(string genre) => $"genre:{genre.ToLowerInvariant()}";
+        var lists = genres.Select(genre => cache.TryGetValue(Key(genre), out BookSuggestion[]? books) ? books : null).ToArray();
+        var missing = Enumerable.Range(0, genres.Count).Where(i => lists[i] is null).ToList();
+        if (missing.Count > 0)
         {
             try
             {
-                var list = (await hardcover.ListBooksAsync([CatalogueFilter(InGenre(genre))], GenreFetchSize, ct))[0];
-                books = OnePerSeries(MainlyIn(list, genre)).Take(ListSize).Select(ToSuggestion).ToArray();
+                var fetched = await hardcover.ListBooksAsync(
+                    missing.Select(i => (object)CatalogueFilter(InGenre(genres[i]))).ToList(), GenreFetchSize, ct);
+                foreach (var (i, list) in missing.Zip(fetched))
+                {
+                    lists[i] = OnePerSeries(MainlyIn(list, genres[i])).Take(ListSize).Select(ToSuggestion).ToArray();
+                    cache.Set(Key(genres[i]), lists[i], new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = DiscoverCacheDuration });
+                }
             }
             catch (BookSourceUnavailableException)
             {
-                return new GenrePicks(genre, []); // The rest of the page still loads; try again next time.
+                // The rest of the page still loads; try again next time.
             }
-            cache.Set(key, books, new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = DiscoverCacheDuration });
         }
-        return new GenrePicks(genre, await suppression.ApplyAsync(books, ct));
+        return lists.Select(books => books ?? []).ToArray();
     }
 
     /// <summary>

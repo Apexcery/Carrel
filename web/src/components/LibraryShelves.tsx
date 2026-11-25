@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { listNames, STATUS_LABELS } from '../format'
-import { shelfPath } from '../shelves'
-import type { LibraryItem, ReadingStatus } from '../types'
+import { customShelfPath, shelfPath, type ShelfItem } from '../shelves'
+import type { CustomShelf, LibraryItem, ReadingStatus } from '../types'
 import { Cover } from './Cover'
 import { ShelfRow } from './ShelfRow'
 import { StarDisplay } from './StarRating'
@@ -26,6 +26,29 @@ export function ShelfTitle({
       <Link to={shelfPath(username, status)} className="shelf-title-link">
         {STATUS_LABELS[status]} ({count})
       </Link>
+    </Heading>
+  )
+}
+
+/** A custom shelf's title and count, linking to the whole shelf; a private one (only its reader sees) says so. */
+export function CustomShelfTitle({
+  username,
+  shelf,
+  count,
+  level,
+}: {
+  username: string
+  shelf: CustomShelf
+  count: number
+  level: 'h2' | 'h3'
+}) {
+  const Heading = level
+  return (
+    <Heading className="section-title">
+      <Link to={customShelfPath(username, shelf.id)} className="shelf-title-link">
+        {shelf.name} ({count})
+      </Link>
+      {!shelf.isPublic && <span className="shelf-private"> · Private</span>}
     </Heading>
   )
 }
@@ -61,16 +84,16 @@ function ReadingCard({ item }: { item: LibraryItem }) {
   )
 }
 
-/** A shelf's first few books in a row, with their ratings, under its title. */
-export function ShelfStrip({ heading, items, limit }: { heading: ReactNode; items: LibraryItem[]; limit: number }) {
+/** A shelf's first few books in a row, with the reader's ratings, under its title. */
+export function ShelfStrip({ heading, items, limit }: { heading: ReactNode; items: ShelfItem[]; limit: number }) {
   return (
     <ShelfRow heading={heading}>
       {items.slice(0, limit).map((item) => (
-        <li key={item.entry.id}>
+        <li key={item.book.id}>
           <Tooltip content={item.book.title}>
             <Link to={`/books/${item.book.id}`} className="shelf-book">
               <Cover url={item.book.coverUrl} title={item.book.title} author={item.book.authors[0]} />
-              {item.entry.rating !== null && <StarDisplay value={item.entry.rating} />}
+              {item.entry?.rating != null && <StarDisplay value={item.entry.rating} />}
             </Link>
           </Tooltip>
         </li>

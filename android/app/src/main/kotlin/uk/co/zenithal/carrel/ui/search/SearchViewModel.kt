@@ -1,10 +1,15 @@
 package uk.co.zenithal.carrel.ui.search
 
+import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.mlkit.common.MlKitException
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import io.ktor.http.encodeURLParameter
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -15,6 +20,7 @@ import uk.co.zenithal.carrel.data.AuthorSearchResult
 import uk.co.zenithal.carrel.data.BookSearchResponse
 import uk.co.zenithal.carrel.data.BookSearchResult
 import uk.co.zenithal.carrel.data.RecentSearches
+import uk.co.zenithal.carrel.data.validIsbn
 
 /**
  * A search and its results, loaded 20 at a time as the reader scrolls (up to the API's 50 pages). Kept while the
@@ -36,6 +42,12 @@ class SearchViewModel(private val api: ApiClient, private val recent: RecentSear
         private set
     var error by mutableStateOf<String?>(null)
         private set
+    /** A scanned book's ISBN, to look up, until `onScanHandled`. */
+    var scannedIsbn by mutableStateOf<String?>(null)
+        private set
+    /** Why the last scan found nothing to look up. */
+    var scanMessage by mutableStateOf<String?>(null)
+        private set
     private var page = 0
     private var hasMore = false
     private var job: Job? = null
@@ -48,6 +60,7 @@ class SearchViewModel(private val api: ApiClient, private val recent: RecentSear
         val q = text.trim()
         if (q.isEmpty()) return
         recent.add(userId, q)
+        scanMessage = null
         job?.cancel()
         authorsJob?.cancel()
         generation++
@@ -99,6 +112,25 @@ class SearchViewModel(private val api: ApiClient, private val recent: RecentSear
         }
     }
 
+    /**
+     * Scans a book's barcode. Google Play services shows the camera, so Carrel needs no camera permission of its own.
+     * The result comes here, not to the screen, since the scanner (portrait only) may recreate a sideways activity.
+     */
+    fun scan(context: Context) {
+        scanMessage = null
+        GmsBarcodeScanning.getClient(context, SCAN_OPTIONS).startScan()
+            .addOnSuccessListener { barcode ->
+                // Every EAN-13 passes the ISBN-13 check, so only Bookland's 978 and 979 are books.
+                val isbn = barcode.rawValue?.takeIf { it.startsWith("978") || it.startsWith("979") }?.let(::validIsbn)
+                if (isbn != null) scannedIsbn = isbn else scanMessage = "That isn’t a book’s barcode. Try the one with the ISBN above it."
+            }
+            .addOnFailureListener { scanMessage = scanFailure(it) }
+    }
+
+    fun onScanHandled() {
+        scannedIsbn = null
+    }
+
     private fun loadAuthors(q: String) {
         val mine = generation
         authorsJob = viewModelScope.launch {
@@ -115,4 +147,17 @@ class SearchViewModel(private val api: ApiClient, private val recent: RecentSear
         const val PAGE_SIZE = 20
         const val MAX_PAGE = 50
     }
+}
+
+/** Books' barcodes only: an ISBN is printed as an EAN-13. */
+private val SCAN_OPTIONS = GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_EAN_13).build()
+
+/** Why the scanner failed, for the reader; null when they closed it, or one is already open. */
+private fun scanFailure(e: Exception): String? = when ((e as? MlKitException)?.errorCode) {
+    MlKitException.CODE_SCANNER_CANCELLED, MlKitException.CANCELLED, MlKitException.CODE_SCANNER_TASK_IN_PROGRESS -> null
+    // The first scan starts Google Play services downloading the scanner.
+    MlKitException.CODE_SCANNER_UNAVAILABLE, MlKitException.UNAVAILABLE -> "The scanner is still downloading. Try again in a minute."
+    MlKitException.CODE_SCANNER_CAMERA_PERMISSION_NOT_GRANTED -> "Google Play services needs the camera to scan. Allow it in the phone’s settings."
+    MlKitException.CODE_SCANNER_GOOGLE_PLAY_SERVICES_VERSION_TOO_OLD -> "Update Google Play services to scan barcodes."
+    else -> "The scanner couldn’t start. Type the ISBN instead."
 }

@@ -352,8 +352,8 @@ function ImportResults({ status }: { status: ImportStatus }) {
         <section className="import-review">
           <h2 className="section-title">Check these ({toCheck.length})</h2>
           <p className="muted">
-            These were matched by title and author rather than an ISBN, so they may be a different book. They’re in your
-            library already.
+            These were matched by title and author rather than an ISBN, so they may be a different book. They’re already
+            in your library, or on your shelves.
           </p>
           <ul>
             {toCheck.map((item) => (

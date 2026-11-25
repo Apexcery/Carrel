@@ -22,13 +22,20 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+import uk.co.zenithal.carrel.data.CustomShelvesSerializer
 import uk.co.zenithal.carrel.data.LIBRARY_PATH
 import uk.co.zenithal.carrel.data.LibraryItem
 import uk.co.zenithal.carrel.data.LibrarySerializer
 import uk.co.zenithal.carrel.data.ReadingStatus
+import uk.co.zenithal.carrel.data.SHELVES_PATH
+import uk.co.zenithal.carrel.data.ShelfItem
+import uk.co.zenithal.carrel.data.customShelfItems
 import uk.co.zenithal.carrel.data.listNames
 import uk.co.zenithal.carrel.data.shelfItems
 import uk.co.zenithal.carrel.ui.components.Cover
@@ -45,10 +52,15 @@ private val SHELVES = listOf(ReadingStatus.WantToRead, ReadingStatus.Paused, Rea
 /** Books shown in each shelf's row; the shelf's title opens the rest. */
 private const val SHELF_BOOKS = 12
 
-/** The signed-in reader's library, as the website's library column: Reading as cards, then a row for each shelf. */
+/**
+ * The signed-in reader's library, as the website's library column: Reading as cards, then a row for each shelf, then
+ * for each custom shelf with books on it.
+ */
 @Composable
-fun LibraryScreen(openBook: (path: String) -> Unit, openShelf: (ReadingStatus) -> Unit) {
+fun LibraryScreen(openBook: (path: String) -> Unit, openShelf: (ReadingStatus) -> Unit, openCustomShelf: (Long) -> Unit) {
     val library = rememberLoaded(LIBRARY_PATH, LibrarySerializer)
+    // Left out until they load, or if they can't be.
+    val shelves = rememberLoaded(SHELVES_PATH, CustomShelvesSerializer).loaded.data
     val items = library.loaded.data
     val colors = Carrel.colors
     Column(
@@ -71,7 +83,13 @@ fun LibraryScreen(openBook: (path: String) -> Unit, openShelf: (ReadingStatus) -
                 if (reading.isNotEmpty()) ReadingShelf(reading, openBook) { openShelf(ReadingStatus.Reading) }
                 SHELVES.forEach { status ->
                     val shelf = shelfItems(items, status)
-                    if (shelf.isNotEmpty()) CoverShelf(status, shelf, openBook) { openShelf(status) }
+                    if (shelf.isNotEmpty()) CoverShelf(status.label, shelf, openBook, { openShelf(status) })
+                }
+                shelves?.forEach { custom ->
+                    val shelf = customShelfItems(items, custom)
+                    if (shelf.isNotEmpty()) {
+                        CoverShelf(custom.name, shelf, openBook, { openCustomShelf(custom.id) }, note = if (custom.isPublic) null else "Private")
+                    }
                 }
             }
             library.loaded.error != null -> {
@@ -83,9 +101,9 @@ fun LibraryScreen(openBook: (path: String) -> Unit, openShelf: (ReadingStatus) -
     }
 }
 
-/** A shelf's title and count, opening the whole shelf. */
+/** A shelf's title and count, opening the whole shelf; `note` follows in fainter ink (a private custom shelf's). */
 @Composable
-internal fun ShelfHeading(status: ReadingStatus, count: Int, onOpen: () -> Unit) {
+internal fun ShelfHeading(label: String, count: Int, onOpen: () -> Unit, note: String? = null) {
     val colors = Carrel.colors
     Row(
         Modifier
@@ -96,7 +114,10 @@ internal fun ShelfHeading(status: ReadingStatus, count: Int, onOpen: () -> Unit)
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            "${status.label} ($count)".uppercase(),
+            buildAnnotatedString {
+                append("$label ($count)".uppercase())
+                note?.let { withStyle(SpanStyle(color = colors.inkFaint)) { append(" · ${it.uppercase()}") } }
+            },
             style = Carrel.type.monoMedium.copy(letterSpacing = 0.14.em),
             color = colors.inkSoft,
             modifier = Modifier.weight(1f),
@@ -110,7 +131,7 @@ internal fun ShelfHeading(status: ReadingStatus, count: Int, onOpen: () -> Unit)
 internal fun ReadingShelf(items: List<LibraryItem>, openBook: (String) -> Unit, openShelf: () -> Unit) {
     val colors = Carrel.colors
     Column(Modifier.padding(top = 40.dp)) {
-        ShelfHeading(ReadingStatus.Reading, items.size, openShelf)
+        ShelfHeading(ReadingStatus.Reading.label, items.size, openShelf)
         LazyRow(
             Modifier.padding(top = 18.dp).fillMaxWidth().shelfEdge(colors.ruleStrong),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -148,17 +169,17 @@ internal fun ReadingShelf(items: List<LibraryItem>, openBook: (String) -> Unit, 
     }
 }
 
-/** A shelf's first books as a row of covers with the reader's ratings. */
+/** A shelf's first books as a row of covers with the reader's ratings, under its `label` (and `note`, see ShelfHeading). */
 @Composable
-internal fun CoverShelf(status: ReadingStatus, items: List<LibraryItem>, openBook: (String) -> Unit, openShelf: () -> Unit) {
+internal fun CoverShelf(label: String, items: List<ShelfItem>, openBook: (String) -> Unit, openShelf: () -> Unit, note: String? = null) {
     val colors = Carrel.colors
     Column(Modifier.padding(top = 40.dp)) {
-        ShelfHeading(status, items.size, openShelf)
+        ShelfHeading(label, items.size, openShelf, note)
         LazyRow(
             Modifier.padding(top = 18.dp).fillMaxWidth().shelfEdge(colors.ruleStrong),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            items(items.take(SHELF_BOOKS), key = { it.entry.id }) { item ->
+            items(items.take(SHELF_BOOKS), key = { it.book.id }) { item ->
                 Column(
                     Modifier
                         .width(92.dp)
@@ -167,7 +188,7 @@ internal fun CoverShelf(status: ReadingStatus, items: List<LibraryItem>, openBoo
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Cover(item.book.coverUrl, item.book.title, item.book.authors.firstOrNull(), 92.dp)
-                    item.entry.rating?.let { StarDisplay(it) }
+                    item.entry?.rating?.let { StarDisplay(it) }
                 }
             }
         }

@@ -14,8 +14,8 @@ android {
         // supabase-kt needs Android 8.
         minSdk = 26
         targetSdk = 37
-        versionCode = 9
-        versionName = "0.7.1"
+        versionCode = 10
+        versionName = "0.8.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "WEBSITE_URL", "\"https://carrel.zenithal.co.uk\"")
     }
@@ -115,6 +115,8 @@ dependencies {
     implementation(libs.readium.streamer)
     implementation(libs.readium.navigator)
     implementation(libs.readium.opds)
+    // Scanning a book's barcode: Google Play services' own scanner, so Carrel needs no camera permission.
+    implementation(libs.play.services.code.scanner)
     // Online libraries' own client, with their logins, kept apart from the Carrel API's.
     implementation(libs.okhttp)
     coreLibraryDesugaring(libs.desugar.jdk.libs)

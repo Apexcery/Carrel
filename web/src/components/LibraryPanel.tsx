@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiGetOrNull, apiSend } from '../api'
 import { formatDuration, localToday, STATUS_LABELS } from '../format'
 import type { BookDetail, Edition, LibraryEntry, ProgressUnit, ReadingStatus, SaveEntryRequest } from '../types'
+import { CustomShelfPicker } from './CustomShelfPicker'
 import { EditionPicker } from './EditionPicker'
 import { ErrorNotice } from './ErrorNotice'
 import { Select } from './Select'
@@ -13,8 +14,8 @@ const STATUSES: ReadingStatus[] = ['want_to_read', 'reading', 'paused', 'read', 
 const IN_PROGRESS: ReadingStatus[] = ['reading', 'paused']
 
 /**
- * The signed-in reader's shelf entry for a book. Status and rating save as soon as they change; progress, edition
- * and reading history are edited together behind "Edit" and saved with one button.
+ * The signed-in reader's shelf entry for a book. Status, rating, and custom shelves save as soon as they change;
+ * progress, edition, and reading history are edited together behind "Edit" and saved with one button.
  */
 export function LibraryPanel({ book }: { book: BookDetail }) {
   const queryClient = useQueryClient()
@@ -86,6 +87,9 @@ export function LibraryPanel({ book }: { book: BookDetail }) {
           </button>
         ))}
       </div>
+
+      {/* In the library or not. */}
+      <CustomShelfPicker bookId={book.id} />
 
       {current && (
         <>

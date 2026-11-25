@@ -63,6 +63,10 @@ class ApiClient(
     suspend fun <T> post(path: String, resultSerializer: KSerializer<T>): T =
         json.decodeFromString(resultSerializer, call(HttpMethod.Post, path, null).bodyAsText())
 
+    /** PUTs without a body, e.g. to put a book on a shelf, and returns the parsed response. */
+    suspend fun <T> put(path: String, resultSerializer: KSerializer<T>): T =
+        json.decodeFromString(resultSerializer, call(HttpMethod.Put, path, null).bodyAsText())
+
     /** POSTs without a body to an endpoint that answers with no content. */
     suspend fun post(path: String) {
         call(HttpMethod.Post, path, null)

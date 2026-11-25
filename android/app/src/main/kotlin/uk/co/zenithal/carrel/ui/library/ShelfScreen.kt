@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.core.content.edit
 import uk.co.zenithal.carrel.data.LibraryItem
+import uk.co.zenithal.carrel.data.ShelfItem
 import uk.co.zenithal.carrel.data.ReadingStatus
 import uk.co.zenithal.carrel.data.SortDirection
 import uk.co.zenithal.carrel.data.SortKey
@@ -85,10 +86,20 @@ private const val VIEW_KEY = "shelfView"
 /**
  * Every book on one of a reader's shelves, with a filter and sort, as covers or as a list. The view is remembered on
  * the device for every shelf; the filter and sort only while the shelf is open. `kicker` says whose shelf it is, and
- * `library` is that reader's library.
+ * `library` is that reader's library. `status` is null for a custom shelf, whose books `books` picks out; `actions`
+ * go under the title (the reader's own custom shelf's settings), and `empty` is said when there are no books.
  */
 @Composable
-fun ShelfScreen(status: ReadingStatus, kicker: String, library: Loadable<List<LibraryItem>>, openBook: (path: String) -> Unit) {
+fun ShelfScreen(
+    title: String,
+    status: ReadingStatus?,
+    kicker: String,
+    library: Loadable<List<LibraryItem>>,
+    openBook: (path: String) -> Unit,
+    books: (List<LibraryItem>) -> List<ShelfItem> = { library -> library.filter { it.entry.status == status } },
+    empty: String = "Nothing on this shelf yet.",
+    actions: @Composable () -> Unit = {},
+) {
     val colors = Carrel.colors
     val prefs = LocalContext.current.getSharedPreferences(VIEW_PREFS, Context.MODE_PRIVATE)
     var view by remember { mutableStateOf(prefs.getString(VIEW_KEY, null)?.let { runCatching { ShelfView.valueOf(it) }.getOrNull() } ?: ShelfView.Grid) }
@@ -96,7 +107,7 @@ fun ShelfScreen(status: ReadingStatus, kicker: String, library: Loadable<List<Li
     var sort by rememberSaveable { mutableStateOf(defaultSort(status)) }
     var direction by rememberSaveable { mutableStateOf(naturalDirection(defaultSort(status))) }
 
-    val all = library.loaded.data?.filter { it.entry.status == status }
+    val all = library.loaded.data?.let(books)
     val items = all?.let { sortItems(filterItems(it, query), sort, direction) }
     val grid = view == ShelfView.Grid
 
@@ -110,18 +121,19 @@ fun ShelfScreen(status: ReadingStatus, kicker: String, library: Loadable<List<Li
         whole {
             Column {
                 Kicker(kicker)
-                Text(status.label, style = Carrel.type.displayLarge, color = colors.ink, modifier = Modifier.padding(top = 8.dp))
+                Text(title, style = Carrel.type.displayLarge, color = colors.ink, modifier = Modifier.padding(top = 8.dp))
                 all?.let {
                     val count = if (query.isNotBlank()) "${items!!.size} of ${it.size}" else "${it.size}"
                     Text("$count ${if (it.size == 1) "book" else "books"}", style = Carrel.type.mono, color = colors.inkSoft, modifier = Modifier.padding(top = 4.dp))
                 }
+                actions()
             }
         }
         when {
             all == null -> whole {
                 library.loaded.error?.let { ErrorNotice(it.message.orEmpty(), library.retry) } ?: ShelfSkeleton()
             }
-            all.isEmpty() -> whole { Text("Nothing on this shelf yet.", style = Carrel.type.body, color = colors.inkSoft) }
+            all.isEmpty() -> whole { Text(empty, style = Carrel.type.body, color = colors.inkSoft) }
             else -> {
                 whole {
                     Toolbar(status, query, { query = it }, sort, direction, view, { key ->
@@ -136,8 +148,9 @@ fun ShelfScreen(status: ReadingStatus, kicker: String, library: Loadable<List<Li
                 if (items!!.isEmpty()) {
                     whole { Text("No books on this shelf match “$query”.", style = Carrel.type.body, color = colors.inkSoft) }
                 }
-                items(items, key = { it.entry.id }) { item ->
-                    if (grid) GridBook(item, openBook) else ListBook(item, status, openBook)
+                items(items, key = { it.book.id }) { item ->
+                    // A custom shelf's books each show what their own status calls for.
+                    if (grid) GridBook(item, openBook) else ListBook(item, status ?: item.entry?.status, openBook)
                 }
             }
         }
@@ -150,7 +163,7 @@ private fun LazyGridScope.whole(content: @Composable () -> Unit) = item(span = {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Toolbar(
-    status: ReadingStatus,
+    status: ReadingStatus?,
     query: String,
     onQuery: (String) -> Unit,
     sort: SortKey,
@@ -242,7 +255,7 @@ private fun lucide(name: String, vararg paths: String) = ImageVector.Builder(nam
 
 /** A cover with its title, author, and the reader's rating under it. */
 @Composable
-private fun GridBook(item: LibraryItem, openBook: (String) -> Unit) {
+private fun GridBook(item: ShelfItem, openBook: (String) -> Unit) {
     val colors = Carrel.colors
     BoxWithConstraints(Modifier.clickable(onClickLabel = "Open", role = Role.Button) { openBook("/books/${item.book.id}") }) {
         val width = maxWidth
@@ -252,14 +265,14 @@ private fun GridBook(item: LibraryItem, openBook: (String) -> Unit) {
             if (item.book.authors.isNotEmpty()) {
                 Text(listNames(item.book.authors), style = Carrel.type.mono, color = colors.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            item.entry.rating?.let { StarDisplay(it, Modifier.padding(top = 2.dp)) }
+            item.entry?.rating?.let { StarDisplay(it, Modifier.padding(top = 2.dp)) }
         }
     }
 }
 
 /** One book to a row: a small cover, then its title, author, rating, and where the reader is with it. */
 @Composable
-private fun ListBook(item: LibraryItem, status: ReadingStatus, openBook: (String) -> Unit) {
+private fun ListBook(item: ShelfItem, status: ReadingStatus?, openBook: (String) -> Unit) {
     val colors = Carrel.colors
     Row(
         Modifier.fillMaxWidth().clickable(onClickLabel = "Open", role = Role.Button) { openBook("/books/${item.book.id}") },
@@ -272,16 +285,19 @@ private fun ListBook(item: LibraryItem, status: ReadingStatus, openBook: (String
                 Text(listNames(item.book.authors), style = Carrel.type.body, color = colors.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                item.entry.rating?.let { StarDisplay(it) }
+                item.entry?.rating?.let { StarDisplay(it) }
                 listDetail(item, status)?.let { Text(it, style = Carrel.type.mono, color = colors.inkSoft) }
             }
         }
     }
 }
 
-/** Where the reader is with the book: progress while reading, when it was finished, or when it was added. */
-private fun listDetail(item: LibraryItem, status: ReadingStatus): String? = when {
-    status.inProgress -> item.entry.progressPercent?.let { "${it.roundToInt()}%" } ?: "Just started"
-    status == ReadingStatus.WantToRead -> formatDate(item.entry.addedAt.take(10))?.let { "Added $it" }
+/**
+ * Where the reader is with the book: progress while reading, when it was finished, or when it was added (to a custom
+ * shelf, there, which is all there is for a book not in the library, with no status).
+ */
+private fun listDetail(item: ShelfItem, status: ReadingStatus?): String? = when {
+    status?.inProgress == true -> item.entry?.progressPercent?.let { "${it.roundToInt()}%" } ?: "Just started"
+    status == null || status == ReadingStatus.WantToRead -> (item.shelvedAt ?: item.entry?.addedAt)?.let { formatDate(it.take(10)) }?.let { "Added $it" }
     else -> formatDate(lastFinished(item))
 }

@@ -13,7 +13,7 @@ public static class CarrelCsv
     public static readonly string[] Columns =
     [
         "Title", "Authors", "Series", "Series Position", "ISBN13", "ISBN10", "Hardcover Book Id", "Hardcover Edition Id",
-        "Status", "Rating", "Progress Unit", "Progress Value", "Progress Percent", "Date Added", "Reads",
+        "Status", "Rating", "Progress Unit", "Progress Value", "Progress Percent", "Date Added", "Reads", "Shelves",
     ];
 
     /// <summary>Statuses as the shelf addresses spell them.</summary>
@@ -35,6 +35,9 @@ public static class CarrelCsv
 
     /// <summary>Authors are separated by semicolons, since names can hold commas ("Martin Luther King, Jr.").</summary>
     public const char AuthorSeparator = ';';
+
+    /// <summary>Custom shelves' names are separated by semicolons too; one with a semicolon in it comes back as two.</summary>
+    public const char ShelfSeparator = ';';
 
     /// <summary>Date added, to the second, in UTC.</summary>
     public const string AddedFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'";

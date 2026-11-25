@@ -21,6 +21,7 @@ import uk.co.zenithal.carrel.data.LibraryChanges
 import uk.co.zenithal.carrel.data.OnlineLibraries
 import uk.co.zenithal.carrel.data.Outbox
 import uk.co.zenithal.carrel.data.Secrets
+import uk.co.zenithal.carrel.data.ShelfChanges
 import coil3.ImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import uk.co.zenithal.carrel.data.PhoneBooks
@@ -55,6 +56,7 @@ class AppContainer(context: Context, val scope: CoroutineScope) {
     val outbox = Outbox(context, ChangesDatabase.create(context).changes()) { (session.state.value as? Session.SignedIn)?.userId }
     val library = LibraryChanges(api, store, outbox)
     val goals = GoalChanges(api, store)
+    val shelves = ShelfChanges(api, store, outbox)
     private val phoneBooksDatabase = PhoneBooksDatabase.create(context)
     val phoneBooks = PhoneBooks(context, phoneBooksDatabase.books(), context.getSharedPreferences("reading", Context.MODE_PRIVATE))
     val libraries = OnlineLibraries(phoneBooksDatabase.libraries(), Secrets())

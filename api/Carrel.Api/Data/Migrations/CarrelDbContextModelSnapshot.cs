@@ -229,6 +229,74 @@ namespace Carrel.Api.Data.Migrations
                     b.ToTable("book_series", (string)null);
                 });
 
+            modelBuilder.Entity("Carrel.Api.Data.CustomShelf", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<bool>("IsPublic")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_public");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_custom_shelves");
+
+                    b.ToTable("custom_shelves", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_custom_shelves_name", "char_length(name) between 1 and 50");
+                        });
+                });
+
+            modelBuilder.Entity("Carrel.Api.Data.CustomShelfEntry", b =>
+                {
+                    b.Property<long>("ShelfId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("shelf_id");
+
+                    b.Property<long>("BookId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("book_id");
+
+                    b.Property<DateTimeOffset>("AddedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("added_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("ShelfId", "BookId")
+                        .HasName("pk_custom_shelf_entries");
+
+                    b.HasIndex("BookId")
+                        .HasDatabaseName("ix_custom_shelf_entries_book_id");
+
+                    b.ToTable("custom_shelf_entries", (string)null);
+                });
+
             modelBuilder.Entity("Carrel.Api.Data.Edition", b =>
                 {
                     b.Property<long>("Id")
@@ -430,6 +498,19 @@ namespace Carrel.Api.Data.Migrations
                     b.Property<int>("Row")
                         .HasColumnType("integer")
                         .HasColumnName("row");
+
+                    b.Property<bool>("ShelveOnly")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("shelve_only");
+
+                    b.PrimitiveCollection<string[]>("Shelves")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text[]")
+                        .HasColumnName("shelves")
+                        .HasDefaultValueSql("'{}'");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -862,6 +943,27 @@ namespace Carrel.Api.Data.Migrations
                     b.Navigation("Series");
                 });
 
+            modelBuilder.Entity("Carrel.Api.Data.CustomShelfEntry", b =>
+                {
+                    b.HasOne("Carrel.Api.Data.Book", "Book")
+                        .WithMany()
+                        .HasForeignKey("BookId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_custom_shelf_entries_books_book_id");
+
+                    b.HasOne("Carrel.Api.Data.CustomShelf", "Shelf")
+                        .WithMany("Entries")
+                        .HasForeignKey("ShelfId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_custom_shelf_entries_custom_shelves_shelf_id");
+
+                    b.Navigation("Book");
+
+                    b.Navigation("Shelf");
+                });
+
             modelBuilder.Entity("Carrel.Api.Data.Edition", b =>
                 {
                     b.HasOne("Carrel.Api.Data.Book", "Book")
@@ -980,6 +1082,11 @@ namespace Carrel.Api.Data.Migrations
                     b.Navigation("Genres");
 
                     b.Navigation("Series");
+                });
+
+            modelBuilder.Entity("Carrel.Api.Data.CustomShelf", b =>
+                {
+                    b.Navigation("Entries");
                 });
 
             modelBuilder.Entity("Carrel.Api.Data.Genre", b =>

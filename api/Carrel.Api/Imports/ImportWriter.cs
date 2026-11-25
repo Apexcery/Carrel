@@ -37,7 +37,13 @@ public static class ImportWriter
 
         foreach (var book in books)
         {
-            var rows = book.ToList();
+            // Rows that only shelve the book make no entry (see ShelveAsync).
+            var rows = book.Where(r => !r.ShelveOnly).ToList();
+            if (rows.Count == 0)
+            {
+                book.ToList().ForEach(r => r.Written = true);
+                continue;
+            }
             if (!entries.TryGetValue(book.Key, out var entry))
             {
                 entry = new LibraryEntry { UserId = import.UserId, BookId = book.Key };
@@ -55,8 +61,76 @@ public static class ImportWriter
                 Replace(entry, rows, editions);
             }
             // Otherwise the book was already in the library and the reader chose to leave those alone.
-            rows.ForEach(r => r.Written = true);
+            book.ToList().ForEach(r => r.Written = true);
         }
+        await ShelveAsync(db, import.UserId, books, ct);
+    }
+
+    /// <summary>
+    /// Puts each book on the custom shelves its rows name, matching the reader's shelves ignoring case and making
+    /// (private) ones they don't have yet. Only ever adds, and nothing twice, so importing the same file again changes
+    /// nothing; that includes books already in the library, since shelving them loses nothing.
+    /// </summary>
+    private static async Task ShelveAsync(CarrelDbContext db, Guid userId, IReadOnlyCollection<IGrouping<long, ImportItem>> books,
+        CancellationToken ct)
+    {
+        var wanted = books
+            .SelectMany(book => book.SelectMany(r => r.Shelves).Select(name => (BookId: book.Key, Name: name)))
+            .DistinctBy(w => (w.BookId, w.Name.ToLowerInvariant()))
+            .ToList();
+        if (wanted.Count == 0)
+        {
+            return;
+        }
+        var shelves = await ShelvesAsync(db, userId, wanted.Select(w => w.Name), ct);
+        var shelfIds = shelves.Values.Where(s => s.Id != 0).Select(s => s.Id).ToList();
+        var bookIds = wanted.Select(w => w.BookId).Distinct().ToList();
+        var existing = (await db.CustomShelfEntries
+                .Where(e => shelfIds.Contains(e.ShelfId) && bookIds.Contains(e.BookId))
+                .Select(e => new { e.ShelfId, e.BookId })
+                .ToListAsync(ct))
+            .Select(e => (e.ShelfId, e.BookId))
+            .ToHashSet();
+        var now = DateTimeOffset.UtcNow;
+        foreach (var (bookId, name) in wanted)
+        {
+            var shelf = shelves[name.ToLowerInvariant()];
+            // A new shelf has no id yet, and nothing on it.
+            if (shelf.Id == 0 || !existing.Contains((shelf.Id, bookId)))
+            {
+                shelf.Entries.Add(new CustomShelfEntry { BookId = bookId, AddedAt = now });
+            }
+        }
+    }
+
+    /// <summary>
+    /// The reader's shelves by name in lower case, with new (private) ones added for any of `names` they don't have,
+    /// for the caller to save. A reader has a handful of shelves, so all of them are matched here rather than in SQL.
+    /// </summary>
+    public static async Task<Dictionary<string, CustomShelf>> ShelvesAsync(CarrelDbContext db, Guid userId, IEnumerable<string> names,
+        CancellationToken ct)
+    {
+        var shelves = (await db.CustomShelves.Where(s => s.UserId == userId).ToListAsync(ct))
+            .DistinctBy(s => s.Name.ToLowerInvariant())
+            .ToDictionary(s => s.Name.ToLowerInvariant());
+        var now = DateTimeOffset.UtcNow;
+        foreach (var name in names)
+        {
+            if (shelves.ContainsKey(name.ToLowerInvariant()))
+            {
+                continue;
+            }
+            // Postgres can lower a name differently from .NET (İ, say), and the unique index is on its lower(name), so
+            // before making a shelf, one it counts as the same is looked for there, lowering both sides in SQL.
+            var shelf = await db.CustomShelves.FirstOrDefaultAsync(s => s.UserId == userId && s.Name.ToLower() == EF.Constant(name).ToLower(), ct);
+            if (shelf is null)
+            {
+                shelf = new CustomShelf { UserId = userId, Name = name, IsPublic = false, CreatedAt = now, UpdatedAt = now };
+                db.CustomShelves.Add(shelf);
+            }
+            shelves[name.ToLowerInvariant()] = shelf;
+        }
+        return shelves;
     }
 
     private static void Replace(LibraryEntry entry, List<ImportItem> rows, Dictionary<(long, long), long> editions)

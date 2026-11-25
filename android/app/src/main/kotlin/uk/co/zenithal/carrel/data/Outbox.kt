@@ -12,6 +12,8 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
@@ -32,7 +34,8 @@ import java.time.Instant
 
 /**
  * A library change made without a signal, waiting to be sent: a save (`request`, as JSON, with its changedAt) or, with
- * no request, removing the book. Kept in the order made.
+ * no request, removing the book. With a `shelfId`, it instead puts the book on that custom shelf or takes it off
+ * (`onShelf`). Kept in the order made.
  */
 @Entity(tableName = "changes")
 data class WaitingChange(
@@ -43,6 +46,8 @@ data class WaitingChange(
     val request: String?,
     /** When it was made, for a removal (a save has it in its request). */
     val changedAt: String,
+    val shelfId: Long? = null,
+    val onShelf: Boolean? = null,
 )
 
 @Dao
@@ -56,11 +61,16 @@ interface WaitingChangeDao {
     @Query("SELECT bookId FROM changes")
     fun observeBooks(): Flow<List<Long>>
 
-    @Query("SELECT * FROM changes WHERE bookId = :bookId ORDER BY id DESC LIMIT 1")
+    /** The book's last library change (not a custom shelf's). */
+    @Query("SELECT * FROM changes WHERE bookId = :bookId AND shelfId IS NULL ORDER BY id DESC LIMIT 1")
     suspend fun lastFor(bookId: Long): WaitingChange?
 
-    @Query("SELECT COUNT(*) FROM changes WHERE bookId = :bookId")
+    /** The book's library changes, which don't wait on its custom shelf changes (nor they on these). */
+    @Query("SELECT COUNT(*) FROM changes WHERE bookId = :bookId AND shelfId IS NULL")
     suspend fun countFor(bookId: Long): Int
+
+    @Query("SELECT COUNT(*) FROM changes WHERE bookId = :bookId AND shelfId IS NOT NULL")
+    suspend fun countShelvingFor(bookId: Long): Int
 
     @Query("DELETE FROM changes WHERE id = :id")
     suspend fun delete(id: Long)
@@ -73,26 +83,45 @@ interface WaitingChangeDao {
  * The reader's own changes, unlike carrel.db (copies of API responses, started again on any new version), so a new
  * version of this needs a real migration.
  */
-@Database(entities = [WaitingChange::class], version = 1, exportSchema = false)
+@Database(entities = [WaitingChange::class], version = 2, exportSchema = false)
 abstract class ChangesDatabase : RoomDatabase() {
     abstract fun changes(): WaitingChangeDao
 
     companion object {
         fun create(context: Context): ChangesDatabase =
-            Room.databaseBuilder(context, ChangesDatabase::class.java, "changes.db").build()
+            Room.databaseBuilder(context, ChangesDatabase::class.java, "changes.db").addMigrations(CUSTOM_SHELVES).build()
+
+        /** Version 2: putting books on custom shelves, and taking them off. */
+        private val CUSTOM_SHELVES = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `changes` ADD COLUMN `shelfId` INTEGER")
+                db.execSQL("ALTER TABLE `changes` ADD COLUMN `onShelf` INTEGER")
+            }
+        }
     }
 }
 
 /**
- * Library changes made without a signal, sent in order by [SyncWorker] once there is one, even with the app closed.
- * A change the API turns away because the book was changed or removed more recently elsewhere is dropped, as the
- * newer one wins.
+ * Library and custom shelf changes made without a signal, sent in order by [SyncWorker] once there is one, even with
+ * the app closed. A change the API turns away because the book was changed or removed more recently elsewhere (or its
+ * shelf deleted) is dropped, as the newer one wins.
  */
 class Outbox(private val context: Context, private val dao: WaitingChangeDao, private val currentUser: () -> String?) {
     /** The books with changes waiting, once for each change. */
     val waitingBooks: Flow<List<Long>> = dao.observeBooks()
 
+    /** Whether the book has library changes waiting. */
     suspend fun isWaiting(bookId: Long) = dao.countFor(bookId) > 0
+
+    /** Whether the book has custom shelf changes waiting. */
+    suspend fun isShelvingWaiting(bookId: Long) = dao.countShelvingFor(bookId) > 0
+
+    /** Keeps putting the book on a custom shelf (`on`), or taking it off, to send. */
+    suspend fun addShelving(shelfId: Long, bookId: Long, on: Boolean) {
+        val userId = currentUser() ?: throw ApiException(401, "Your session has expired. Sign in again.")
+        dao.add(WaitingChange(userId = userId, bookId = bookId, request = null, changedAt = Instant.now().toString(), shelfId = shelfId, onShelf = on))
+        schedule()
+    }
 
     /**
      * Keeps a change to send: a save, or a removal when `request` is null. A save can take the place of the book's last
@@ -136,6 +165,7 @@ class Outbox(private val context: Context, private val dao: WaitingChangeDao, pr
      */
     suspend fun send(api: ApiClient, store: Store): Boolean {
         var sent = false
+        var shelved = false
         while (true) {
             val change = dao.next() ?: break
             if (change.userId != currentUser()) {
@@ -144,22 +174,29 @@ class Outbox(private val context: Context, private val dao: WaitingChangeDao, pr
                 continue
             }
             try {
-                if (change.request != null) {
+                if (change.shelfId != null) {
+                    val path = "$SHELVES_PATH/${change.shelfId}/books/${change.bookId}"
+                    if (change.onShelf == true) api.put(path, CustomShelf.serializer()) else api.delete(path, CustomShelf.serializer())
+                } else if (change.request != null) {
                     val request = CarrelJson.decodeFromString(SaveEntryRequest.serializer(), change.request)
                     api.send(HttpMethod.Put, "/library/books/${change.bookId}", request, SaveEntryRequest.serializer(), LibraryEntry.serializer())
                 } else {
                     api.delete("/library/books/${change.bookId}?changedAt=${change.changedAt.encodeURLParameter()}")
                 }
             } catch (e: ApiException) {
-                // Turned away for good: changed or removed more recently elsewhere (409), or no longer valid (400, 404).
+                // Turned away for good: changed or removed more recently elsewhere (409), or no longer valid (400, 404,
+                // e.g. a shelf deleted since).
                 if (e.status !in setOf(400, 404, 409)) return false
             }
             dao.delete(change.id)
-            sent = true
+            if (change.shelfId != null) shelved = true else sent = true
         }
         // What the API now has, including any newer changes that won and the API's own read dates and progress.
         if (sent) {
             runCatching { store.save(LIBRARY_PATH, api.get(LIBRARY_PATH, LibrarySerializer), LibrarySerializer) }
+        }
+        if (shelved) {
+            runCatching { store.save(SHELVES_PATH, api.get(SHELVES_PATH, CustomShelvesSerializer), CustomShelvesSerializer) }
         }
         return true
     }

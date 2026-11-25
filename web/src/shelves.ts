@@ -1,4 +1,4 @@
-import type { LibraryItem, ReadingStatus } from './types'
+import type { CustomShelf, LibraryEntry, LibraryItem, ReadingStatus } from './types'
 
 /** URL slugs for each shelf, e.g. /@reader/shelves/want-to-read. */
 const SLUGS: Record<ReadingStatus, string> = {
@@ -18,6 +18,11 @@ export function shelfPath(username: string, status: ReadingStatus): string {
   return `${profilePath(username)}/shelves/${SLUGS[status]}`
 }
 
+/** A custom shelf, by id so renaming it keeps its address, e.g. /@reader/shelves/custom/12. */
+export function customShelfPath(username: string, id: number): string {
+  return `${profilePath(username)}/shelves/custom/${id}`
+}
+
 export function statusFromSlug(slug: string | undefined): ReadingStatus | null {
   const match = Object.entries(SLUGS).find(([, s]) => s === slug)
   return match ? (match[0] as ReadingStatus) : null
@@ -28,38 +33,50 @@ export type SortDirection = 'asc' | 'desc'
 
 type Kind = 'text' | 'number' | 'date'
 
+/**
+ * A book on a shelf: a library item, or a custom shelf's book, with its library entry if it's in the library (null if
+ * not) and when it was put on the shelf.
+ */
+export interface ShelfItem {
+  book: LibraryItem['book']
+  entry: LibraryEntry | null
+  shelvedAt?: string
+}
+
 interface SortOption {
   key: SortKey
   label: string
   kind: Kind
-  /** Only offered on these shelves. */
+  /** Only offered on these shelves (so not on custom ones, whose books can have any status). */
   shelves?: ReadingStatus[]
-  value: (item: LibraryItem) => string | number | null
+  value: (item: ShelfItem) => string | number | null
 }
 
 const SORT_OPTIONS: SortOption[] = [
-  { key: 'added', label: 'Date added', kind: 'date', value: (i) => i.entry.addedAt },
+  // To the library, or on a custom shelf, to the shelf.
+  { key: 'added', label: 'Date added', kind: 'date', value: (i) => i.shelvedAt ?? i.entry?.addedAt ?? null },
   // Any save stamps it, but for a book being read that's nearly always a progress update or starting it.
-  { key: 'updated', label: 'Last updated', kind: 'date', shelves: ['reading', 'paused'], value: (i) => i.entry.updatedAt },
+  { key: 'updated', label: 'Last updated', kind: 'date', shelves: ['reading', 'paused'], value: (i) => i.entry?.updatedAt ?? null },
   { key: 'finished', label: 'Date finished', kind: 'date', shelves: ['read', 'did_not_finish'], value: lastFinished },
-  { key: 'progress', label: 'Progress', kind: 'number', shelves: ['reading', 'paused'], value: (i) => i.entry.progressPercent },
+  { key: 'progress', label: 'Progress', kind: 'number', shelves: ['reading', 'paused'], value: (i) => i.entry?.progressPercent ?? null },
   { key: 'title', label: 'Title', kind: 'text', value: (i) => i.book.title },
   { key: 'author', label: 'Author', kind: 'text', value: (i) => surname(i.book.authors[0]) },
-  { key: 'rating', label: 'Your rating', kind: 'number', value: (i) => i.entry.rating },
+  { key: 'rating', label: 'Your rating', kind: 'number', value: (i) => i.entry?.rating ?? null },
   { key: 'hardcover', label: 'Hardcover rating', kind: 'number', value: (i) => i.book.hardcoverRating },
   { key: 'popularity', label: 'Popularity', kind: 'number', value: (i) => i.book.hardcoverRatingsCount },
   { key: 'published', label: 'Year published', kind: 'number', value: (i) => i.book.firstPublishedYear },
 ]
 
-export function sortOptions(status: ReadingStatus): SortOption[] {
-  return SORT_OPTIONS.filter((o) => !o.shelves || o.shelves.includes(status))
+/** A status shelf's sorts, or a custom shelf's (null). */
+export function sortOptions(status: ReadingStatus | null): SortOption[] {
+  return SORT_OPTIONS.filter((o) => !o.shelves || (status !== null && o.shelves.includes(status)))
 }
 
 /**
  * Read by when it was finished; Reading and Paused by when the book was last updated, so the latest progress comes
- * first; the rest by when the book was added.
+ * first; the rest, and custom shelves (null), by when the book was added.
  */
-export function defaultSort(status: ReadingStatus): SortKey {
+export function defaultSort(status: ReadingStatus | null): SortKey {
   return status === 'read' ? 'finished' : status === 'reading' || status === 'paused' ? 'updated' : 'added'
 }
 
@@ -79,7 +96,7 @@ export function directionLabel(key: SortKey, direction: SortDirection): string {
   return DIRECTION_LABELS[kind ?? 'text'][direction]
 }
 /** Sorts by the given key; books without a value go last in either direction, then ties go by title. */
-export function sortItems(items: LibraryItem[], key: SortKey, direction: SortDirection): LibraryItem[] {
+export function sortItems<T extends ShelfItem>(items: T[], key: SortKey, direction: SortDirection): T[] {
   const option = SORT_OPTIONS.find((o) => o.key === key) ?? SORT_OPTIONS[0]
   const sign = direction === 'asc' ? 1 : -1
   const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true })
@@ -98,7 +115,7 @@ export function sortItems(items: LibraryItem[], key: SortKey, direction: SortDir
 }
 
 /** Keeps books whose title, author or series contains every word of the query. */
-export function filterItems(items: LibraryItem[], query: string): LibraryItem[] {
+export function filterItems<T extends ShelfItem>(items: T[], query: string): T[] {
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
   if (terms.length === 0) {
     return items
@@ -128,8 +145,23 @@ export function shelfItems(library: LibraryItem[], status: ReadingStatus): Libra
   )
 }
 
-function lastFinished(item: LibraryItem): string | null {
-  return item.entry.reads.map((r) => r.finishedOn).filter((d): d is string => d !== null).sort().at(-1) ?? null
+/** A custom shelf's books, unsorted, each with the reader's entry for it from `library` when it's in it. */
+export function onCustomShelf(library: LibraryItem[], shelf: CustomShelf): ShelfItem[] {
+  const inLibrary = new Map(library.map((item) => [item.book.id, item]))
+  return shelf.books.map(({ book, addedAt }) => {
+    const item = inLibrary.get(book.id)
+    return { book: item?.book ?? book, entry: item?.entry ?? null, shelvedAt: addedAt }
+  })
+}
+
+/** A custom shelf's books in its default order. */
+export function customShelfItems(library: LibraryItem[], shelf: CustomShelf): ShelfItem[] {
+  const key = defaultSort(null)
+  return sortItems(onCustomShelf(library, shelf), key, naturalDirection(key))
+}
+
+function lastFinished(item: ShelfItem): string | null {
+  return (item.entry?.reads ?? []).map((r) => r.finishedOn).filter((d): d is string => d !== null).sort().at(-1) ?? null
 }
 
 function surname(name: string | undefined): string | null {

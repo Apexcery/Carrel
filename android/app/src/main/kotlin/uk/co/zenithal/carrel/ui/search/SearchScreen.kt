@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -22,19 +23,34 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Text
+import androidx.compose.material3.TooltipAnchorPosition
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.path
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
@@ -45,19 +61,29 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
+import kotlinx.serialization.builtins.ListSerializer
 import uk.co.zenithal.carrel.LocalContainer
 import uk.co.zenithal.carrel.auth.Session
+import uk.co.zenithal.carrel.data.ApiException
 import uk.co.zenithal.carrel.data.AuthorSearchResult
 import uk.co.zenithal.carrel.data.BookSearchResult
 import uk.co.zenithal.carrel.data.GENRES_PATH
 import uk.co.zenithal.carrel.data.GenreIndex
 import uk.co.zenithal.carrel.data.GenreLink
+import uk.co.zenithal.carrel.data.LIBRARY_PATH
+import uk.co.zenithal.carrel.data.LibrarySerializer
+import uk.co.zenithal.carrel.data.PickGroup
+import uk.co.zenithal.carrel.data.ReadingStatus
+import uk.co.zenithal.carrel.data.TopGenrePicks
 import uk.co.zenithal.carrel.data.displaySubtitle
 import uk.co.zenithal.carrel.data.formatCount
 import uk.co.zenithal.carrel.data.listNames
+import uk.co.zenithal.carrel.data.randomPick
 import uk.co.zenithal.carrel.data.seriesPosition
 import uk.co.zenithal.carrel.ui.components.Cover
 import uk.co.zenithal.carrel.ui.components.ErrorNotice
+import uk.co.zenithal.carrel.ui.components.FormMessage
 import uk.co.zenithal.carrel.ui.components.Gap
 import uk.co.zenithal.carrel.ui.components.GenreLinks
 import uk.co.zenithal.carrel.ui.components.HardcoverRating
@@ -65,13 +91,17 @@ import uk.co.zenithal.carrel.ui.components.Kicker
 import uk.co.zenithal.carrel.ui.components.LinkButton
 import uk.co.zenithal.carrel.ui.components.SectionTitle
 import uk.co.zenithal.carrel.ui.components.SkeletonLine
+import uk.co.zenithal.carrel.ui.components.Tone
 import uk.co.zenithal.carrel.ui.rememberLoaded
+import uk.co.zenithal.carrel.ui.rememberOwnedHardcoverIds
 import uk.co.zenithal.carrel.ui.theme.Carrel
 import uk.co.zenithal.carrel.ui.you.Avatar
+import kotlin.random.Random
 
 /**
  * The Search tab: a search box, then results as the website lists them. Before searching, the reader's recent
  * searches and the genres to browse. `searchFor` is a search to run from a link or a share, until `onSearchedFor`.
+ * A scanned barcode's ISBN goes to `findIsbn`.
  */
 @Composable
 fun SearchScreen(
@@ -80,10 +110,12 @@ fun SearchScreen(
     openAuthor: (hardcoverId: Int) -> Unit,
     openGenre: (GenreLink) -> Unit,
     openAllGenres: () -> Unit,
+    findIsbn: (isbn: String) -> Unit,
     searchFor: String?,
     onSearchedFor: () -> Unit,
 ) {
     val container = LocalContainer.current
+    val context = LocalContext.current
     val model = viewModel { SearchViewModel(container.api, container.recentSearches) }
     val session by container.session.state.collectAsStateWithLifecycle()
     val userId = (session as? Session.SignedIn)?.userId.orEmpty()
@@ -94,6 +126,34 @@ fun SearchScreen(
     var recentVersion by remember { mutableStateOf(0) }
     val recent = remember(userId, recentVersion, model.query) { container.recentSearches.get(userId) }
     val list = rememberLazyListState()
+    // The dice in the search box opens a random book from the popular ones in the reader's top genres, a genre more
+    // likely the more of their books have it, leaving out books they have. Their top genres come from the books they've
+    // read or are reading, so it's hidden until they have one.
+    val library = rememberLoaded(if (userId.isNotEmpty()) LIBRARY_PATH else null, LibrarySerializer).loaded.data
+    val owned = rememberOwnedHardcoverIds()
+    val canPick = owned != null && library?.any { it.entry.status == ReadingStatus.Read || it.entry.status == ReadingStatus.Reading } == true
+    val scope = rememberCoroutineScope()
+    var topPicks by remember { mutableStateOf<List<TopGenrePicks>?>(null) }
+    var pickNote by remember { mutableStateOf<String?>(null) }
+
+    fun pickRandomBook() {
+        pickNote = null
+        scope.launch {
+            val picks = topPicks ?: try {
+                container.api.get("/library/genre-picks/top", ListSerializer(TopGenrePicks.serializer())).also { topPicks = it }
+            } catch (e: ApiException) {
+                pickNote = e.message
+                return@launch
+            }
+            val book = randomPick(picks.map { PickGroup(it.books, it.readerBooks) }, owned.orEmpty(), lastRandomPick, Random.nextDouble())
+            if (book == null) {
+                pickNote = "You have every book it could pick already."
+            } else {
+                lastRandomPick = book.hardcoverId
+                openBook("/books/hardcover/${book.hardcoverId}")
+            }
+        }
+    }
 
     fun search(q: String) {
         if (q.isBlank()) return
@@ -101,6 +161,12 @@ fun SearchScreen(
         model.search(q, userId)
         keyboard?.hide()
         focus.clearFocus()
+    }
+    LaunchedEffect(model.scannedIsbn) {
+        model.scannedIsbn?.let {
+            findIsbn(it)
+            model.onScanHandled()
+        }
     }
     LaunchedEffect(searchFor) {
         searchFor?.let {
@@ -117,14 +183,20 @@ fun SearchScreen(
 
     LazyColumn(state = list, modifier = Modifier.fillMaxSize().background(Carrel.colors.paper), contentPadding = PaddingValues(16.dp, 20.dp)) {
         item {
-            SearchBox(
-                text = text,
-                onTextChange = {
-                    text = it
-                    if (it.isBlank()) model.clear()
-                },
-                onSearch = { search(text) },
-            )
+            Column {
+                SearchBox(
+                    text = text,
+                    onTextChange = {
+                        text = it
+                        if (it.isBlank()) model.clear()
+                    },
+                    onSearch = { search(text) },
+                    onScan = { model.scan(context) },
+                    onRandomBook = if (canPick) ::pickRandomBook else null,
+                )
+                model.scanMessage?.let { FormMessage(it, Tone.Error, Modifier.padding(top = 10.dp)) }
+                pickNote?.let { FormMessage(it, modifier = Modifier.padding(top = 10.dp)) }
+            }
         }
         val query = model.query
         if (query == null) {
@@ -160,9 +232,9 @@ fun SearchScreen(
     }
 }
 
-/** The website's header search box: the field and an accent Search button, joined. */
+/** The website's header search box: the field and an accent Search button, joined. In the field, the dice (when there's something to pick) and a scan button, for a book's barcode. */
 @Composable
-private fun SearchBox(text: String, onTextChange: (String) -> Unit, onSearch: () -> Unit) {
+private fun SearchBox(text: String, onTextChange: (String) -> Unit, onSearch: () -> Unit, onScan: () -> Unit, onRandomBook: (() -> Unit)?) {
     val colors = Carrel.colors
     Row(Modifier.fillMaxWidth().height(46.dp)) {
         Box(
@@ -174,19 +246,34 @@ private fun SearchBox(text: String, onTextChange: (String) -> Unit, onSearch: ()
                 .padding(horizontal = 13.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
-            if (text.isEmpty()) {
-                Text("Title, author, or ISBN", style = Carrel.type.body.copy(fontStyle = FontStyle.Italic), color = colors.inkFaint)
+            // In a row, so the field ends where the dice and Scan start, however wide the font makes it.
+            Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                    if (text.isEmpty()) {
+                        Text("Title, author, or ISBN", style = Carrel.type.body.copy(fontStyle = FontStyle.Italic), color = colors.inkFaint)
+                    }
+                    BasicTextField(
+                        value = text,
+                        onValueChange = { if (it.length <= 200) onTextChange(it) },
+                        singleLine = true,
+                        textStyle = Carrel.type.body.copy(color = colors.ink),
+                        cursorBrush = SolidColor(colors.accent),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { onSearch() }),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                if (onRandomBook != null) RandomBookButton(onRandomBook)
+                Box(
+                    Modifier
+                        .fillMaxHeight()
+                        .clickable(role = Role.Button, onClick = onScan)
+                        .padding(start = 8.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(ScanIcon, contentDescription = "Scan a book’s barcode", tint = colors.accent, modifier = Modifier.size(22.dp))
+                }
             }
-            BasicTextField(
-                value = text,
-                onValueChange = { if (it.length <= 200) onTextChange(it) },
-                singleLine = true,
-                textStyle = Carrel.type.body.copy(color = colors.ink),
-                cursorBrush = SolidColor(colors.accent),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { onSearch() }),
-                modifier = Modifier.fillMaxWidth(),
-            )
         }
         Box(
             Modifier
@@ -197,6 +284,58 @@ private fun SearchBox(text: String, onTextChange: (String) -> Unit, onSearch: ()
             contentAlignment = Alignment.Center,
         ) {
             Text("SEARCH", style = Carrel.type.monoMedium.copy(letterSpacing = 0.08.em), color = colors.onAccent)
+        }
+    }
+}
+
+/** A barcode in a scanner's corners, for Scan (Material's core icons have none). */
+private val ScanIcon: ImageVector by lazy {
+    ImageVector.Builder("Scan", 24.dp, 24.dp, 24f, 24f).apply {
+        path(stroke = SolidColor(Color.Black), strokeLineWidth = 1.75f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+            // The corners: top left, top right, bottom right, then bottom left.
+            moveTo(3f, 7.5f)
+            verticalLineTo(3f)
+            horizontalLineTo(7.5f)
+            moveTo(16.5f, 3f)
+            horizontalLineTo(21f)
+            verticalLineTo(7.5f)
+            moveTo(21f, 16.5f)
+            verticalLineTo(21f)
+            horizontalLineTo(16.5f)
+            moveTo(7.5f, 21f)
+            horizontalLineTo(3f)
+            verticalLineTo(16.5f)
+        }
+        path(fill = SolidColor(Color.Black)) {
+            // The bars, of different widths, left to right.
+            listOf(6.5f to 1.5f, 9f to 1f, 11f to 2f, 14f to 1f, 16f to 1.5f).forEach { (x, width) ->
+                moveTo(x, 7.5f)
+                horizontalLineTo(x + width)
+                verticalLineTo(16.5f)
+                horizontalLineTo(x)
+                close()
+            }
+        }
+    }.build()
+}
+
+private const val RANDOM_BOOK = "Pick a random book"
+
+/** The book the dice opened last, so the next press opens a different one. Kept while the app runs. */
+private var lastRandomPick: Int? = null
+
+/** The dice in the search box, named on a long press. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RandomBookButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
+        tooltip = { PlainTooltip { Text(RANDOM_BOOK) } },
+        state = rememberTooltipState(),
+        modifier = modifier,
+    ) {
+        IconButton(onClick) {
+            Icon(DiceIcon, contentDescription = RANDOM_BOOK, tint = Carrel.colors.inkFaint, modifier = Modifier.size(20.dp))
         }
     }
 }

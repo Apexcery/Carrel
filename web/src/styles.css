@@ -443,6 +443,64 @@ a.primary-button:hover {
   border-radius: 0 2px 2px 0;
 }
 
+/* The dice (components/RandomBookButton.tsx): part of the field, not another accent button. */
+.random-book {
+  position: relative;
+  display: flex;
+}
+
+.search-box .random-book-button {
+  display: flex;
+  align-items: center;
+  padding: 0 0.7em;
+  border: 1px solid var(--rule-strong);
+  border-left: 0;
+  border-right: 0;
+  border-radius: 0;
+  background: var(--paper-raised);
+  color: var(--ink-faint);
+  transition: color 120ms ease;
+}
+
+.search-box .random-book-button:hover {
+  filter: none;
+  color: var(--accent);
+}
+
+.search-box .random-book-button:disabled {
+  cursor: progress;
+}
+
+.random-book-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.random-book-button svg {
+  width: 1.3em;
+  height: 1.3em;
+}
+
+/* Why a press opened nothing, briefly, in the tooltip's style. */
+.random-book-note {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  width: max-content;
+  max-width: 220px;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: var(--paper-raised);
+  box-shadow: var(--card-shadow);
+  color: var(--ink);
+}
+
+.random-book-note:empty {
+  display: none;
+}
+
 .account {
   display: flex;
   align-items: center;
@@ -1561,6 +1619,60 @@ a.primary-button:hover {
   margin-left: auto;
 }
 
+/* The reader's custom shelves: each a switch, filled with the accent while the book is on it. */
+.custom-shelves {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-width: 0;
+}
+
+.shelf-chip {
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  background: none;
+  padding: 0.35em 0.75em;
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.shelf-chip:hover:not(:disabled):not([aria-pressed='true']) {
+  color: var(--accent);
+}
+
+.shelf-chip[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.shelf-chip:disabled {
+  cursor: progress;
+}
+
+/* Naming a new shelf (book page) or renaming one (its page). */
+.shelf-name-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.shelf-name-form input {
+  width: 14em;
+  max-width: 100%;
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  background: var(--paper);
+  padding: 0.35em 0.6em;
+  font-size: var(--text-body);
+}
+
 /* Edition picker (Headless UI combobox; the options list is portalled to the body). */
 .edition-picker {
   display: flex;
@@ -2204,6 +2316,11 @@ a.primary-button:hover {
   .profile-shelves .shelf-did_not_finish {
     order: 2;
   }
+
+  /* The reader's own shelves come after all of those. */
+  .profile-shelves .shelf-custom {
+    order: 3;
+  }
 }
 
 /* The grid spaces them instead. */
@@ -2284,6 +2401,23 @@ a.primary-button:hover {
 }
 
 /* ---------- Shelf page ---------- */
+
+/* A custom shelf's own reader: whether it's public, and ways to change it, under the count. */
+.custom-shelf-settings {
+  margin-top: 14px;
+}
+
+.custom-shelf-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 18px;
+}
+
+/* Beside a custom shelf's title: only its reader sees a private one. */
+.shelf-private {
+  color: var(--ink-faint);
+}
 
 .shelf-toolbar {
   display: flex;
