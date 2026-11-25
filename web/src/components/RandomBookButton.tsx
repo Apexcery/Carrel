@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useMatch, useNavigate } from 'react-router'
-import { apiGet, apiGetOrNull } from '../api'
+import { useNavigate } from 'react-router'
+import { apiGet } from '../api'
 import { useSession } from '../auth'
 import { randomPick, type PickGroup } from '../randomPick'
-import type { GenreShelves, LibraryItem, TopGenrePicks } from '../types'
+import type { DiscoverShelves, LibraryItem, TopGenrePicks } from '../types'
 import { useOwnedHardcoverIds } from './SuggestionShelf'
 import { Tooltip } from './Tooltip'
 
@@ -16,62 +16,63 @@ const NOTE_FOR = 4000
 let lastPick: number | null = null
 
 /**
- * The dice in the search box, which opens a random book's page. On a genre's page it picks from that genre's shelves;
- * elsewhere, signed in, from the popular books in the reader's top genres (fetched on the first press), a genre more
- * likely the more of the reader's books have it. Books the reader has are left out. Hidden when there's nothing it
- * could pick from.
+ * The dice in the search box, which opens a random book's page, on any page. Signed in, it picks from the popular books
+ * in the reader's top genres (fetched on the first press), a genre more likely the more of the reader's books have it.
+ * Signed out, or without top genres, from the home page's Discover shelves that are out already. Books the reader has
+ * are left out.
  */
 export function RandomBookButton() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const signedIn = Boolean(useSession())
-  const slug = useMatch('/genres/:slug')?.params.slug
-  // The genre page's own query, so this uses what the page loaded.
-  const genre = useQuery({
-    queryKey: ['genre', slug],
-    queryFn: () => apiGetOrNull<GenreShelves>(`/genres/${slug}`),
-    enabled: Boolean(slug),
-  })
   const library = useQuery({ queryKey: ['library'], queryFn: () => apiGet<LibraryItem[]>('/library'), enabled: signedIn })
   const owned = useOwnedHardcoverIds()
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
 
-  const shelves = genre.data
-  const genreBooks = shelves ? [...shelves.popular, ...shelves.topRated, ...shelves.newReleases] : []
-  // The reader's top genres come from the books they've read or are reading, so without one there are none.
-  const hasTopGenres = library.data?.some((item) => item.entry.status === 'read' || item.entry.status === 'reading')
-  if (!owned || !(slug ? genreBooks.length > 0 : signedIn && hasTopGenres)) {
+  if (!owned) {
     return null
   }
   const ownedIds = owned
+  // The reader's top genres come from the books they've read or are reading, so without one there are none.
+  const hasTopGenres = library.data?.some((item) => item.entry.status === 'read' || item.entry.status === 'reading')
 
   function show(text: string) {
     setNote(text)
     setTimeout(() => setNote(''), NOTE_FOR)
   }
 
-  async function pick() {
-    setNote('')
-    let groups: PickGroup[] = [{ books: genreBooks, weight: 1 }]
-    if (!slug) {
-      setBusy(true)
-      try {
-        // Not under 'library': books the reader has are left out here, so a change to their shelves needn't fetch it
-        // again (Hardcover's limits are tight).
-        const top = await queryClient.fetchQuery({
-          queryKey: ['genre-picks', 'top'],
-          queryFn: () => apiGet<TopGenrePicks[]>('/library/genre-picks/top'),
-        })
-        groups = top.map((picks) => ({ books: picks.books, weight: picks.readerBooks }))
-      } catch {
-        show('Couldn’t pick a book. Try again.')
-        return
-      } finally {
-        setBusy(false)
+  async function groups(): Promise<PickGroup[]> {
+    if (hasTopGenres) {
+      // Not under 'library': books the reader has are left out here, so a change to their shelves needn't fetch it
+      // again (Hardcover's limits are tight).
+      const top = await queryClient.fetchQuery({
+        queryKey: ['genre-picks', 'top'],
+        queryFn: () => apiGet<TopGenrePicks[]>('/library/genre-picks/top'),
+      })
+      // None when their books have only broad genres, or Hardcover can't be reached; then pick as if signed out.
+      if (top.some((picks) => picks.books.length > 0)) {
+        return top.map((picks) => ({ books: picks.books, weight: picks.readerBooks }))
       }
     }
-    const book = randomPick(groups, ownedIds, lastPick, Math.random())
+    // The home page's query, so this uses what it loaded.
+    const discover = await queryClient.fetchQuery({ queryKey: ['discover'], queryFn: () => apiGet<DiscoverShelves>('/discover') })
+    return [{ books: [...discover.popular, ...discover.newReleases, ...discover.topRated], weight: 1 }]
+  }
+
+  async function pick() {
+    setNote('')
+    setBusy(true)
+    let from: PickGroup[]
+    try {
+      from = await groups()
+    } catch {
+      show('Couldn’t pick a book. Try again.')
+      return
+    } finally {
+      setBusy(false)
+    }
+    const book = randomPick(from, ownedIds, lastPick, Math.random())
     if (!book) {
       show('You have every book it could pick already.')
       return

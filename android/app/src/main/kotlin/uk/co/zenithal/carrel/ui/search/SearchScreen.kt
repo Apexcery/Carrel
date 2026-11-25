@@ -68,6 +68,7 @@ import uk.co.zenithal.carrel.auth.Session
 import uk.co.zenithal.carrel.data.ApiException
 import uk.co.zenithal.carrel.data.AuthorSearchResult
 import uk.co.zenithal.carrel.data.BookSearchResult
+import uk.co.zenithal.carrel.data.DiscoverShelves
 import uk.co.zenithal.carrel.data.GENRES_PATH
 import uk.co.zenithal.carrel.data.GenreIndex
 import uk.co.zenithal.carrel.data.GenreLink
@@ -126,26 +127,38 @@ fun SearchScreen(
     var recentVersion by remember { mutableStateOf(0) }
     val recent = remember(userId, recentVersion, model.query) { container.recentSearches.get(userId) }
     val list = rememberLazyListState()
-    // The dice in the search box opens a random book from the popular ones in the reader's top genres, a genre more
-    // likely the more of their books have it, leaving out books they have. Their top genres come from the books they've
-    // read or are reading, so it's hidden until they have one.
+    // The dice in the search box opens a random book, leaving out books the reader has. Signed in, from the popular ones
+    // in the reader's top genres, a genre more likely the more of their books have it. Signed out, or without top genres
+    // (which come from the books they've read or are reading), from the Discover shelves that are out already.
     val library = rememberLoaded(if (userId.isNotEmpty()) LIBRARY_PATH else null, LibrarySerializer).loaded.data
     val owned = rememberOwnedHardcoverIds()
-    val canPick = owned != null && library?.any { it.entry.status == ReadingStatus.Read || it.entry.status == ReadingStatus.Reading } == true
+    val hasTopGenres = library?.any { it.entry.status == ReadingStatus.Read || it.entry.status == ReadingStatus.Reading } == true
     val scope = rememberCoroutineScope()
     var topPicks by remember { mutableStateOf<List<TopGenrePicks>?>(null) }
+    var discover by remember { mutableStateOf<DiscoverShelves?>(null) }
     var pickNote by remember { mutableStateOf<String?>(null) }
 
     fun pickRandomBook() {
         pickNote = null
         scope.launch {
-            val picks = topPicks ?: try {
-                container.api.get("/library/genre-picks/top", ListSerializer(TopGenrePicks.serializer())).also { topPicks = it }
+            val groups = try {
+                val top = if (hasTopGenres) {
+                    topPicks ?: container.api.get("/library/genre-picks/top", ListSerializer(TopGenrePicks.serializer())).also { topPicks = it }
+                } else {
+                    null
+                }
+                // None when their books have only broad genres, or Hardcover can't be reached; then pick as if signed out.
+                if (top != null && top.any { it.books.isNotEmpty() }) {
+                    top.map { PickGroup(it.books, it.readerBooks) }
+                } else {
+                    val shelves = discover ?: container.api.get("/discover", DiscoverShelves.serializer()).also { discover = it }
+                    listOf(PickGroup(shelves.popular + shelves.newReleases + shelves.topRated))
+                }
             } catch (e: ApiException) {
                 pickNote = e.message
                 return@launch
             }
-            val book = randomPick(picks.map { PickGroup(it.books, it.readerBooks) }, owned.orEmpty(), lastRandomPick, Random.nextDouble())
+            val book = randomPick(groups, owned.orEmpty(), lastRandomPick, Random.nextDouble())
             if (book == null) {
                 pickNote = "You have every book it could pick already."
             } else {
@@ -192,7 +205,7 @@ fun SearchScreen(
                     },
                     onSearch = { search(text) },
                     onScan = { model.scan(context) },
-                    onRandomBook = if (canPick) ::pickRandomBook else null,
+                    onRandomBook = if (owned != null) ::pickRandomBook else null,
                 )
                 model.scanMessage?.let { FormMessage(it, Tone.Error, Modifier.padding(top = 10.dp)) }
                 pickNote?.let { FormMessage(it, modifier = Modifier.padding(top = 10.dp)) }
