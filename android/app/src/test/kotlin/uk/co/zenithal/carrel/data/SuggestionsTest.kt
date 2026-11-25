@@ -117,4 +117,56 @@ class SuggestionsTest {
         val series = SeriesDetail(1, "Stormlight", null, null, listOf(seriesBook(1, 1.0), seriesBook(2, 2.0), seriesBook(3, 3.0)), emptyList())
         assertNull(nextInSeries(series, 1.0, setOf(2L)))
     }
+
+    private fun books(vararg ids: Int) = ids.map { BookSuggestion(it, "Book $it", emptyList(), null, null, null, null) }
+
+    private fun pickedId(groups: List<PickGroup>, seed: Double, owned: Set<Long> = emptySet(), previous: Int? = null) =
+        randomPick(groups, owned, previous, seed)?.hardcoverId
+
+    @Test
+    fun `a random pick leaves out owned books, repeats, and the last pick`() {
+        val groups = listOf(PickGroup(books(1, 2, 1, 3)))
+        assertEquals(listOf(1, 3), pickable(groups, setOf(2L)).single().books.map { it.hardcoverId })
+        assertEquals(1, pickedId(groups, 0.0, owned = setOf(2L)))
+        assertEquals(3, pickedId(groups, 0.99, owned = setOf(2L)))
+        // Pressed again, it can't land on the book it just opened.
+        assertEquals(3, pickedId(groups, 0.0, owned = setOf(2L), previous = 1))
+    }
+
+    @Test
+    fun `a random pick keeps the last book when it's the only one, and finds nothing when all are owned`() {
+        val groups = listOf(PickGroup(books(1, 2)))
+        assertEquals(1, pickedId(groups, 0.5, owned = setOf(2L), previous = 1))
+        assertNull(pickedId(groups, 0.5, owned = setOf(1L, 2L)))
+    }
+
+    @Test
+    fun `a genre the reader reads more is more likely to be picked`() {
+        // Weighted by the square root, 9 books and 1 count as 3 and 1: the first three quarters of the seeds land on the first.
+        val groups = listOf(PickGroup(books(1), 9), PickGroup(books(2), 1))
+        assertEquals(1, pickedId(groups, 0.0))
+        assertEquals(1, pickedId(groups, 0.74))
+        assertEquals(2, pickedId(groups, 0.75))
+        assertEquals(2, pickedId(groups, 0.99))
+    }
+
+    @Test
+    fun `a book is picked evenly within its genre`() {
+        // Each genre has half the seeds; within the first's half, each of its two books has half again.
+        val groups = listOf(PickGroup(books(1, 2)), PickGroup(books(3)))
+        assertEquals(1, pickedId(groups, 0.2))
+        assertEquals(2, pickedId(groups, 0.3))
+        assertEquals(3, pickedId(groups, 0.6))
+    }
+
+    @Test
+    fun `a genre with nothing left to pick gives way to the others`() {
+        val groups = listOf(PickGroup(books(1, 2), 9), PickGroup(books(3), 1))
+        assertEquals(3, pickedId(groups, 0.0, owned = setOf(1L, 2L)))
+        // A book in both genres counts in the first only, so the second has nothing of its own left.
+        assertEquals(listOf(listOf(1)), pickable(listOf(PickGroup(books(1)), PickGroup(books(1))), emptySet()).map { g -> g.books.map { it.hardcoverId } })
+        // Only the last pick is left in the second, so it goes to the first, however much the second weighs.
+        val shown = listOf(PickGroup(books(1), 1), PickGroup(books(3), 9))
+        assertEquals(1, pickedId(shown, 0.99, previous = 3))
+    }
 }
