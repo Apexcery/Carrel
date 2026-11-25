@@ -22,19 +22,24 @@ import uk.co.zenithal.carrel.ui.components.Kicker
 import uk.co.zenithal.carrel.ui.theme.Carrel
 
 /**
- * Looks up a shared book by its ISBN, then opens it (`onFound`, with its path), or searches for `fallback` when no book
- * has that ISBN (`onNotFound`).
+ * Looks up a shared or scanned book by its ISBN, then opens it (`onFound`, with its path), or searches for `fallback`
+ * when no book has that ISBN (`onNotFound`). With no `fallback` (a scan's), it says so instead.
  */
 @Composable
 fun FindBookScreen(isbn: String, fallback: String, onFound: (path: String) -> Unit, onNotFound: (text: String) -> Unit) {
     val api = LocalContainer.current.api
     var attempt by remember { mutableIntStateOf(0) }
     var error by remember { mutableStateOf<String?>(null) }
+    var notFound by remember { mutableStateOf(false) }
     LaunchedEffect(attempt) {
         error = null
         try {
             val book = api.getOrNull("/books/isbn/$isbn", BookDetail.serializer())
-            if (book != null) onFound("/books/${book.id}") else onNotFound(fallback)
+            when {
+                book != null -> onFound("/books/${book.id}")
+                fallback.isNotEmpty() -> onNotFound(fallback)
+                else -> notFound = true
+            }
         } catch (e: ApiException) {
             error = e.message
         }
@@ -42,6 +47,11 @@ fun FindBookScreen(isbn: String, fallback: String, onFound: (path: String) -> Un
     Column(Modifier.fillMaxSize().background(Carrel.colors.paper).padding(horizontal = 16.dp, vertical = 24.dp)) {
         Kicker("ISBN $isbn")
         error?.let { ErrorNotice(it, { attempt++ }, Modifier.padding(top = 24.dp)) }
-            ?: Text("Finding the book…", style = Carrel.type.displayMedium, color = Carrel.colors.ink, modifier = Modifier.padding(top = 8.dp))
+            ?: Text(
+                if (notFound) "No book has this ISBN yet." else "Finding the book…",
+                style = Carrel.type.displayMedium,
+                color = Carrel.colors.ink,
+                modifier = Modifier.padding(top = 8.dp),
+            )
     }
 }

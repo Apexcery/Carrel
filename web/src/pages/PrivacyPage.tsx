@@ -117,7 +117,7 @@ export function PrivacyPage() {
       <p>Carrel doesn’t sell your information, show adverts, or use your information to profile you.</p>
 
       <h2>Who else handles it</h2>
-      <p>Carrel relies on these services, which handle information only to provide their service to Carrel:</p>
+      <p>Carrel relies on these services, which handle information to provide their service to Carrel:</p>
       <ul>
         <li>
           <strong>Supabase</strong> stores Carrel’s database and profile pictures, and handles signing in. The data is
@@ -143,6 +143,13 @@ export function PrivacyPage() {
         <li>
           <strong>GitHub</strong> hosts the Android app. When you download it or open its release notes, your browser
           fetches them from GitHub, which sees your IP address.
+        </li>
+        <li>
+          <strong>Google Play services</strong> runs the Android app’s barcode scanner (Google’s ML Kit). The scan
+          happens on your phone: the camera’s images never reach Carrel, only the ISBN it reads, to find the book, and
+          Google says it doesn’t store the images or results. Google collects diagnostics and usage statistics from the
+          scanner, such as your phone’s model and Android version, the app’s name and version, how quickly scans run,
+          error codes, and an identifier for your phone or the app’s installation.
         </li>
       </ul>
       <p>
