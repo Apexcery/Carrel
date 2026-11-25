@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useParams } from 'react-router'
+import { Link, useParams } from 'react-router'
 import { apiGetOrNull } from '../api'
 import { AuthorPhoto } from '../components/AuthorPhoto'
 import { ErrorNotice } from '../components/ErrorNotice'
@@ -13,8 +13,13 @@ import { NOT_FOUND_TITLE, NotFoundPage } from './NotFoundPage'
 const SHELF_BOOKS = 50
 /** Characters of the bio's first paragraph shown before "Show more". */
 const BIO_PREVIEW = 280
+/** Series shown as shelves of covers, most read first; the rest are listed by name. */
+const FULL_SHELVES = 6
 
-/** An author at /authors/hardcover/<id>: their details and bio, then their books by series, then the rest. */
+/**
+ * An author at /authors/hardcover/<id>: their details beside their bio, then their most read series as shelves, the
+ * rest of their series as a list, and the books in no series.
+ */
 export function AuthorPage() {
   const { hardcoverId } = useParams()
   const author = useQuery({
@@ -35,26 +40,26 @@ export function AuthorPage() {
   }
 
   const { name, photoUrl, bornYear, deathYear, location, bio, series, standalones } = author.data
+  const moreSeries = series.slice(FULL_SHELVES)
   return (
-    <section>
+    <section className="author-page">
       <header className="author-header">
         <AuthorPhoto url={photoUrl} size="large" />
-        <div>
+        <div className="author-intro">
           <p className="kicker">Author</p>
           <h1 className="series-title">{name}</h1>
           {(bornYear || deathYear || location) && (
             <p className="series-meta mono">{[lifeYears(bornYear, deathYear), location].filter(Boolean).join(' · ')}</p>
           )}
         </div>
+        {bio && <Bio text={bio} />}
       </header>
-
-      {bio && <Bio text={bio} />}
 
       {series.length === 0 && standalones.length === 0 ? (
         <p className="muted">Hardcover doesn’t list any books by {name} yet.</p>
       ) : (
-        <div className="home-shelves">
-          {series.map((s) => (
+        <div className="author-columns">
+          {series.slice(0, FULL_SHELVES).map((s) => (
             <SuggestionShelf
               key={s.hardcoverId}
               title={s.name}
@@ -63,7 +68,28 @@ export function AuthorPage() {
               limit={SHELF_BOOKS}
             />
           ))}
-          <SuggestionShelf title={series.length > 0 ? 'Other books' : 'Books'} books={standalones} limit={SHELF_BOOKS} />
+          {moreSeries.length > 0 && (
+            <section className="book-section author-wide">
+              <h2 className="section-title">More series</h2>
+              <ul className="author-columns author-more-series">
+                {moreSeries.map((s) => (
+                  <li key={s.hardcoverId}>
+                    <Link to={`/series/hardcover/${s.hardcoverId}`} className="author-series-link">
+                      <span className="author-series-name">{s.name}</span>
+                      <span className="author-series-count mono">
+                        {s.books.length} {s.books.length === 1 ? 'book' : 'books'} →
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {standalones.length > 0 && (
+            <div className="author-wide">
+              <SuggestionShelf title={series.length > 0 ? 'Other books' : 'Books'} books={standalones} limit={SHELF_BOOKS} />
+            </div>
+          )}
         </div>
       )}
     </section>
@@ -104,17 +130,19 @@ function Bio({ text }: { text: string }) {
 
 function AuthorSkeleton() {
   return (
-    <section className="skeleton" aria-busy="true" aria-label="Loading author">
+    <section className="author-page skeleton" aria-busy="true" aria-label="Loading author">
       <header className="author-header">
         <span className="avatar large" />
-        <div>
+        <div className="author-intro">
           <div className="skeleton-line short" />
           <div className="skeleton-line title" />
         </div>
+        <div className="author-bio">
+          <div className="skeleton-line wide" />
+          <div className="skeleton-line wide" />
+        </div>
       </header>
-      <div className="skeleton-line wide" />
-      <div className="skeleton-line wide" />
-      <div className="home-shelves">
+      <div className="author-columns">
         {Array.from({ length: 2 }, (_, i) => (
           <SuggestionShelfSkeleton key={i} />
         ))}
