@@ -154,6 +154,10 @@ data class GenreShelves(
 @Serializable
 data class GenrePicks(val genre: String?, val books: List<BookSuggestion>)
 
+/** Popular books in one of the reader's top genres, and how many of the books they've read or are reading have it. */
+@Serializable
+data class TopGenrePicks(val genre: String, val readerBooks: Int, val books: List<BookSuggestion>)
+
 /** The Discover tab's shelves, the same for everyone. */
 @Serializable
 data class DiscoverShelves(
